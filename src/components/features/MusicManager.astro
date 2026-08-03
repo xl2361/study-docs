@@ -56,12 +56,13 @@ const managerConfigStr = JSON.stringify({
 });
 ---
 
-<script is:inline data-swup-ignore-script define:vars={{ managerConfigStr }}>
+<div id="music-manager-config" data-config={managerConfigStr} hidden></div>
+<script is:inline data-swup-ignore-script>
 (function () {
     // Singleton guard – only create once
     if (window.__fireflyMusic) return;
 
-    var config = JSON.parse(managerConfigStr);
+    var config = JSON.parse(document.getElementById('music-manager-config').dataset.config);
 
     // ── Helpers ──────────────────────────────────────────────
     function formatTime(seconds) {
@@ -98,7 +99,7 @@ const managerConfigStr = JSON.stringify({
     var audio = document.createElement('audio');
     audio.crossOrigin = 'anonymous';
     audio.style.display = 'none';
-    audio.preload = 'none'; // 阻止浏览器预加载和自动恢复播放
+    audio.preload = 'metadata';
     document.body.appendChild(audio);
     audio.pause(); // 确保不自动播放
 
@@ -332,8 +333,15 @@ const managerConfigStr = JSON.stringify({
     }
 
     function seek(percent) {
-        if (!audio.duration) return;
-        audio.currentTime = Math.max(0, Math.min(1, percent)) * audio.duration;
+        percent = Math.max(0, Math.min(1, percent));
+        if (!isNaN(audio.duration) && audio.duration > 0) {
+            audio.currentTime = percent * audio.duration;
+        } else {
+            // duration 不可用（preload=none 且元数据未加载），等待 loadedmetadata
+            audio.addEventListener('loadedmetadata', function () {
+                audio.currentTime = percent * audio.duration;
+            }, { once: true });
+        }
     }
 
     function seekToTime(time) {
@@ -493,5 +501,18 @@ const managerConfigStr = JSON.stringify({
         playTrackByIndex: playTrackByIndex,
         loadTrack: loadTrack
     };
+
+    // ── swup 导航后恢复播放状态 ──────────────────────────
+    // 浏览器在 SPA 导航时可能暂停 audio，导航完成后自动恢复
+    function resumeIfNeeded() {
+        if (state.isPlaying && audio.paused && audio.src) {
+            audio.play().catch(function (e) {
+                if (e.name === 'AbortError') return;
+                console.warn('Resume playback after navigation:', e);
+            });
+        }
+    }
+    document.addEventListener('swup:contentReplaced', resumeIfNeeded);
+    document.addEventListener('astro:page-load', resumeIfNeeded);
 })();
 </script>

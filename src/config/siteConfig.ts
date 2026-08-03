@@ -12,7 +12,7 @@ export const siteConfig: SiteConfig = {
 	subtitle: "学习笔记",
 
 	// 站点 URL
-	site_url: "https://dayu-study.dev",
+	site_url: "https://dayu-study.pages.dev",
 
 	// 站点描述
 	description: "个人学习笔记与文档站",

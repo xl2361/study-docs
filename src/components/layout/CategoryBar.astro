@@ -42,7 +42,7 @@ function initialActive(categoryName: string): {
 ---
 
 <div
-  class="card-base category-bar p-3 onload-animation"
+  class="card-base category-bar p-2 onload-animation"
   id="category-bar"
   data-home-path={homeUrl}
   data-archive-path={archiveUrl}
@@ -51,17 +51,17 @@ function initialActive(categoryName: string): {
   <div class="category-bar-inner flex gap-2">
     <a
       href={homeUrl}
-      class="category-pill text-sm px-3 py-1.5 rounded-full shrink-0
+      class="category-pill text-sm px-3 py-1 rounded-full shrink-0
              transition-colors duration-150 ease-out flex items-center justify-center"
       data-category-name=""
       data-active={initialActive("").active ? "" : undefined}
       aria-label={i18n(I18nKey.home)}
     >
-      <Icon is:inline name="material-symbols:home" class="text-lg" />
+      <Icon is:inline name="material-symbols:home" class="text-base" />
     </a>
     <a
       href={archiveUrl}
-      class="category-pill text-sm px-4 py-1.5 rounded-full whitespace-nowrap shrink-0
+      class="category-pill text-sm px-3 py-1 rounded-full whitespace-nowrap shrink-0
              transition-colors duration-150 ease-out flex items-center justify-center"
       data-category-name="__archive__"
       data-active={initialActive("__archive__").active ? "" : undefined}
@@ -79,7 +79,7 @@ function initialActive(categoryName: string): {
             return (
             <a
               href={cat.url}
-              class="category-pill text-sm px-4 py-1.5 rounded-full whitespace-nowrap
+              class="category-pill text-sm px-3 py-1 rounded-full whitespace-nowrap
                      transition-colors duration-150 ease-out flex items-center justify-center"
               data-category-name={cat.name}
               data-active={active.active ? "" : undefined}
@@ -97,7 +97,7 @@ function initialActive(categoryName: string): {
     <div class="category-divider shrink-0 more-divider" aria-hidden="true"></div>
     <a
       href={url("/categories/")}
-      class="category-pill text-sm px-3 py-1.5 rounded-full shrink-0
+      class="category-pill more-pill text-sm px-3 py-1 rounded-full shrink-0
              transition-colors duration-150 ease-out flex items-center justify-center gap-1"
       data-category-name="__categories__"
       data-active={initialActive("__categories__").active ? "" : undefined}
@@ -114,7 +114,7 @@ function initialActive(categoryName: string): {
     border: none;
   }
   .category-bar {
-    margin-bottom: 1rem;
+    margin-bottom: 0.75rem;
   }
   .category-divider {
     width: 1px;
@@ -128,6 +128,12 @@ function initialActive(categoryName: string): {
   }
   .more-divider[data-visible] {
     opacity: 0.5;
+  }
+  .more-pill {
+    display: none;
+  }
+  .more-pill[data-visible] {
+    display: flex;
   }
   .scroll-area {
     flex: 1;
@@ -378,11 +384,22 @@ function initialActive(categoryName: string): {
 
     // 分类溢出时显示"更多"按钮前的分割线
     const moreDivider = bar.querySelector<HTMLElement>(".more-divider");
+    const morePill = bar.querySelector<HTMLElement>(".more-pill");
+    // 当前在 /categories 页面时"更多"按钮是激活项，始终显示
+    const isCategoriesPage = window.location.pathname.replace(/\/$/, "") === "/categories";
+    const showMore = hasOverflow || isCategoriesPage;
     if (moreDivider) {
-      if (hasOverflow) {
+      if (showMore) {
         moreDivider.setAttribute("data-visible", "");
       } else {
         moreDivider.removeAttribute("data-visible");
+      }
+    }
+    if (morePill) {
+      if (showMore) {
+        morePill.setAttribute("data-visible", "");
+      } else {
+        morePill.removeAttribute("data-visible");
       }
     }
   }

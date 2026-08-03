@@ -13,6 +13,7 @@ import {
 	navBarConfig,
 	siteConfig,
 } from "@/config";
+import { announcementConfig } from "@/config/announcementConfig";
 import { musicPlayerConfig } from "@/config/musicConfig";
 import I18nKey from "@/i18n/i18nKey";
 import { i18n } from "@/i18n/translation";
@@ -89,7 +90,7 @@ let links: NavBarLink[] = navBarConfig.links
 const logoConfig = siteConfig.navbar.logo;
 const logoAlt = logoConfig?.alt || siteConfig.title;
 const logoIsImage = logoConfig?.type === "image" || logoConfig?.type === "url";
-const logoBaseClass = "navbar-logo h-7 w-7 mb-1 mr-2 object-contain";
+const logoBaseClass = "navbar-logo h-7 w-7 mb-1 mr-2 object-contain shrink-0";
 
 const logoFiles = import.meta.glob<ImageMetadata>(
 	"../../**/*.{png,jpg,jpeg,webp,avif,gif,svg}",
@@ -146,13 +147,13 @@ const logoVariants = await Promise.all(
         "overflow-visible! h-18 px-4"
     ]}>
         <div class="mx-auto h-full w-full max-w-(--page-width) grid grid-cols-[auto_minmax(0,1fr)_auto] items-center">
-            <a href={url('/')} class="btn-plain scale-animation rounded-lg h-13 px-3 md:px-5 font-bold active:scale-95">
+            <a href={url('/')} class="btn-plain scale-animation rounded-lg h-13 px-3 md:px-5 font-bold active:scale-95 min-w-0 max-w-[58vw] md:max-w-none">
                 <div class:list={[
-                    "flex flex-row items-center text-md",
+                    "flex flex-row items-center text-md min-w-0",
                     siteConfig.navbar.followTheme ? "text-(--primary)" : "dark:text-white text-black"
                 ]} style="font-family: var(--font-navbar-title, inherit)">
                                     {logoConfig?.type === "icon" ? (
-                                        <Icon is:inline name={logoConfig.value || "material-symbols:home-pin-outline"} class="navbar-logo text-[1.75rem] mb-1 mr-2" />
+                                        <Icon is:inline name={logoConfig.value || "material-symbols:home-pin-outline"} class="navbar-logo text-[1.75rem] mb-1 mr-2 shrink-0" />
                                     ) : logoIsImage && logoVariants.length > 0 ? (
                                         logoVariants.map((variant) => variant.image ? (
                                             <Picture
@@ -170,9 +171,9 @@ const logoVariants = await Promise.all(
                                             <img src={variant.src} alt={logoAlt} class={variant.class} data-logo-theme={variant.theme} fetchpriority="high" />
                                         ))
                                     ) : (
-                                        <Icon is:inline name="material-symbols:home-pin-outline" class="navbar-logo text-[1.75rem] mb-1 mr-2" />
+                                        <Icon is:inline name="material-symbols:home-pin-outline" class="navbar-logo text-[1.75rem] mb-1 mr-2 shrink-0" />
                                     )}
-                    {navbarTitle}
+                    {navbarTitle && <span class="truncate min-w-0 whitespace-nowrap">{navbarTitle}</span>}
                 </div>
             </a>
             <div class:list={[
@@ -190,21 +191,12 @@ const logoVariants = await Promise.all(
                 <Search
                     client:load
                 />
+                <button aria-label={i18n(I18nKey.announcement)} class="btn-plain scale-animation rounded-lg h-9 w-9 md:h-11 md:w-11 active:scale-90" id="announcement-switch">
+                    <Icon is:inline name="material-symbols:notifications-outline" class="text-[1.25rem]"></Icon>
+                </button>
                 {musicPlayerConfig.showInNavbar && (
                     <button aria-label={i18n(I18nKey.music)} class="btn-plain scale-animation rounded-lg h-9 w-9 md:h-11 md:w-11 active:scale-90" id="music-player-switch">
                         <Icon is:inline name="material-symbols:music-note-rounded" class="text-[1.25rem]"></Icon>
-                    </button>
-                )}
-                {backgroundWallpaper.playerEnable && backgroundWallpaper.mode !== "none" && (
-                    <button
-                        aria-label={i18n(I18nKey.videoPlay)}
-                        class="btn-plain scale-animation rounded-lg h-9 w-9 md:h-11 md:w-11 active:scale-90"
-                        id="bg-player-toggle"
-                        data-i18n-play={i18n(I18nKey.videoPlay)}
-                        data-i18n-pause={i18n(I18nKey.videoPause)}
-                    >
-                        <span class="bg-player-icon-play"><Icon is:inline name="material-symbols:play-arrow-rounded" class="text-[1.5rem]" /></span>
-                        <span class="bg-player-icon-pause hidden"><Icon is:inline name="material-symbols:pause-rounded" class="text-[1.5rem]" /></span>
                     </button>
                 )}
                 {hasDisplaySettings && (
@@ -214,16 +206,49 @@ const logoVariants = await Promise.all(
                 )}
                 {/* @ts-ignore */}
                 <LightDarkSwitch client:load></LightDarkSwitch>
+                <button aria-label="Sidebar" class="btn-plain scale-animation rounded-lg w-9 h-9 md:w-11 md:h-11 active:scale-90 md:hidden!" id="mobile-sidebar-toggle">
+                    <Icon is:inline name="material-symbols:left-panel-open-rounded" class="text-[1.25rem]"></Icon>
+                </button>
                 <button aria-label="Menu" name="Nav Menu" class="btn-plain scale-animation rounded-lg w-9 h-9 md:w-11 md:h-11 active:scale-90 lg:hidden!" id="nav-menu-switch">
                     <Icon is:inline name="material-symbols:menu-rounded" class="text-[1.25rem]"></Icon>
                 </button>
             </div>
         </div>
         {musicPlayerConfig.showInNavbar && (
-            <div id="music-nav-panel" class="float-panel float-panel-closed absolute transition-all right-16 p-2 pt-4.5 w-80 z-50">
+            <div id="music-nav-panel" class="float-panel float-panel-closed absolute transition-all right-4 md:right-16 p-2 pt-4.5 w-[calc(100vw-2rem)] md:w-80 max-w-80 z-50">
                 <MusicPlayer />
             </div>
         )}
+        <div id="announcement-panel" class="float-panel float-panel-closed absolute transition-all right-4 md:right-16 p-4 w-[calc(100vw-2rem)] md:w-80 max-w-80 z-50">
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2 font-bold text-(--primary)">
+                    <Icon is:inline name="material-symbols:notifications-outline" class="text-[1.25rem]" />
+                    <span>{announcementConfig.title || i18n(I18nKey.announcement)}</span>
+                </div>
+                <button
+                    class="btn-plain rounded-lg h-7 w-7 text-sm hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                    onclick="document.getElementById('announcement-panel').classList.add('float-panel-closed')"
+                    aria-label={i18n(I18nKey.announcementClose)}
+                >
+                    <Icon is:inline name="fa7-solid:xmark" class="text-sm" />
+                </button>
+            </div>
+            <div class="text-neutral-600 dark:text-neutral-300 leading-relaxed mb-3">
+                {announcementConfig.content}
+            </div>
+            {
+                announcementConfig.link && announcementConfig.link.enable !== false && (
+                    <a
+                        href={announcementConfig.link.url}
+                        target={announcementConfig.link.external ? "_blank" : "_self"}
+                        rel={announcementConfig.link.external ? "noopener noreferrer" : undefined}
+                        class="btn-regular rounded-lg px-3 py-1.5 text-sm font-medium active:scale-95 transition-transform"
+                    >
+                        {announcementConfig.link.text}
+                    </a>
+                )
+            }
+        </div>
         <NavMenuPanel links={links}></NavMenuPanel>
         <DisplaySettings client:load></DisplaySettings>
     </div>
@@ -257,6 +282,16 @@ function loadButtonScript() {
             let musicPanel = document.getElementById("music-nav-panel");
             if (musicPanel) {
                 musicPanel.classList.toggle("float-panel-closed");
+            }
+        };
+    }
+
+    let announcementBtn = document.getElementById("announcement-switch");
+    if (announcementBtn) {
+        announcementBtn.onclick = function () {
+            let announcementPanel = document.getElementById("announcement-panel");
+            if (announcementPanel) {
+                announcementPanel.classList.toggle("float-panel-closed");
             }
         };
     }
@@ -316,8 +351,8 @@ function loadButtonScript() {
     }
 
     document.addEventListener("click", function(event) {
-        const panels = ["display-setting", "nav-menu-panel", "music-nav-panel", "theme-mode-panel"];
-        const buttons = ["display-settings-switch", "nav-menu-switch", "music-player-switch", "scheme-switch"];
+        const panels = ["display-setting", "nav-menu-panel", "music-nav-panel", "theme-mode-panel", "announcement-panel"];
+        const buttons = ["display-settings-switch", "nav-menu-switch", "music-player-switch", "scheme-switch", "announcement-switch"];
 
         panels.forEach((id, index) => {
             const panel = document.getElementById(id);

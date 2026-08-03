@@ -3,16 +3,18 @@ import { Icon } from "astro-icon/components";
 import I18nKey from "@/i18n/i18nKey";
 import { i18n } from "@/i18n/translation";
 import MainGridLayout from "@/layouts/MainGridLayout.astro";
-import { getCategoryList } from "@/utils/content-utils";
+import { getCategoryList, getSortedPostsList } from "@/utils/content-utils";
+import { url } from "@/utils/url-utils";
 
 const categories = await getCategoryList();
-const totalPosts = categories.reduce((sum, cat) => sum + cat.count, 0);
+const totalPosts = (await getSortedPostsList()).length;
+const allUrl = url("/");
 ---
 
 <MainGridLayout title={i18n(I18nKey.categories)}>
     <!-- 页面标题 -->
-    <div class="card-base px-8 py-6 mb-4">
-        <div class="text-2xl font-bold text-(--primary) mb-2">
+    <div class="card-base px-4 md:px-8 py-4 md:py-6 mb-4">
+        <div class="text-xl md:text-2xl font-bold text-(--primary) mb-2">
             {i18n(I18nKey.categories)}
         </div>
         <p class="text-30 text-sm">
@@ -20,38 +22,32 @@ const totalPosts = categories.reduce((sum, cat) => sum + cat.count, 0);
         </p>
     </div>
 
-    <!-- 分类卡片列表 -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-        {
-            categories.map((category, index) => (
-                <a
-                    href={category.url}
-                    class="card-base p-6 flex items-center gap-4 group onload-animation"
-                    style={`animation-delay: calc(var(--content-delay) + ${index * 50}ms);`}
-                >
-                    <div class="shrink-0 w-14 h-14 rounded-full bg-(--primary)/10 group-hover:bg-(--primary)/20 flex items-center justify-center transition-colors">
-                        <Icon is:inline
-                            name="material-symbols:folder-open"
-                            class="text-3xl text-(--primary)"
-                        />
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <h2 class="text-lg font-bold text-90 truncate group-hover:text-(--primary) transition-colors" title={category.name}>
-                            {category.name}
-                        </h2>
-                        <p class="text-sm text-30 mt-1 group-hover:text-(--primary)/60 transition-colors">
-                            {category.count} {i18n(I18nKey.postsCount)}
-                        </p>
-                    </div>
-                    <div class="shrink-0">
-                        <Icon is:inline
-                            name="material-symbols:chevron-right-rounded"
-                            class="text-2xl text-30 group-hover:text-(--primary) transition-colors "
-                        />
-                    </div>
-                </a>
-            ))
-        }
+    <!-- 横排标签胶囊（拙云风格）：全部 N / 分类名 数量 -->
+    <div class="card-base p-4 mb-4 onload-animation">
+        <div class="flex flex-wrap gap-2 items-center justify-center">
+            <a
+                href={allUrl}
+                class="category-pill text-sm px-4 py-1.5 rounded-full whitespace-nowrap
+                       transition-colors duration-150 ease-out flex items-center justify-center"
+                data-category-name=""
+            >
+                {i18n(I18nKey.home)}
+                <span class="pill-count">{totalPosts}</span>
+            </a>
+            {
+                categories.map((category) => (
+                    <a
+                        href={category.url}
+                        class="category-pill text-sm px-4 py-1.5 rounded-full whitespace-nowrap
+                               transition-colors duration-150 ease-out flex items-center justify-center"
+                        data-category-name={category.name}
+                    >
+                        {category.name}
+                        <span class="pill-count">{category.count}</span>
+                    </a>
+                ))
+            }
+        </div>
     </div>
 
     <!-- 空状态 -->

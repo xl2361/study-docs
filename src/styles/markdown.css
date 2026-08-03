@@ -3,6 +3,13 @@
 .custom-md {
   overflow-wrap: break-word;
 
+  /* 确保代码块在移动端可横向滚动，不撑破容器 */
+  pre {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
   body.sticky-navbar & {
     [id] {
       scroll-margin-top: 5.5rem;

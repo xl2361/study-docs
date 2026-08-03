@@ -1,5 +1,6 @@
 ---
 import type { MarkdownHeading } from "astro";
+import { Icon } from "astro-icon/components";
 import "@/styles/toc.css";
 import WidgetLayout from "@/components/common/WidgetLayout.astro";
 import I18nKey from "@/i18n/i18nKey";
@@ -30,13 +31,33 @@ const items = encrypted ? [] : computeTocItems(headings, { maxLevel: 3 });
 ---
 
 <WidgetLayout
-  name={i18n(I18nKey.tableOfContents)}
+  name="目录"
   showTitle={showTitle}
   id="sidebar-toc"
   class={className}
   style={style}
 >
-  <div class="toc-scroll-container custom-scrollbar">
+  <div slot="title-icon" class="toc-title-icons flex items-center gap-1">
+    <button
+      class="toc-locate-btn"
+      type="button"
+      aria-label="定位当前章节"
+      title="定位当前章节"
+      id="toc-locate-btn"
+    >
+      <Icon is:inline name="material-symbols:my-location" class="text-[0.95rem]" aria-hidden="true" />
+    </button>
+    <button
+      class="toc-fold-toggle"
+      type="button"
+      aria-label="折叠/展开目录"
+      title="折叠/展开目录"
+      aria-expanded="true"
+    >
+      <Icon is:inline name="material-symbols:keyboard-arrow-up-rounded" class="toc-fold-icon" aria-hidden="true" />
+    </button>
+  </div>
+  <div class="toc-scroll-container custom-scrollbar" id="toc-scroll-area">
     <div
       class="toc-content"
       id="sidebar-toc-content"
@@ -79,11 +100,121 @@ const items = encrypted ? [] : computeTocItems(headings, { maxLevel: 3 });
 </WidgetLayout>
 
 <style lang="stylus">
-/* SidebarTOC 特定样式 */
 .toc-scroll-container
-	max-height: calc(100vh - 25rem)
-	/* 滚动条与内容之间的小间隙（从共享样式挪入，避免影响浮动目录的对称内边距） */
+	max-height: calc(100vh - 12rem)
 	padding-right: 0.125rem
+	overflow-y: auto
+	overscroll-behavior: contain
+	-webkit-overflow-scrolling: touch
+</style>
+
+<style>
+/* 标题栏紧凑化 */
+:global(widget-layout#sidebar-toc .widget-title) {
+	margin-top: 0.5rem !important;
+	margin-bottom: 0.25rem !important;
+	font-size: 0.95rem !important;
+	justify-content: flex-start !important;
+}
+:global(widget-layout#sidebar-toc .widget-name) {
+	margin-right: auto !important;
+}
+/* 定位按钮样式 */
+.toc-locate-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.5rem;
+	height: 1.5rem;
+	border: none;
+	background: transparent;
+	border-radius: 0.375rem;
+	color: var(--content-meta);
+	cursor: pointer;
+	transition: background-color 0.14s ease, color 0.14s ease;
+}
+.toc-locate-btn:hover {
+	color: var(--primary);
+	background: rgba(0,0,0,0.05);
+}
+/* 折叠按钮紧凑化 */
+.toc-fold-toggle {
+	width: 1.5rem;
+	height: 1.5rem;
+}
+.toc-fold-icon {
+	font-size: 1.1rem;
+}
+/* 目录项左对齐+完整显示 — 覆盖 toc.css 的截断和缩进 */
+:global(.toc-item) {
+	text-align: left !important;
+	white-space: normal !important;
+	overflow: visible !important;
+	justify-content: flex-start !important;
+	padding-left: 0.25rem !important;
+}
+:global(.toc-item.toc-level-0) {
+	padding-left: 0.25rem !important;
+}
+:global(.toc-item.toc-level-1) {
+	padding-left: 0.75rem !important;
+}
+:global(.toc-item.toc-level-2) {
+	padding-left: 1.25rem !important;
+}
+:global(.toc-content) {
+	padding: 0.125rem 0 !important;
+	align-items: flex-start !important;
+}
+:global(.toc-label) {
+	text-align: left !important;
+	white-space: normal !important;
+	word-break: break-all !important;
+	line-height: 1.35 !important;
+	overflow: visible !important;
+	text-overflow: clip !important;
+	text-align-last: left !important;
+}
+:global(.toc-badge) {
+	flex-shrink: 0 !important;
+}
+:global(widget-layout#sidebar-toc .collapse-wrapper) {
+	padding-left: 0.25rem !important;
+}
+/* 滚动隔离 */
+:global(#left-sidebar-wrapper) {
+	overscroll-behavior: contain;
+}
+.toc-scroll-container {
+	position: relative;
+	z-index: 1;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+/* 滚动条样式 */
+.toc-scroll-container::-webkit-scrollbar {
+	width: 6px;
+}
+.toc-scroll-container::-webkit-scrollbar-track {
+	background: transparent;
+}
+.toc-scroll-container::-webkit-scrollbar-thumb {
+	background: rgba(128,128,128,0.3);
+	border-radius: 3px;
+}
+.toc-scroll-container::-webkit-scrollbar-thumb:hover {
+	background: rgba(128,128,128,0.5);
+}
+/* 折叠状态 */
+:global(widget-layout.toc-folded > .collapse-wrapper) {
+	max-height: 0 !important;
+	padding-top: 0 !important;
+	padding-bottom: 0 !important;
+	overflow: hidden;
+}
+:global(widget-layout.toc-folded .toc-fold-icon) {
+	transform: rotate(180deg);
+}
 </style>
 
 <script>
@@ -122,39 +253,119 @@ const items = encrypted ? [] : computeTocItems(headings, { maxLevel: 3 });
     }
   }
 
+  // 目录折叠/展开按钮初始化（事件委托，支持 swup 换页后重新绑定）
+  function initTocFold() {
+    document.querySelectorAll(".toc-fold-toggle:not([data-bound])").forEach((btn) => {
+      btn.dataset.bound = "true";
+      btn.addEventListener("click", () => {
+        const widget = btn.closest("widget-layout");
+        if (!widget) return;
+        const folded = widget.classList.toggle("toc-folded");
+        btn.setAttribute("aria-expanded", String(!folded));
+      });
+    });
+  }
+
+  // 目录项点击：事件委托，绑在 document 上，即使 TOC DOM 重建也生效
+  function initTocClicks() {
+    if (document.getElementById("toc-click-delegate")) return;
+    // 标记已绑定，防止重复
+    const marker = document.createElement("div");
+    marker.id = "toc-click-delegate";
+    marker.style.display = "none";
+    document.body.appendChild(marker);
+
+    document.addEventListener("click", (e) => {
+      const item = (e.target as HTMLElement).closest(".toc-item");
+      if (!item) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const href = item.getAttribute("href") || "";
+      const id = decodeURIComponent(href.replace(/^#/, ""));
+      const target = document.getElementById(id);
+      if (target) {
+        const offset = 80;
+        const top = target.getBoundingClientRect().top + window.pageYOffset - offset;
+        window.scrollTo({ top, behavior: "smooth" });
+        // 移动端点击后关闭侧边栏
+        if (window.innerWidth < 768) {
+          const wrapper = document.getElementById("left-sidebar-wrapper");
+          const overlay = document.getElementById("mobile-sidebar-overlay");
+          if (wrapper) wrapper.classList.remove("mobile-open");
+          if (overlay) overlay.classList.remove("open");
+        }
+      }
+    }, true); // capture 阶段，优先于 TOCManager 的 handler
+  }
+
+  // 定位按钮：将侧边栏目录滚动到当前正文所在章节（居中）
+  function initLocateBtn() {
+    const btn = document.getElementById("toc-locate-btn");
+    if (!btn || btn.dataset.bound) return;
+    btn.dataset.bound = "true";
+    btn.addEventListener("click", () => {
+      // TOCManager 用 "visible" 类标记当前正文可见区域对应的 TOC 项
+      const activeItem = document.querySelector(".toc-item.visible");
+      if (!activeItem) return;
+      // 将激活项在侧边栏滚动容器内居中
+      const scrollContainer = document.getElementById("toc-scroll-area") || activeItem.closest(".toc-scroll-container");
+      if (!scrollContainer) return;
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const itemRect = activeItem.getBoundingClientRect();
+      const itemOffsetTop = activeItem.offsetTop;
+      const itemHeight = itemRect.height;
+      const containerHeight = scrollContainer.clientHeight;
+      const targetScroll = itemOffsetTop - containerHeight / 2 + itemHeight / 2;
+      scrollContainer.scrollTo({ top: Math.max(0, targetScroll), behavior: "smooth" });
+    });
+  }
+
   // 初始化
-  // 确保 DOM 准备好后再执行
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initSidebarTOC);
+    document.addEventListener("DOMContentLoaded", () => {
+      initSidebarTOC();
+      initTocFold();
+      initLocateBtn();
+      initTocClicks();
+    });
   } else {
     initSidebarTOC();
+    initTocFold();
+    initLocateBtn();
+    initTocClicks();
   }
 
   // 页面切换时重新初始化
   document.addEventListener("swup:contentReplaced", () => {
-    setTimeout(initSidebarTOC, 100);
+    setTimeout(() => {
+      initSidebarTOC();
+      initTocFold();
+      initLocateBtn();
+      initTocClicks();
+    }, 100);
   });
 
-  // Astro 页面切换事件
   document.addEventListener("astro:page-load", () => {
-    setTimeout(initSidebarTOC, 100);
+    setTimeout(() => {
+      initSidebarTOC();
+      initTocFold();
+      initLocateBtn();
+      initTocClicks();
+    }, 100);
   });
 
-  // 浏览器导航事件
   window.addEventListener("popstate", () => {
-    setTimeout(initSidebarTOC, 200);
+    setTimeout(() => { initSidebarTOC(); initLocateBtn(); initTocClicks(); }, 200);
   });
 
-  // 监听 hashchange（但排除 TOC 内部导航）
   window.addEventListener("hashchange", () => {
     if (!window.tocInternalNavigation) {
-      setTimeout(initSidebarTOC, 100);
+      setTimeout(() => { initSidebarTOC(); initLocateBtn(); }, 100);
     }
     window.tocInternalNavigation = false;
   });
 
-  // 密码解密后重新初始化 TOC（需 DOM 遍历重建）
   document.addEventListener("password:decrypted", () => {
-    setTimeout(initSidebarTOC, 200);
+    setTimeout(() => { initSidebarTOC(); initLocateBtn(); }, 200);
   });
 </script>

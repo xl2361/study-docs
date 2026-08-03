@@ -72,21 +72,16 @@ export function generateGridClasses(config: ResponsiveSidebarConfig): {
 		config.hasLeftComponents &&
 		config.hasRightComponents
 	) {
-		// 双侧边栏
 		if (config.tabletSidebar === "right") {
-			// 平板端显示右侧栏: 769-1279px [内容+右侧栏], 1280px+ [左+中+右]
 			gridCols =
 				"grid-cols-1 md:grid-cols-[1fr_17.5rem] xl:grid-cols-[17.5rem_1fr_17.5rem]";
 		} else {
-			// 平板端显示左侧栏（默认）: 769-1279px [左侧栏+内容], 1280px+ [左+中+右]
 			gridCols =
 				"grid-cols-1 md:grid-cols-[17.5rem_1fr] xl:grid-cols-[17.5rem_1fr_17.5rem]";
 		}
 	} else if (config.hasLeftComponents && !config.hasRightComponents) {
-		// 仅左侧边栏: 769px+显示左+中，768-以下单列
 		gridCols = "grid-cols-1 md:grid-cols-[17.5rem_1fr]";
 	} else if (!config.hasLeftComponents && config.hasRightComponents) {
-		// 仅右侧边栏: 769px+显示中+右，768-以下单列
 		gridCols = "grid-cols-1 md:grid-cols-[1fr_17.5rem]";
 	}
 
@@ -111,10 +106,8 @@ export function generateSidebarClasses(
 	];
 
 	if (config.isBothSidebars && config.tabletSidebar === "right") {
-		// 双侧栏+平板端显示右侧栏：左侧栏仅在1280px+显示
 		classes.push("xl:block");
 	} else {
-		// 默认：左侧栏769px+显示
 		classes.push("md:block");
 	}
 

@@ -53,6 +53,19 @@ html {
     scroll-behavior: smooth;
 }
 
+/* 全局图片自适应：防止图片在移动端溢出容器（背景图、装饰图等绝对定位元素除外） */
+img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* 移动端正文字号微调，避免小屏下文字过大 */
+@media (max-width: 767px) {
+    body {
+        font-size: 0.875rem;
+    }
+}
+
 /* 页面顶部渐变高光效果 */
 .top-gradient-highlight {
     position: fixed;

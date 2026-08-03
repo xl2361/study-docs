@@ -48,7 +48,8 @@ let { title, description, lang, setOGTypeArticle, postSlug } = Astro.props;
 // apply a class to the body element to decide the height of the banner, only used for initial page load
 // Swup can update the body for each page visit, but it's after the page transition, causing a delay for banner height change
 // so use Swup hooks instead to change the height immediately when a link is clicked
-const isHomePageCheck = isHomePage(Astro.url.pathname);
+  const isHomePageCheck = isHomePage(Astro.url.pathname);
+  const isPostPage = Astro.url.pathname.includes("/posts/") || Astro.url.pathname.includes("/post/");
 
 // defines global css variables
 // why doing this in Layout instead of GlobalStyles: https://github.com/withastro/astro/issues/6728#issuecomment-1502203757
@@ -156,7 +157,7 @@ const siteLang = lang.replace("_", "-");
       content={description || siteConfig.description || pageTitle}
     />
 
-    <meta name="viewport" content="width=device-width" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="generator" content={Astro.generator} />
     {
       favicons.map((favicon) => (
@@ -554,6 +555,41 @@ const siteLang = lang.replace("_", "-");
 
     <!-- Font Setup (Astro Font API) -->
     <FontSetup />
+
+    <!-- TOC 点击跳转：内联脚本，capture 阶段，最高优先级，不依赖 module 加载 -->
+    <script is:inline>
+      (function() {
+        if (document.getElementById('global-toc-click')) return;
+        var marker = document.createElement('div');
+        marker.id = 'global-toc-click';
+        marker.style.display = 'none';
+        document.addEventListener('click', function(e) {
+          var item = e.target && e.target.closest && e.target.closest('.toc-item');
+          if (!item) return;
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          var href = item.getAttribute('href') || '';
+          var id = decodeURIComponent(href.replace(/^#/, ''));
+          var target = document.getElementById(id);
+          // 先恢复 body overflow，否则 scrollTo 不生效
+          document.body.style.overflow = '';
+          if (window.innerWidth < 768) {
+            var wrapper = document.getElementById('left-sidebar-wrapper');
+            var overlay = document.getElementById('mobile-sidebar-overlay');
+            if (wrapper) wrapper.classList.remove('mobile-open');
+            if (overlay) overlay.classList.remove('open');
+          }
+          if (target) {
+            var offset = 80;
+            var top = target.getBoundingClientRect().top + window.pageYOffset - offset;
+            window.scrollTo({ top: top, behavior: 'smooth' });
+          }
+        }, true);
+        document.addEventListener('DOMContentLoaded', function() {
+          document.body.appendChild(marker);
+        });
+      })();
+    </script>
   </head>
   <body
     class="min-h-screen"
@@ -563,6 +599,7 @@ const siteLang = lang.replace("_", "-");
         "lg:is-home": isHomePageCheck,
         "enable-banner": enableBanner,
         "sticky-navbar": siteConfig.navbar.stickyNavbar ?? false,
+        "post-page": isPostPage,
       },
     ]}
   >
@@ -603,6 +640,10 @@ const siteLang = lang.replace("_", "-");
 
     <!-- Tab 代码块交互 -->
     <CodeGroupManager />
+    <div id="mobile-sidebar-overlay"></div>
+    <button id="desktop-sidebar-toggle" aria-label="切换目录">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h18v2H3V5m0 4h18v2H3V9m0 4h12v2H3v-2m0 4h12v2H3v-2z"/></svg>
+    </button>
   </body>
 </html>
 
@@ -741,6 +782,161 @@ const siteLang = lang.replace("_", "-");
       height: 4.5rem !important;
     }
   }
+
+  /* 文章详情页浮动侧边栏（移动端+桌面端统一） */
+  #mobile-sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    background: rgba(0,0,0,0.15);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  #mobile-sidebar-overlay.open {
+    display: block;
+    opacity: 1;
+  }
+  /* 桌面端浮动按钮（文章页左上角，仅在侧边栏收起时显示） */
+  #desktop-sidebar-toggle {
+    display: none;
+    position: fixed;
+    left: 0.75rem;
+    top: 5rem;
+    z-index: 95;
+    width: 2.25rem;
+    height: 2.25rem;
+    border: none;
+    border-radius: 0.5rem;
+    background: var(--btn-plain-bg, rgba(0,0,0,0.04));
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    color: var(--content-meta, #666);
+    transition: all 0.15s;
+    font-size: 1.125rem;
+  }
+  #desktop-sidebar-toggle:hover {
+    background: var(--btn-plain-bg-hover, rgba(0,0,0,0.08));
+    color: var(--primary);
+  }
+  /* 文章详情页时显示桌面浮动按钮 */
+  body.post-page #desktop-sidebar-toggle {
+    display: flex;
+  }
+  /* 文章详情页：桌面端正常两列布局，移动端浮动覆盖 */
+  /* 桌面端：侧边栏在 grid 中正常显示，点击按钮收起时隐藏 */
+  @media (min-width: 768px) {
+    body.post-page.sidebar-collapsed #left-sidebar-wrapper {
+      display: none !important;
+    }
+    body.post-page.sidebar-collapsed #desktop-sidebar-toggle {
+      display: flex !important;
+    }
+  }
+  /* 移动端：侧边栏浮动覆盖 */
+  @media (max-width: 767px) {
+    body.post-page #left-sidebar-wrapper {
+      position: fixed !important;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 65vw !important;
+      max-width: 280px !important;
+      z-index: 100;
+      background: var(--card-bg, #fff);
+      box-shadow: 2px 0 16px rgba(0,0,0,0.15);
+      transform: translateX(-100%);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      padding: 0.75rem !important;
+      display: none !important;
+    }
+    body.post-page #left-sidebar-wrapper.mobile-open {
+      transform: translateX(0);
+      display: block !important;
+    }
+    body.post-page #left-sidebar-wrapper.mobile-open #left-sidebar {
+      display: block !important;
+    }
+    /* 移动端目录项更紧凑 */
+    body.post-page #left-sidebar-wrapper .toc-item {
+      padding: 0.3rem 0.25rem !important;
+      font-size: 0.9rem !important;
+    }
+    body.post-page #left-sidebar-wrapper .toc-label {
+      font-size: 0.9rem !important;
+      line-height: 1.3 !important;
+    }
+    body.post-page #left-sidebar-wrapper widget-layout {
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      border: none !important;
+      background: transparent !important;
+    }
+    body.post-page #left-sidebar-wrapper .toc-scroll-container {
+      max-height: calc(100vh - 8rem) !important;
+    }
+  }
+  /* 文章页隐藏非目录组件（profile/categories/tags），只显示 sidebarToc */
+  body.post-page #left-sidebar-wrapper .widget-hide-on-post {
+    display: none !important;
+  }
+  /* === TOC 左对齐+完整显示 高优先级覆盖 === */
+  body.post-page #left-sidebar-wrapper .toc-content {
+    padding: 0.125rem 0 !important;
+    align-items: flex-start !important;
+  }
+  body.post-page #left-sidebar-wrapper .toc-item {
+    text-align: left !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    justify-content: flex-start !important;
+    padding: 0.3rem 0.25rem !important;
+    font-size: 1rem !important;
+  }
+  body.post-page #left-sidebar-wrapper .toc-item.toc-level-0 {
+    padding-left: 0.25rem !important;
+  }
+  body.post-page #left-sidebar-wrapper .toc-item.toc-level-1 {
+    padding-left: 0.75rem !important;
+  }
+  body.post-page #left-sidebar-wrapper .toc-item.toc-level-2 {
+    padding-left: 1.25rem !important;
+  }
+  body.post-page #left-sidebar-wrapper .toc-label {
+    text-align: left !important;
+    white-space: normal !important;
+    word-break: break-all !important;
+    line-height: 1.35 !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    font-size: 1rem !important;
+  }
+  body.post-page #left-sidebar-wrapper .toc-badge {
+    flex-shrink: 0 !important;
+  }
+  body.post-page #left-sidebar-wrapper .collapse-wrapper {
+    padding-left: 0.25rem !important;
+  }
+  /* 非文章页：桌面端正常显示侧边栏，隐藏浮动按钮 */
+  body:not(.post-page) #desktop-sidebar-toggle {
+    display: none !important;
+  }
+  /* 移动端顶栏按钮 */
+  #mobile-sidebar-toggle { display: none !important; }
+  body.post-page #mobile-sidebar-toggle { display: flex !important; }
+  @media (max-width: 767px) {
+    body.post-page #mobile-sidebar-toggle { display: flex !important; }
+    body.post-page #desktop-sidebar-toggle { display: none !important; }
+  }
+  @media (min-width: 768px) {
+    body.post-page #mobile-sidebar-toggle { display: none !important; }
+    body.post-page #desktop-sidebar-toggle { display: flex !important; }
+  }
 </style>
 
 <script>
@@ -823,6 +1019,124 @@ function disableAnimation() {
     "nav-menu-panel",
     "nav-menu-switch",
   ]);
+
+  // 文章详情页标记 + 浮动侧边栏切换
+  const mobileSidebarToggle = document.getElementById("mobile-sidebar-toggle");
+  const desktopSidebarToggle = document.getElementById("desktop-sidebar-toggle");
+  const leftSidebarWrapper = document.getElementById("left-sidebar-wrapper");
+  const mobileSidebarOverlay = document.getElementById("mobile-sidebar-overlay");
+
+  function checkPostPage() {
+    const isPost = window.location.pathname.includes("/posts/") || window.location.pathname.includes("/post/");
+    document.body.classList.toggle("post-page", isPost);
+    // 非文章页关闭侧边栏
+    if (!isPost && leftSidebarWrapper) {
+      leftSidebarWrapper.classList.remove("mobile-open");
+      if (mobileSidebarOverlay) mobileSidebarOverlay.classList.remove("open");
+      document.body.style.overflow = "";
+    }
+    // 文章页重置收起状态
+    if (isPost) {
+      document.body.classList.remove("sidebar-collapsed");
+      if (desktopSidebarToggle) desktopSidebarToggle.style.display = "none";
+    }
+  }
+  checkPostPage();
+
+  function toggleMobileSidebar() {
+    if (!leftSidebarWrapper) return;
+    const isMobile = window.innerWidth < 768;
+    if (isMobile) {
+      const isOpen = leftSidebarWrapper.classList.toggle("mobile-open");
+      if (mobileSidebarOverlay) mobileSidebarOverlay.classList.toggle("open", isOpen);
+      // 锁定/解锁 body 滚动，防止侧边栏滑动时正文跟着滚
+      document.body.style.overflow = isOpen ? "hidden" : "";
+    } else {
+      // 桌面端：切换收起/展开
+      const mainGrid = document.getElementById("main-grid");
+      if (!mainGrid) return;
+      const collapsed = document.body.classList.toggle("sidebar-collapsed");
+      if (desktopSidebarToggle) {
+        desktopSidebarToggle.style.display = "";
+      }
+      if (collapsed) {
+        // 收起：单列布局 + 清除子元素列定位类
+        applySingleColLayout(mainGrid);
+      } else {
+        // 展开：恢复两列布局
+        updateMainGridCols();
+      }
+    }
+  }
+  if (mobileSidebarToggle) mobileSidebarToggle.addEventListener("click", toggleMobileSidebar);
+  if (desktopSidebarToggle) desktopSidebarToggle.addEventListener("click", toggleMobileSidebar);
+  if (mobileSidebarOverlay) mobileSidebarOverlay.addEventListener("click", toggleMobileSidebar);
+
+  // 侧边栏滚动隔离：防止滚动传导到正文
+  function bindScrollIsolation(el: Element) {
+    el.addEventListener("wheel", (e: WheelEvent) => {
+      const maxScroll = el.scrollHeight - el.clientHeight;
+      if (maxScroll <= 0) return;
+      const atTop = el.scrollTop <= 0 && e.deltaY < 0;
+      const atBottom = el.scrollTop >= maxScroll && e.deltaY > 0;
+      if (atTop || atBottom) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }, { passive: false });
+  }
+  if (leftSidebarWrapper) {
+    bindScrollIsolation(leftSidebarWrapper);
+    leftSidebarWrapper.querySelectorAll(".toc-scroll-container, .collapse-wrapper-content").forEach(el => {
+      bindScrollIsolation(el);
+    });
+  }
+
+  // TOC 点击跳转：全局事件委托，最高优先级
+  if (!document.getElementById("global-toc-click")) {
+    const marker = document.createElement("div");
+    marker.id = "global-toc-click";
+    marker.style.display = "none";
+    document.body.appendChild(marker);
+    document.addEventListener("click", (e: MouseEvent) => {
+      const item = (e.target as HTMLElement)?.closest?.(".toc-item");
+      if (!item) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const href = item.getAttribute("href") || "";
+      const id = decodeURIComponent(href.replace(/^#/, ""));
+      const target = document.getElementById(id);
+      if (target) {
+        const offset = 80;
+        const top = target.getBoundingClientRect().top + window.pageYOffset - offset;
+        window.scrollTo({ top, behavior: "smooth" });
+        if (window.innerWidth < 768) {
+          leftSidebarWrapper?.classList.remove("mobile-open");
+          const overlay = document.getElementById("mobile-sidebar-overlay");
+          overlay?.classList.remove("open");
+        }
+      }
+    }, true);
+  }
+
+  // 页面切换时重新检测
+  document.addEventListener("swup:contentReplaced", () => {
+    setTimeout(checkPostPage, 50);
+    // 重新绑定滚动隔离
+    if (leftSidebarWrapper) {
+      leftSidebarWrapper.querySelectorAll(".toc-scroll-container, .collapse-wrapper-content").forEach(el => {
+        bindScrollIsolation(el);
+      });
+    }
+  });
+  document.addEventListener("astro:page-load", () => {
+    setTimeout(checkPostPage, 50);
+    if (leftSidebarWrapper) {
+      leftSidebarWrapper.querySelectorAll(".toc-scroll-container, .collapse-wrapper-content").forEach(el => {
+        bindScrollIsolation(el);
+      });
+    }
+  });
   setClickOutsideToClose("search-panel", [
     "search-panel",
     "search-bar",

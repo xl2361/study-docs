@@ -1,0 +1,159 @@
+---
+import type { CollectionEntry } from "astro:content";
+import { render } from "astro:content";
+import { Icon } from "astro-icon/components";
+import { getTagUrl } from "@/utils/url-utils";
+
+interface Props {
+	class?: string;
+	entry: CollectionEntry<"posts">;
+	title: string;
+	url: string;
+	published: Date;
+	updated?: Date;
+	tags: string[];
+	category: string | null;
+	image: string;
+	description: string;
+	draft: boolean;
+	pinned?: boolean;
+	password?: boolean;
+	style: string;
+	loading?: "lazy" | "eager";
+}
+const {
+	entry,
+	title,
+	url,
+	published,
+	tags,
+	pinned,
+	password,
+	style,
+	loading = "lazy",
+} = Astro.props;
+const className = Astro.props.class;
+const { remarkPluginFrontmatter } = await render(entry);
+const words = remarkPluginFrontmatter.words;
+const minutes = remarkPluginFrontmatter.minutes;
+const dateStr = published.toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" });
+---
+
+<div
+  class:list={[
+    "post-card-wrapper",
+    pinned ? "pinned" : "",
+    "card-base flex flex-col w-full rounded-(--radius-large) overflow-hidden relative",
+    className,
+  ]}
+  style={style}
+>
+  <div class="post-card-content px-4 md:px-6 py-2 md:py-3 relative flex flex-col h-full w-full">
+    <div class="flex items-start gap-1.5 mb-1">
+      <a
+        href={url}
+        class="post-card-title transition group flex-1 min-w-0 block font-bold text-lg md:text-2xl text-90
+          hover:text-(--primary) dark:hover:text-(--primary)
+          active:text-(--title-active) dark:active:text-(--title-active)"
+      >
+        {title}
+        {password && (
+          <Icon is:inline name="material-symbols:lock-outline" class="inline text-lg align-middle -translate-y-px" />
+        )}
+      </a>
+      <button
+        class="post-card-copy-title shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md text-black/35 dark:text-white/35 hover:text-(--primary) dark:hover:text-(--primary) hover:bg-black/5 dark:hover:bg-white/10 transition"
+        type="button"
+        data-copy-title={title}
+        aria-label="复制标题"
+        title="复制标题"
+      >
+        <Icon is:inline name="material-symbols:content-copy-outline-rounded" class="text-base" aria-hidden="true" />
+      </button>
+    </div>
+    <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-black/30 dark:text-white/30">
+      {pinned && <span class="text-(--primary) font-medium">置顶</span>}
+      {pinned && <span>·</span>}
+      <span class="whitespace-nowrap">{dateStr}</span>
+      <span>·</span>
+      <span class="whitespace-nowrap">{minutes}分钟</span>
+      {tags && tags.length > 0 && tags.slice(0, 3).map((tag) => (
+        <a href={getTagUrl(tag)} class="transition hover:text-(--primary) whitespace-nowrap">#{tag.trim()}</a>
+      ))}
+    </div>
+  </div>
+</div>
+
+<style>
+  /* 复制按钮默认隐藏，hover 卡片或按钮时显示；触屏设备始终可见 */
+  .post-card-copy-title {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .post-card-wrapper:hover .post-card-copy-title,
+  .post-card-copy-title:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .post-card-copy-title.copied {
+    color: var(--primary);
+    opacity: 1;
+    pointer-events: auto;
+  }
+  @media (hover: none) {
+    .post-card-copy-title {
+      opacity: 1;
+      pointer-events: auto;
+    }
+  }
+</style>
+
+<script>
+  // 首页文章卡片标题复制按钮：事件委托，兼容 swup 换页
+  function initPostCardCopy() {
+    document.querySelectorAll(".post-card-copy-title:not([data-bound])").forEach((btn) => {
+      btn.dataset.bound = "true";
+      btn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const text = btn.getAttribute("data-copy-title") || "";
+        if (!text) return;
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+          } else {
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            ta.style.position = "fixed";
+            ta.style.opacity = "0";
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            document.body.removeChild(ta);
+          }
+          const original = btn.getAttribute("title");
+          btn.classList.add("copied");
+          btn.setAttribute("title", "已复制");
+          setTimeout(() => {
+            btn.classList.remove("copied");
+            if (original) btn.setAttribute("title", original);
+          }, 1500);
+        } catch (err) {
+          console.warn("复制标题失败:", err);
+        }
+      });
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initPostCardCopy);
+  } else {
+    initPostCardCopy();
+  }
+  document.addEventListener("swup:contentReplaced", () => {
+    setTimeout(initPostCardCopy, 100);
+  });
+  document.addEventListener("astro:page-load", () => {
+    setTimeout(initPostCardCopy, 100);
+  });
+</script>

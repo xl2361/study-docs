@@ -19,24 +19,16 @@ interface Props {
 	pinned?: boolean;
 	password?: boolean;
 	style: string;
-	loading?: "lazy" | "eager";
 }
-const {
-	entry,
-	title,
-	url,
-	published,
-	tags,
-	pinned,
-	password,
-	style,
-	loading = "lazy",
-} = Astro.props;
+const { entry, title, url, published, tags, pinned, password, style } =
+	Astro.props;
 const className = Astro.props.class;
 const { remarkPluginFrontmatter } = await render(entry);
-const words = remarkPluginFrontmatter.words;
 const minutes = remarkPluginFrontmatter.minutes;
-const dateStr = published.toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" });
+const dateStr = published.toLocaleDateString("zh-CN", {
+	month: "2-digit",
+	day: "2-digit",
+});
 ---
 
 <div
@@ -111,7 +103,7 @@ const dateStr = published.toLocaleDateString("zh-CN", { month: "2-digit", day: "
 <script>
   // 首页文章卡片标题复制按钮：事件委托，兼容 swup 换页
   function initPostCardCopy() {
-    document.querySelectorAll(".post-card-copy-title:not([data-bound])").forEach((btn) => {
+    document.querySelectorAll<HTMLButtonElement>(".post-card-copy-title:not([data-bound])").forEach((btn) => {
       btn.dataset.bound = "true";
       btn.addEventListener("click", async (e) => {
         e.preventDefault();
@@ -119,17 +111,21 @@ const dateStr = published.toLocaleDateString("zh-CN", { month: "2-digit", day: "
         const text = btn.getAttribute("data-copy-title") || "";
         if (!text) return;
         try {
-          if (navigator.clipboard && window.isSecureContext) {
+          if (navigator.clipboard?.writeText) {
             await navigator.clipboard.writeText(text);
           } else {
-            const ta = document.createElement("textarea");
-            ta.value = text;
-            ta.style.position = "fixed";
-            ta.style.opacity = "0";
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand("copy");
-            document.body.removeChild(ta);
+            const textarea = document.createElement("textarea");
+            textarea.value = text;
+            textarea.style.position = "fixed";
+            textarea.style.opacity = "0";
+            document.body.appendChild(textarea);
+            textarea.select();
+            const copyCommand = (
+              document as unknown as { execCommand: (command: string) => boolean }
+            ).execCommand.bind(document);
+            const copied = copyCommand("copy");
+            textarea.remove();
+            if (!copied) throw new Error("Copy command failed");
           }
           const original = btn.getAttribute("title");
           btn.classList.add("copied");

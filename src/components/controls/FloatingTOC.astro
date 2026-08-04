@@ -193,6 +193,10 @@ const hideSidebarOnPostPage =
 
   // 设置自动关闭功能
   function setupAutoClose() {
+	// 客户端导航可能再次执行组件脚本，全局监听只绑定一次。
+	if (document.documentElement.dataset.floatingTocAutoCloseBound === "true") return;
+	document.documentElement.dataset.floatingTocAutoCloseBound = "true";
+
     // 监听页面卸载和隐藏
     window.addEventListener("beforeunload", closeTOC);
     window.addEventListener("pagehide", closeTOC);
@@ -205,14 +209,9 @@ const hideSidebarOnPostPage =
     // 监听 Astro 页面切换
     document.addEventListener("astro:page-load", closeTOC);
     document.addEventListener("astro:before-preparation", closeTOC);
+    window.addEventListener("toc:navigate", closeTOC);
 
-    // 监听 hashchange（排除TOC内部导航）
-    window.addEventListener("hashchange", () => {
-      if (!window.tocInternalNavigation) {
-        closeTOC();
-      }
-      window.tocInternalNavigation = false;
-    });
+    window.addEventListener("hashchange", closeTOC);
 
     // 监听外部链接点击
     document.addEventListener("click", (e) => {
@@ -221,35 +220,28 @@ const hideSidebarOnPostPage =
       if (!link || !link.href) return;
 
       const href = link.getAttribute("href");
+	  const tocPanel = document.getElementById("floating-toc-panel");
+	  if (href?.startsWith("#") && tocPanel?.contains(link)) return;
       const isExternalLink = href && !href.startsWith("#") && !href.startsWith("javascript:");
       
-      if (isExternalLink && !window.tocInternalNavigation) {
-        const tocPanel = document.getElementById("floating-toc-panel");
+      if (isExternalLink) {
         if (!tocPanel || !tocPanel.contains(link)) {
           closeTOC();
         }
       }
     });
 
-    // 拦截 history API
-    const originalPushState = history.pushState;
-    const originalReplaceState = history.replaceState;
-
-    history.pushState = function (...args) {
-      closeTOC();
-      return originalPushState.apply(this, args);
-    };
-
-    history.replaceState = function (...args) {
-      closeTOC();
-      return originalReplaceState.apply(this, args);
-    };
   }
 
   // 检查是否应该显示悬浮目录
   function shouldShowFloatingTOC() {
     // 检查是否为文章页面
     if (!window.FloatingTOC.isPostPage()) {
+      return false;
+    }
+
+    // 桌面端使用侧边栏目录，仅在平板和手机端保留悬浮目录按钮。
+    if (window.innerWidth >= 1024) {
       return false;
     }
 
@@ -317,18 +309,6 @@ const hideSidebarOnPostPage =
       // attach() 自校正：SSR 锚点与当前正文一致则直接附着；
       // 缺失或过时（加密未解密/异常情况）则自动回退 DOM 遍历重建。
       window.FloatingTOC.manager.attach();
-
-      // 设置点击事件 - 标记为 TOC 内部导航
-      const tocContent = document.getElementById("floating-toc-content");
-      if (tocContent) {
-        tocContent.addEventListener("click", (e) => {
-          const target = e.target as Element | null;
-          const anchor = target?.closest('a[href^="#"]');
-          if (anchor) {
-            window.tocInternalNavigation = true;
-          }
-        }, { capture: true });
-      }
 
       // 设置自动关闭
       setupAutoClose();

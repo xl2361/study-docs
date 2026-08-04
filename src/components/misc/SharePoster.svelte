@@ -1,5 +1,4 @@
 <script lang="ts">
-import QRCode from "qrcode";
 import { onMount } from "svelte";
 import Icon from "@/components/common/Icon.svelte";
 import { siteConfig } from "@/config";
@@ -213,6 +212,7 @@ async function generatePoster() {
 
 	generating = true;
 	try {
+		const { default: QRCode } = await import("qrcode");
 		const scale = 2;
 		const width = 425 * scale;
 		const padding = 24 * scale;

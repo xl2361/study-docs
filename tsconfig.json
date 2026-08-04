@@ -4,11 +4,8 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "jsx": "react-jsx",
-    "jsxImportSource": "react",
     "strictNullChecks": true,
     "allowJs": false,
-    "declaration": true,
     "noUncheckedSideEffectImports": false,
     "plugins": [
       {

@@ -48,8 +48,10 @@ let { title, description, lang, setOGTypeArticle, postSlug } = Astro.props;
 // apply a class to the body element to decide the height of the banner, only used for initial page load
 // Swup can update the body for each page visit, but it's after the page transition, causing a delay for banner height change
 // so use Swup hooks instead to change the height immediately when a link is clicked
-  const isHomePageCheck = isHomePage(Astro.url.pathname);
-  const isPostPage = Astro.url.pathname.includes("/posts/") || Astro.url.pathname.includes("/post/");
+const isHomePageCheck = isHomePage(Astro.url.pathname);
+const isPostPage =
+	Astro.url.pathname.includes("/posts/") ||
+	Astro.url.pathname.includes("/post/");
 
 // defines global css variables
 // why doing this in Layout instead of GlobalStyles: https://github.com/withastro/astro/issues/6728#issuecomment-1502203757
@@ -642,7 +644,7 @@ const siteLang = lang.replace("_", "-");
     <CodeGroupManager />
     <div id="mobile-sidebar-overlay"></div>
     <button id="desktop-sidebar-toggle" aria-label="切换目录">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h18v2H3V5m0 4h18v2H3V9m0 4h12v2H3v-2m0 4h12v2H3v-2z"/></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 5.5A1.5 1.5 0 1 0 4 8.5a1.5 1.5 0 0 0 0-3M8 6h13v2H8V6M4 10.5A1.5 1.5 0 1 0 4 13.5a1.5 1.5 0 0 0 0-3M8 11h13v2H8v-2M4 15.5A1.5 1.5 0 1 0 4 18.5a1.5 1.5 0 0 0 0-3M8 16h13v2H8v-2Z"/></svg>
     </button>
   </body>
 </html>
@@ -821,6 +823,23 @@ const siteLang = lang.replace("_", "-");
     background: var(--btn-plain-bg-hover, rgba(0,0,0,0.08));
     color: var(--primary);
   }
+  #desktop-sidebar-toggle.in-sidebar-title {
+    position: static;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 0.375rem;
+    background: transparent;
+    box-shadow: none;
+    color: var(--content-meta, #666);
+    flex-shrink: 0;
+  }
+  #desktop-sidebar-toggle.in-sidebar-title svg {
+    width: 1rem;
+    height: 1rem;
+  }
+  #desktop-sidebar-toggle:not(.in-sidebar-title) {
+    top: var(--desktop-sidebar-toggle-top, 5rem);
+  }
   /* 文章详情页时显示桌面浮动按钮 */
   body.post-page #desktop-sidebar-toggle {
     display: flex;
@@ -885,42 +904,11 @@ const siteLang = lang.replace("_", "-");
   body.post-page #left-sidebar-wrapper .widget-hide-on-post {
     display: none !important;
   }
-  /* === TOC 左对齐+完整显示 高优先级覆盖 === */
-  body.post-page #left-sidebar-wrapper .toc-content {
-    padding: 0.125rem 0 !important;
-    align-items: flex-start !important;
-  }
-  body.post-page #left-sidebar-wrapper .toc-item {
-    text-align: left !important;
-    white-space: normal !important;
-    overflow: visible !important;
-    justify-content: flex-start !important;
-    padding: 0.3rem 0.25rem !important;
-    font-size: 1rem !important;
-  }
-  body.post-page #left-sidebar-wrapper .toc-item.toc-level-0 {
-    padding-left: 0.25rem !important;
-  }
-  body.post-page #left-sidebar-wrapper .toc-item.toc-level-1 {
-    padding-left: 0.75rem !important;
-  }
-  body.post-page #left-sidebar-wrapper .toc-item.toc-level-2 {
-    padding-left: 1.25rem !important;
-  }
-  body.post-page #left-sidebar-wrapper .toc-label {
-    text-align: left !important;
-    white-space: normal !important;
-    word-break: break-all !important;
-    line-height: 1.35 !important;
-    overflow: visible !important;
-    text-overflow: clip !important;
-    font-size: 1rem !important;
-  }
-  body.post-page #left-sidebar-wrapper .toc-badge {
-    flex-shrink: 0 !important;
-  }
-  body.post-page #left-sidebar-wrapper .collapse-wrapper {
-    padding-left: 0.25rem !important;
+  @media (min-width: 768px) {
+    body.post-page #left-sidebar-wrapper .toc-item,
+    body.post-page #left-sidebar-wrapper .toc-label {
+      font-size: 0.9rem !important;
+    }
   }
   /* 非文章页：桌面端正常显示侧边栏，隐藏浮动按钮 */
   body:not(.post-page) #desktop-sidebar-toggle {
@@ -928,9 +916,8 @@ const siteLang = lang.replace("_", "-");
   }
   /* 移动端顶栏按钮 */
   #mobile-sidebar-toggle { display: none !important; }
-  body.post-page #mobile-sidebar-toggle { display: flex !important; }
   @media (max-width: 767px) {
-    body.post-page #mobile-sidebar-toggle { display: flex !important; }
+    body.post-page #mobile-sidebar-toggle { display: none !important; }
     body.post-page #desktop-sidebar-toggle { display: none !important; }
   }
   @media (min-width: 768px) {
@@ -1038,7 +1025,29 @@ function disableAnimation() {
     // 文章页重置收起状态
     if (isPost) {
       document.body.classList.remove("sidebar-collapsed");
-      if (desktopSidebarToggle) desktopSidebarToggle.style.display = "none";
+    }
+    updateDesktopSidebarTogglePlacement();
+  }
+
+  function updateDesktopSidebarTogglePlacement() {
+    if (!desktopSidebarToggle) return;
+    const isPost = document.body.classList.contains("post-page");
+    const collapsed = document.body.classList.contains("sidebar-collapsed");
+    const slot = document.getElementById("desktop-sidebar-toggle-slot");
+
+    if (isPost && window.innerWidth >= 768 && !collapsed && slot) {
+      slot.appendChild(desktopSidebarToggle);
+      desktopSidebarToggle.classList.add("in-sidebar-title");
+    } else {
+      document.body.appendChild(desktopSidebarToggle);
+      desktopSidebarToggle.classList.remove("in-sidebar-title");
+      if (isPost && window.innerWidth >= 768) {
+        const content = document.getElementById("swup-container");
+        if (content) {
+          const contentTop = Math.max(16, content.getBoundingClientRect().top);
+          desktopSidebarToggle.style.setProperty("--desktop-sidebar-toggle-top", `${contentTop}px`);
+        }
+      }
     }
   }
   checkPostPage();
@@ -1056,9 +1065,7 @@ function disableAnimation() {
       const mainGrid = document.getElementById("main-grid");
       if (!mainGrid) return;
       const collapsed = document.body.classList.toggle("sidebar-collapsed");
-      if (desktopSidebarToggle) {
-        desktopSidebarToggle.style.display = "";
-      }
+      updateDesktopSidebarTogglePlacement();
       if (collapsed) {
         // 收起：单列布局 + 清除子元素列定位类
         applySingleColLayout(mainGrid);
@@ -1071,10 +1078,13 @@ function disableAnimation() {
   if (mobileSidebarToggle) mobileSidebarToggle.addEventListener("click", toggleMobileSidebar);
   if (desktopSidebarToggle) desktopSidebarToggle.addEventListener("click", toggleMobileSidebar);
   if (mobileSidebarOverlay) mobileSidebarOverlay.addEventListener("click", toggleMobileSidebar);
+  window.addEventListener("resize", updateDesktopSidebarTogglePlacement);
 
   // 侧边栏滚动隔离：防止滚动传导到正文
-  function bindScrollIsolation(el: Element) {
-    el.addEventListener("wheel", (e: WheelEvent) => {
+  function bindScrollIsolation(el: HTMLElement) {
+    if (el.dataset.scrollIsolationBound === "true") return;
+    el.dataset.scrollIsolationBound = "true";
+    el.addEventListener("wheel", (e) => {
       const maxScroll = el.scrollHeight - el.clientHeight;
       if (maxScroll <= 0) return;
       const atTop = el.scrollTop <= 0 && e.deltaY < 0;
@@ -1087,36 +1097,9 @@ function disableAnimation() {
   }
   if (leftSidebarWrapper) {
     bindScrollIsolation(leftSidebarWrapper);
-    leftSidebarWrapper.querySelectorAll(".toc-scroll-container, .collapse-wrapper-content").forEach(el => {
+    leftSidebarWrapper.querySelectorAll<HTMLElement>(".toc-scroll-container, .collapse-wrapper-content").forEach(el => {
       bindScrollIsolation(el);
     });
-  }
-
-  // TOC 点击跳转：全局事件委托，最高优先级
-  if (!document.getElementById("global-toc-click")) {
-    const marker = document.createElement("div");
-    marker.id = "global-toc-click";
-    marker.style.display = "none";
-    document.body.appendChild(marker);
-    document.addEventListener("click", (e: MouseEvent) => {
-      const item = (e.target as HTMLElement)?.closest?.(".toc-item");
-      if (!item) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      const href = item.getAttribute("href") || "";
-      const id = decodeURIComponent(href.replace(/^#/, ""));
-      const target = document.getElementById(id);
-      if (target) {
-        const offset = 80;
-        const top = target.getBoundingClientRect().top + window.pageYOffset - offset;
-        window.scrollTo({ top, behavior: "smooth" });
-        if (window.innerWidth < 768) {
-          leftSidebarWrapper?.classList.remove("mobile-open");
-          const overlay = document.getElementById("mobile-sidebar-overlay");
-          overlay?.classList.remove("open");
-        }
-      }
-    }, true);
   }
 
   // 页面切换时重新检测
@@ -1124,7 +1107,7 @@ function disableAnimation() {
     setTimeout(checkPostPage, 50);
     // 重新绑定滚动隔离
     if (leftSidebarWrapper) {
-      leftSidebarWrapper.querySelectorAll(".toc-scroll-container, .collapse-wrapper-content").forEach(el => {
+      leftSidebarWrapper.querySelectorAll<HTMLElement>(".toc-scroll-container, .collapse-wrapper-content").forEach(el => {
         bindScrollIsolation(el);
       });
     }
@@ -1132,7 +1115,7 @@ function disableAnimation() {
   document.addEventListener("astro:page-load", () => {
     setTimeout(checkPostPage, 50);
     if (leftSidebarWrapper) {
-      leftSidebarWrapper.querySelectorAll(".toc-scroll-container, .collapse-wrapper-content").forEach(el => {
+      leftSidebarWrapper.querySelectorAll<HTMLElement>(".toc-scroll-container, .collapse-wrapper-content").forEach(el => {
         bindScrollIsolation(el);
       });
     }

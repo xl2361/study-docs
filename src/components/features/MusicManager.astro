@@ -97,22 +97,24 @@ const managerConfigStr = JSON.stringify({
 
     // ── Audio element (persistent, attached to body) ────────
     var audio = document.createElement('audio');
-    audio.crossOrigin = 'anonymous';
     audio.style.display = 'none';
-    audio.preload = 'metadata';
+    audio.preload = 'auto';
     document.body.appendChild(audio);
     audio.pause(); // 确保不自动播放
 
     // ── State ────────────────────────────────────────────────
     var loadVersion = 0; // incremented on each loadTrack to discard stale play() results
+    var lyricsController = null;
+    var storedVolume = Number.parseFloat(localStorage.getItem('music-player-volume'));
+    var initialVolume = Number.isFinite(storedVolume)
+        ? Math.max(0, Math.min(1, storedVolume))
+        : (config.volume ?? 0.7);
     var state = {
         playlist: [],
         currentIndex: 0,
         isPlaying: false,
         playMode: 0, // 0: list, 1: one, 2: random
-        volume: localStorage.getItem('music-player-volume') !== null
-            ? parseFloat(localStorage.getItem('music-player-volume'))
-            : (config.volume || 0.7),
+        volume: initialVolume,
         isMuted: false,
         lyrics: [],
         currentLrcIndex: -1,
@@ -136,6 +138,15 @@ const managerConfigStr = JSON.stringify({
         if (!config.meting) return;
         var m = config.meting;
         var apis = [m.api].concat(m.fallbackApis || []);
+        var cacheKey = 'music-playlist:' + [m.server, m.type, m.id].join(':');
+
+        try {
+            var cached = JSON.parse(localStorage.getItem(cacheKey));
+            if (cached && Date.now() - cached.time < 21600000 && Array.isArray(cached.playlist) && cached.playlist.length) {
+                state.playlist = cached.playlist;
+                return;
+            }
+        } catch (_) {}
 
         for (var i = 0; i < apis.length; i++) {
             var baseApi = apis[i];
@@ -162,6 +173,9 @@ const managerConfigStr = JSON.stringify({
                             lrc: item.lrc
                         };
                     });
+                    try {
+                        localStorage.setItem(cacheKey, JSON.stringify({ time: Date.now(), playlist: state.playlist }));
+                    } catch (_) {}
                     return;
                 }
             } catch (e) {
@@ -172,7 +186,9 @@ const managerConfigStr = JSON.stringify({
     }
 
     // ── Lyrics ───────────────────────────────────────────────
-    function loadLyrics(track) {
+    function loadLyrics(track, ver) {
+        if (lyricsController) lyricsController.abort();
+        lyricsController = null;
         state.lyrics = [];
         state.currentLrcIndex = -1;
 
@@ -186,18 +202,23 @@ const managerConfigStr = JSON.stringify({
             || /\.(lrc|txt)(\?|#|$)/i.test(track.lrc);
 
         if (isLrcUrl) {
+            var controller = new AbortController();
+            lyricsController = controller;
             emit('fm:lyrics', { lyrics: [], status: 'loading' });
-            fetch(track.lrc)
+            fetch(track.lrc, { signal: controller.signal })
                 .then(function (r) { return r.text(); })
                 .then(function (text) {
+                    if (ver !== loadVersion || controller.signal.aborted) return;
                     state.lyrics = parseLRC(text);
                     emit('fm:lyrics', { lyrics: state.lyrics, status: 'loaded' });
                 })
-                .catch(function () {
+                .catch(function (error) {
+                    if (ver !== loadVersion || error.name === 'AbortError') return;
                     state.lyrics = [];
                     emit('fm:lyrics', { lyrics: [], status: 'failed' });
                 });
         } else {
+            if (ver !== loadVersion) return;
             state.lyrics = parseLRC(track.lrc);
             emit('fm:lyrics', { lyrics: state.lyrics, status: state.lyrics.length > 0 ? 'loaded' : 'none' });
         }
@@ -206,59 +227,134 @@ const managerConfigStr = JSON.stringify({
     var currentTrackUrls = [];
     var currentTrackUrlIndex = 0;
     var errorSkipTimeout = null;
+    var stallTimeout = null;
+    var pendingResumeTime = 0;
+    var playRequested = false;
 
-    function tryPlayCurrentTrackUrl(autoPlay, ver) {
+    function clearStallTimeout() {
+        if (!stallTimeout) return;
+        clearTimeout(stallTimeout);
+        stallTimeout = null;
+    }
+
+    function failCurrentTrackUrl(ver, error) {
         if (ver !== loadVersion) return;
-        var playUrl = currentTrackUrls[currentTrackUrlIndex];
-        audio.src = playUrl;
+        if (currentTrackUrlIndex < currentTrackUrls.length - 1) {
+            currentTrackUrlIndex++;
+            console.warn('Playback source failed, trying fallback:', error);
+            tryPlayCurrentTrackUrl(playRequested, ver);
+            return;
+        }
 
-        if (autoPlay) {
-            audio.play().then(function () {
-                if (ver !== loadVersion) return; // stale, discard
+        state.error = 'Audio playback error';
+        state.isPlaying = false;
+        emit('fm:play-state', { isPlaying: false });
+        if (!playRequested) {
+            emit('fm:error', { message: '当前歌曲暂时无法加载' });
+            return;
+        }
+        emit('fm:error', { message: '播放失败，即将自动跳过...' });
+        if (errorSkipTimeout) clearTimeout(errorSkipTimeout);
+        errorSkipTimeout = setTimeout(function () {
+            if (ver === loadVersion) playNext(true);
+        }, 2000);
+    }
+
+    async function resolveTrackUrl(candidate) {
+        if (!candidate || !candidate.url) throw new Error('Missing playback URL');
+        if (candidate.response !== 'json') return candidate.url;
+        if (candidate.resolvedUrl) return candidate.resolvedUrl;
+        if (candidate.resolving) return candidate.resolving;
+
+        candidate.resolving = fetch(candidate.url).then(async function (response) {
+            if (!response.ok) throw new Error('Fallback HTTP ' + response.status);
+            var data = await response.json();
+            if (!data || typeof data.url !== 'string' || !data.url.startsWith('http')) {
+                throw new Error('Fallback did not return an audio URL');
+            }
+            candidate.resolvedUrl = data.url;
+            return data.url;
+        }).finally(function () {
+            candidate.resolving = null;
+        });
+        return candidate.resolving;
+    }
+
+    async function tryPlayCurrentTrackUrl(autoPlay, ver) {
+        if (ver !== loadVersion) return;
+        var candidateIndex = currentTrackUrlIndex;
+
+        try {
+            var playUrl = await resolveTrackUrl(currentTrackUrls[candidateIndex]);
+            if (ver !== loadVersion || candidateIndex !== currentTrackUrlIndex) return;
+            var resumeAt = pendingResumeTime;
+            pendingResumeTime = 0;
+            if (resumeAt > 0) {
+                audio.addEventListener('loadedmetadata', function () {
+                    if (ver === loadVersion && Number.isFinite(audio.duration)) {
+                        audio.currentTime = Math.min(resumeAt, audio.duration);
+                    }
+                }, { once: true });
+            }
+            audio.src = playUrl;
+
+            if (autoPlay && playRequested) {
+                await audio.play();
+                if (ver !== loadVersion || !playRequested) {
+                    audio.pause();
+                    return;
+                }
                 state.isPlaying = true;
                 state.error = null;
+                clearStallTimeout();
                 emit('fm:play-state', { isPlaying: true });
-            }).catch(function (e) {
-                if (ver !== loadVersion) return; // stale, discard
-                if (e.name === 'AbortError') return; // interrupted by new load
-                console.warn('Autoplay blocked:', e);
-            });
-        } else {
-            state.isPlaying = false;
-            emit('fm:play-state', { isPlaying: false });
+            } else {
+                state.isPlaying = false;
+                emit('fm:play-state', { isPlaying: false });
+            }
+        } catch (e) {
+            if (ver !== loadVersion || candidateIndex !== currentTrackUrlIndex) return;
+            if (e && e.name === 'AbortError') return;
+            failCurrentTrackUrl(ver, e);
         }
     }
 
     // ── Track loading ────────────────────────────────────────
     function loadTrack(index, autoPlay) {
-        if (index < 0 || index >= state.playlist.length) return;
+        if (!state.playlist.length || !Number.isInteger(index) || index < 0 || index >= state.playlist.length) return;
         state.currentIndex = index;
         var track = state.playlist[index];
         var ver = ++loadVersion;
+        playRequested = !!autoPlay;
+        pendingResumeTime = 0;
+        clearStallTimeout();
 
         if (errorSkipTimeout) {
             clearTimeout(errorSkipTimeout);
             errorSkipTimeout = null;
         }
 
-        currentTrackUrls = [track.url];
+        currentTrackUrls = [{ url: track.url, response: 'audio' }];
         currentTrackUrlIndex = 0;
 
         var matchId = track.url.match(/[?&]id=([^&]+)/);
         var matchServer = track.url.match(/[?&]server=([^&]+)/);
-        if (matchId && matchServer && config.meting && config.meting.fallbackApis) {
-            config.meting.fallbackApis.forEach(function (fallback) {
-                var fallbackUrl = fallback
+        if (matchId && matchServer && config.meting && config.meting.urlFallbackApis) {
+            config.meting.urlFallbackApis.forEach(function (fallback) {
+                var fallbackUrl = fallback.api
                     .replace(':server', matchServer[1])
                     .replace(':type', 'url')
                     .replace(':id', matchId[1]);
-                if (currentTrackUrls.indexOf(fallbackUrl) === -1) {
-                    currentTrackUrls.push(fallbackUrl);
+                if (!currentTrackUrls.some(function (candidate) { return candidate.url === fallbackUrl; })) {
+                    currentTrackUrls.push({
+                        url: fallbackUrl,
+                        response: fallback.response || 'audio'
+                    });
                 }
             });
         }
 
-        loadLyrics(track);
+        loadLyrics(track, ver);
 
         emit('fm:track', { index: index, track: track, autoPlay: !!autoPlay });
 
@@ -268,14 +364,22 @@ const managerConfigStr = JSON.stringify({
     // ── Playback controls ────────────────────────────────────
     function togglePlay() {
         if (audio.paused) {
+            var ver = loadVersion;
+            playRequested = true;
             audio.play().then(function () {
+                if (ver !== loadVersion || !playRequested) return;
                 state.isPlaying = true;
                 emit('fm:play-state', { isPlaying: true });
             }).catch(function (e) {
+                if (ver !== loadVersion) return;
                 if (e.name === 'AbortError') return;
+                playRequested = false;
+                state.isPlaying = false;
+                emit('fm:play-state', { isPlaying: false });
                 console.warn('Playback failed:', e);
             });
         } else {
+            playRequested = false;
             audio.pause();
             state.isPlaying = false;
             emit('fm:play-state', { isPlaying: false });
@@ -283,6 +387,7 @@ const managerConfigStr = JSON.stringify({
     }
 
     function playNext(auto) {
+        if (!state.playlist.length) return;
         if (state.playMode === 1 && auto) {
             audio.currentTime = 0;
             audio.play();
@@ -298,6 +403,7 @@ const managerConfigStr = JSON.stringify({
     }
 
     function playPrev() {
+        if (!state.playlist.length) return;
         var prevIndex;
         if (state.playMode === 2) {
             prevIndex = Math.floor(Math.random() * state.playlist.length);
@@ -332,15 +438,25 @@ const managerConfigStr = JSON.stringify({
         emit('fm:volume', { volume: state.volume, isMuted: state.isMuted });
     }
 
+    var pendingSeekHandler = null;
     function seek(percent) {
         percent = Math.max(0, Math.min(1, percent));
+        if (pendingSeekHandler) {
+            audio.removeEventListener('loadedmetadata', pendingSeekHandler);
+            pendingSeekHandler = null;
+        }
         if (!isNaN(audio.duration) && audio.duration > 0) {
             audio.currentTime = percent * audio.duration;
         } else {
             // duration 不可用（preload=none 且元数据未加载），等待 loadedmetadata
-            audio.addEventListener('loadedmetadata', function () {
-                audio.currentTime = percent * audio.duration;
-            }, { once: true });
+            var ver = loadVersion;
+            pendingSeekHandler = function () {
+                pendingSeekHandler = null;
+                if (ver === loadVersion && Number.isFinite(audio.duration) && audio.duration > 0) {
+                    audio.currentTime = percent * audio.duration;
+                }
+            };
+            audio.addEventListener('loadedmetadata', pendingSeekHandler, { once: true });
         }
     }
 
@@ -387,26 +503,30 @@ const managerConfigStr = JSON.stringify({
     });
 
     audio.addEventListener('ended', function () {
+        playRequested = true;
         playNext(true);
     });
 
+    function handleBuffering() {
+        if (!playRequested || currentTrackUrlIndex >= currentTrackUrls.length - 1 || stallTimeout) return;
+        var ver = loadVersion;
+        stallTimeout = setTimeout(function () {
+            stallTimeout = null;
+            if (ver !== loadVersion || audio.paused || currentTrackUrlIndex >= currentTrackUrls.length - 1) return;
+            pendingResumeTime = audio.currentTime;
+            currentTrackUrlIndex++;
+            tryPlayCurrentTrackUrl(true, ver);
+        }, 4000);
+    }
+
+    audio.addEventListener('waiting', handleBuffering);
+    audio.addEventListener('stalled', handleBuffering);
+    audio.addEventListener('playing', clearStallTimeout);
+    audio.addEventListener('canplay', clearStallTimeout);
+
     audio.addEventListener('error', function () {
         var ver = loadVersion;
-        if (currentTrackUrlIndex < currentTrackUrls.length - 1) {
-            currentTrackUrlIndex++;
-            console.warn('Playback failed, trying fallback URL: ' + currentTrackUrls[currentTrackUrlIndex]);
-            tryPlayCurrentTrackUrl(true, ver);
-        } else {
-            state.error = 'Audio playback error';
-            emit('fm:error', { message: '播放失败，即将自动跳过...' });
-
-            if (errorSkipTimeout) clearTimeout(errorSkipTimeout);
-            errorSkipTimeout = setTimeout(function () {
-                if (ver === loadVersion) {
-                    playNext(true);
-                }
-            }, 2000);
-        }
+        failCurrentTrackUrl(ver, new Error('Audio element error'));
     });
 
     // ── Init (idempotent) ────────────────────────────────────
@@ -501,18 +621,5 @@ const managerConfigStr = JSON.stringify({
         playTrackByIndex: playTrackByIndex,
         loadTrack: loadTrack
     };
-
-    // ── swup 导航后恢复播放状态 ──────────────────────────
-    // 浏览器在 SPA 导航时可能暂停 audio，导航完成后自动恢复
-    function resumeIfNeeded() {
-        if (state.isPlaying && audio.paused && audio.src) {
-            audio.play().catch(function (e) {
-                if (e.name === 'AbortError') return;
-                console.warn('Resume playback after navigation:', e);
-            });
-        }
-    }
-    document.addEventListener('swup:contentReplaced', resumeIfNeeded);
-    document.addEventListener('astro:page-load', resumeIfNeeded);
 })();
 </script>

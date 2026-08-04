@@ -24,7 +24,6 @@ declare global {
 			isPostPage: () => boolean;
 		};
 		toggleFloatingTOC: () => void;
-		tocInternalNavigation: boolean;
 		// swup is defined in global.d.ts
 		// biome-ignore lint/suspicious/noExplicitAny: External library without types
 		spine: any;

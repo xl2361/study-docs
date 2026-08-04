@@ -81,9 +81,11 @@ const widgetId =
                     <Icon is:inline name="material-symbols:volume-up-rounded" class=" icon-vol-high text-lg" aria-hidden="true" />
                     <Icon is:inline name="material-symbols:volume-off-rounded" class="icon-vol-mute text-lg hidden" aria-hidden="true" />
                 </button>
-                <div class="w-16 transition-all duration-300 ease-out flex items-center">
-                    <div class="vol-container h-1 w-16 bg-neutral-300/50 dark:bg-neutral-500/40 rounded-full cursor-pointer relative ml-1" role="slider" aria-label={i18n(I18nKey.musicVolume)} aria-valuemin="0" aria-valuemax="100" aria-valuenow="70">
-                        <div class="vol-bar absolute left-0 top-0 h-full bg-(--primary) rounded-full w-[70%]"></div>
+                <div class="w-16 flex items-center">
+                    <div class="vol-container h-5 w-16 cursor-pointer relative ml-1 touch-pan-y select-none" role="slider" tabindex="0" aria-label={i18n(I18nKey.musicVolume)} aria-valuemin="0" aria-valuemax="100" aria-valuenow="70">
+                        <div class="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 bg-neutral-300/50 dark:bg-neutral-500/40 rounded-full pointer-events-none">
+                            <div class="vol-bar h-full bg-(--primary) rounded-full w-[84%]"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -93,10 +95,12 @@ const widgetId =
 
 <!-- Progress Bar (Slim) -->
 <div class="px-1">
-    <div class="progress-container relative w-full h-1 bg-neutral-300/60 dark:bg-neutral-500/40 rounded-full cursor-pointer mb-2 group mt-2 before:content-[''] before:absolute before:inset-x-0 before:-inset-y-2 before:z-10 before:pointer-events-none" role="slider" aria-label={i18n(I18nKey.musicProgress)} aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-        <div class="progress-bar absolute left-0 top-0 h-full bg-(--primary) rounded-full w-0 transition-[width] duration-100"></div>
+    <div class="progress-container relative w-full h-5 cursor-pointer touch-pan-y select-none group" role="slider" tabindex="0" aria-label={i18n(I18nKey.musicProgress)} aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 bg-neutral-300/60 dark:bg-neutral-500/40 rounded-full pointer-events-none">
+            <div class="progress-bar h-full bg-(--primary) rounded-full w-0"></div>
+        </div>
         <!-- Hover Thumb -->
-        <div class="progress-thumb absolute top-1/2 -mt-1.5 -ml-1.5 w-3 h-3 bg-(--primary) ring-2 ring-white dark:ring-neutral-800 rounded-full shadow-sm scale-0 group-hover:scale-100 transition-transform duration-200"></div>
+        <div class="progress-thumb pointer-events-none absolute top-1/2 -mt-1.5 -ml-1.5 w-3 h-3 bg-(--primary) ring-2 ring-white dark:ring-neutral-800 rounded-full shadow-sm scale-0 group-hover:scale-100 group-focus-within:scale-100 transition-transform duration-200"></div>
     </div>
 </div>
 
@@ -182,13 +186,11 @@ const widgetId =
 </div>
 </template>
 
-<script is:inline data-swup-ignore-script>
+<script is:inline data-swup-ignore-script define:vars={{ widgetId }}>
 (function () {
-    var widget = document.querySelector('.music-player-widget');
+    var widget = document.getElementById(widgetId);
     if (!widget) return;
     var cfg = JSON.parse(widget.dataset.config);
-    var widgetId = widget.id;
-    if (!widget) return;
 
     var mgr = window.__fireflyMusic;
     if (!mgr) return;
@@ -243,6 +245,7 @@ const widgetId =
     var local = {
         isUserScrolling: false,
         scrollTimeout: null,
+        drawerRaf: 0,
         currentLrcIndex: -1,
         vs: {
             playlist: [],
@@ -320,9 +323,9 @@ const widgetId =
     }
 
     function updateVolumeUI(volume, isMuted) {
-        var pct = isMuted ? 0 : volume * 100;
-        ui.volBar.style.width = pct + '%';
-        ui.volContainer.setAttribute('aria-valuenow', Math.round(pct).toString());
+        var sliderPosition = isMuted ? 0 : Math.sqrt(clamp01(volume));
+        ui.volBar.style.width = (sliderPosition * 100) + '%';
+        ui.volContainer.setAttribute('aria-valuenow', Math.round(volume * 100).toString());
         if (isMuted || volume === 0) {
             ui.iconVolHigh.classList.add('hidden');
             ui.iconVolMute.classList.remove('hidden');
@@ -695,18 +698,95 @@ const widgetId =
     ui.btnRepeat.addEventListener('click', function () { mgr.cyclePlayMode(); });
     ui.btnMute.addEventListener('click', function () { mgr.toggleMute(); });
 
-    ui.volContainer.addEventListener('click', function (e) {
-        var rect = ui.volContainer.getBoundingClientRect();
-        var x = e.clientX - rect.left;
-        var val = Math.max(0, Math.min(1, x / rect.width));
-        mgr.setVolume(val);
+    function clamp01(value) {
+        return Math.max(0, Math.min(1, value));
+    }
+
+    function bindPointerSlider(element, onChange) {
+        var dragging = false;
+        var frame = 0;
+        var pendingX = 0;
+
+        function update(clientX) {
+            var rect = element.getBoundingClientRect();
+            if (rect.width > 0) onChange(clamp01((clientX - rect.left) / rect.width));
+        }
+
+        function schedule(clientX) {
+            pendingX = clientX;
+            if (frame) return;
+            frame = requestAnimationFrame(function () {
+                frame = 0;
+                update(pendingX);
+            });
+        }
+
+        function pointerDown(e) {
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            dragging = true;
+            element.setPointerCapture(e.pointerId);
+            update(e.clientX);
+            e.preventDefault();
+        }
+        function pointerMove(e) {
+            if (!dragging) return;
+            schedule(e.clientX);
+            e.preventDefault();
+        }
+        function pointerUp(e) {
+            if (!dragging) return;
+            dragging = false;
+            update(e.clientX);
+            if (element.hasPointerCapture(e.pointerId)) element.releasePointerCapture(e.pointerId);
+        }
+        function pointerCancel() {
+            dragging = false;
+            if (frame) cancelAnimationFrame(frame);
+            frame = 0;
+        }
+        element.addEventListener('pointerdown', pointerDown);
+        element.addEventListener('pointermove', pointerMove);
+        element.addEventListener('pointerup', pointerUp);
+        element.addEventListener('pointercancel', pointerCancel);
+        return function () {
+            element.removeEventListener('pointerdown', pointerDown);
+            element.removeEventListener('pointermove', pointerMove);
+            element.removeEventListener('pointerup', pointerUp);
+            element.removeEventListener('pointercancel', pointerCancel);
+            if (frame) cancelAnimationFrame(frame);
+        };
+    }
+
+    var cleanupVolumeSlider = bindPointerSlider(ui.volContainer, function (position) {
+        mgr.setVolume(position * position);
+    });
+    var cleanupProgressSlider = bindPointerSlider(ui.progressContainer, function (percent) {
+        mgr.seek(percent);
+        ui.progressContainer.setAttribute('aria-valuenow', Math.round(percent * 100).toString());
     });
 
-    ui.progressContainer.addEventListener('click', function (e) {
-        var rect = ui.progressContainer.getBoundingClientRect();
-        var clickX = e.clientX - rect.left;
-        var percent = Math.min(Math.max(clickX / rect.width, 0), 1);
-        mgr.seek(percent);
+    ui.volContainer.addEventListener('keydown', function (e) {
+        var state = mgr.getState();
+        var volume = state.isMuted ? 0 : state.volume;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') volume -= 0.02;
+        else if (e.key === 'ArrowUp' || e.key === 'ArrowRight') volume += 0.02;
+        else if (e.key === 'Home') volume = 0;
+        else if (e.key === 'End') volume = 1;
+        else return;
+        mgr.setVolume(clamp01(volume));
+        e.preventDefault();
+    });
+    ui.progressContainer.addEventListener('keydown', function (e) {
+        var state = mgr.getState();
+        if (!state.duration) return;
+        var target = state.currentTime;
+        if (e.key === 'ArrowLeft') target -= 5;
+        else if (e.key === 'ArrowRight') target += 5;
+        else if (e.key === 'Home') target = 0;
+        else if (e.key === 'End') target = state.duration;
+        else return;
+        mgr.seek(target / state.duration);
+        e.preventDefault();
     });
 
     // ── Drawer logic (local state) ───────────────────────────
@@ -766,7 +846,9 @@ const widgetId =
 
             // Render playlist after drawer transition settles
             if (local.vs.playlist.length > 0) {
-                requestAnimationFrame(function () {
+                if (local.drawerRaf) cancelAnimationFrame(local.drawerRaf);
+                local.drawerRaf = requestAnimationFrame(function () {
+                    local.drawerRaf = 0;
                     vsSetContainerHeight();
                     vsCommitRange();
                 });
@@ -817,24 +899,26 @@ const widgetId =
     });
 
     // ── Cleanup on DOM removal ───────────────────────────────
-    var observer = new MutationObserver(function (mutations) {
-        for (var i = 0; i < mutations.length; i++) {
-            var removed = mutations[i].removedNodes;
-            for (var j = 0; j < removed.length; j++) {
-                if (removed[j] === widget || (removed[j].contains && removed[j].contains(widget))) {
-                    // Widget removed from DOM – clean up event listeners
-                    Object.keys(handlers).forEach(function (name) {
-                        window.removeEventListener(name, handlers[name]);
-                    });
-                    observer.disconnect();
-                    clearTimeout(local.scrollTimeout);
-                    return;
-                }
-            }
-        }
+    var cleanedUp = false;
+    function cleanup() {
+        if (cleanedUp) return;
+        cleanedUp = true;
+        // Widget removed from DOM – clean up event listeners
+        Object.keys(handlers).forEach(function (name) {
+            window.removeEventListener(name, handlers[name]);
+        });
+        observer.disconnect();
+        clearTimeout(local.scrollTimeout);
+        if (local.vs.scrollRaf) cancelAnimationFrame(local.vs.scrollRaf);
+        if (local.drawerRaf) cancelAnimationFrame(local.drawerRaf);
+        cleanupVolumeSlider();
+        cleanupProgressSlider();
+    }
+    var observer = new MutationObserver(function () {
+        if (!widget.isConnected) cleanup();
     });
-    if (widget.parentNode) {
-        observer.observe(widget.parentNode, { childList: true });
+    if (document.body) {
+        observer.observe(document.body, { childList: true, subtree: true });
     }
 
     // ── Init: either sync existing state or trigger init ─────

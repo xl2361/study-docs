@@ -26,6 +26,10 @@ export class TOCManager {
 	private contentId: string;
 	private indicatorId: string;
 	private scrollOffset: number;
+	private clickContainer: HTMLElement | null = null;
+	private readonly boundClickHandler = (event: Event): void => {
+		this.handleClick(event);
+	};
 
 	constructor(config: TOCConfig) {
 		this.contentId = config.contentId;
@@ -297,8 +301,11 @@ export class TOCManager {
 	 * 处理点击事件
 	 */
 	public handleClick(event: Event): void {
+		const eventTarget = event.target as Element | null;
+		const target = eventTarget?.closest<HTMLAnchorElement>('a[href^="#"]');
+		if (!target || !this.clickContainer?.contains(target)) return;
+
 		event.preventDefault();
-		const target = event.currentTarget as HTMLAnchorElement;
 		const id = decodeURIComponent(
 			target.getAttribute("href")?.substring(1) || "",
 		);
@@ -314,6 +321,11 @@ export class TOCManager {
 				top: targetTop,
 				behavior: "smooth",
 			});
+			window.dispatchEvent(
+				new CustomEvent("toc:navigate", {
+					detail: { contentId: this.contentId, headingId: id },
+				}),
+			);
 		}
 	}
 
@@ -348,15 +360,20 @@ export class TOCManager {
 	 * 绑定点击事件
 	 */
 	public bindClickEvents(): void {
-		this.tocItems.forEach((item) => {
-			item.addEventListener("click", this.handleClick.bind(this));
-		});
+		const tocContent = document.getElementById(this.contentId);
+		if (this.clickContainer === tocContent) return;
+
+		this.clickContainer?.removeEventListener("click", this.boundClickHandler);
+		this.clickContainer = tocContent;
+		this.clickContainer?.addEventListener("click", this.boundClickHandler);
 	}
 
 	/**
 	 * 清理
 	 */
 	public cleanup(): void {
+		this.clickContainer?.removeEventListener("click", this.boundClickHandler);
+		this.clickContainer = null;
 		if (this.observer) {
 			this.observer.disconnect();
 			this.observer = null;
@@ -428,5 +445,6 @@ export class TOCManager {
  * 检查是否为文章页面
  */
 export function isPostPage(): boolean {
-	return window.location.pathname.includes("/posts/");
+	const pathname = window.location.pathname;
+	return pathname.includes("/posts/") || pathname.includes("/post/");
 }

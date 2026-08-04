@@ -37,6 +37,12 @@ export type MusicPlayerConfig = {
 
 		// 备用 API 配置（当主 API 失败时使用）
 		fallbackApis?: string[];
+
+		// 播放地址回退源。json 类型接口需返回 { url: string }
+		urlFallbackApis?: Array<{
+			api: string;
+			response?: "audio" | "json";
+		}>;
 	};
 
 	// 本地音乐配置（当 mode 为 'local' 时使用）

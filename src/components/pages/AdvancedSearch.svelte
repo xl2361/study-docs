@@ -15,6 +15,7 @@ let keyword = "";
 let results: SearchResult[] = [];
 let isSearching = false;
 let initialized = false;
+let searchVersion = 0;
 
 // 在客户端获取 URL 参数
 const getInitialKeyword = (): string => {
@@ -41,33 +42,47 @@ const fakeResult: SearchResult[] = [
 
 // --- Core Search Logic ---
 const search = async () => {
-	if (!initialized || !keyword.trim()) {
+	const searchKeyword = keyword.trim();
+	const version = ++searchVersion;
+	if (!initialized || !searchKeyword) {
 		results = [];
+		isSearching = false;
 		return;
 	}
 	isSearching = true;
 
 	try {
 		if (import.meta.env.PROD && window.pagefind) {
-			const response = await window.pagefind.search(keyword);
+			const response = await window.pagefind.search(searchKeyword);
 			const rawResults = await Promise.all(
 				response.results.map((item) => item.data()),
 			);
-			results = rawResults;
+			if (version === searchVersion) results = rawResults;
 		} else if (import.meta.env.DEV) {
 			// 开发模式下的模拟结果
-			results = fakeResult.filter(
+			const devResults = fakeResult.filter(
 				(item) =>
-					item.excerpt.toLowerCase().includes(keyword.toLowerCase()) ||
-					item.meta.title.toLowerCase().includes(keyword.toLowerCase()),
+					item.excerpt.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+					item.meta.title.toLowerCase().includes(searchKeyword.toLowerCase()),
 			);
+			if (version === searchVersion) results = devResults;
 		}
 	} catch (error) {
 		console.error("Search error:", error);
-		results = [];
+		if (version === searchVersion) results = [];
 	} finally {
-		isSearching = false;
+		if (version === searchVersion) isSearching = false;
 	}
+};
+
+const submitSearch = async (event: SubmitEvent) => {
+	event.preventDefault();
+	const searchKeyword = keyword.trim();
+	const url = new URL(window.location.href);
+	if (searchKeyword) url.searchParams.set("q", searchKeyword);
+	else url.searchParams.delete("q");
+	window.history.replaceState({}, "", url);
+	await search();
 };
 
 // --- Initialization onMount ---
@@ -98,55 +113,33 @@ onMount(() => {
 			document.addEventListener("pagefindready", initialize, {
 				once: true,
 			});
+			document.addEventListener("pagefindloaderror", initialize, {
+				once: true,
+			});
 		}
 	}
+	return () => {
+		searchVersion++;
+		document.removeEventListener("pagefindready", initialize);
+		document.removeEventListener("pagefindloaderror", initialize);
+	};
 });
-
-let debounceTimer: NodeJS.Timeout;
-const handleInput = () => {
-	clearTimeout(debounceTimer);
-	debounceTimer = setTimeout(() => {
-		search();
-	}, 300);
-};
 </script>
 
-<div class="card-base px-6 py-6 md:px-9 md:py-6 mb-4 rounded-(--radius-large)">
-    <!-- Title Section -->
-    <div class="mb-4">
-        <div class="flex items-center gap-3 mb-3">
-            <div class="h-8 w-8 rounded-lg bg-(--primary) flex items-center justify-center text-white dark:text-black/70">
-                <Icon icon="material-symbols:search" class="text-[1.5rem]"></Icon>
-            </div>
-            <div class="text-3xl font-bold text-90">
-                {title}
-            </div>
-        </div>
-        {#if description}
-            <p class="text-base text-50 leading-relaxed">
-                {description}
-            </p>
-        {/if}
-    </div>
-
-    <!-- Search Bar -->
-    <div class="relative flex">
-        <div class="relative flex-1">
-            <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                <Icon icon="material-symbols:search" class="text-2xl text-50" />
-            </div>
-            <input
-                type="text"
-                class="block w-full p-4 pl-10 text-sm bg-transparent border border-black/10 dark:border-white/10 rounded-lg focus:ring-2 focus:ring-(--primary) focus:border-(--primary) hover:border-black/20 dark:hover:border-white/20 text-75 placeholder:opacity-50 transition-colors outline-hidden"
-                placeholder={i18n(I18nKey.search)}
-                bind:value={keyword}
-                on:input={handleInput}
-            >
-        </div>
-    </div>
-</div>
-
 <div class="grid grid-cols-1 gap-4">
+    <form class="card-base flex items-center gap-3 rounded-(--radius-large) p-3" on:submit={submitSearch}>
+        <Icon icon="material-symbols:search" class="shrink-0 text-2xl text-50" />
+        <input
+            bind:value={keyword}
+            type="search"
+            placeholder={title}
+            aria-label={title}
+            class="min-w-0 flex-1 bg-transparent px-1 py-2 text-90 outline-none"
+        />
+        <button type="submit" class="btn-regular rounded-lg px-4 py-2 text-sm font-medium">
+            {title}
+        </button>
+    </form>
     <!-- Results Area -->
     <div>
         {#if isSearching}

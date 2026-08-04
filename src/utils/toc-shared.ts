@@ -113,19 +113,21 @@ export function renderBadgeInnerHTML(item: TocItem): string {
  * 结构与 SidebarTOC.astro / FloatingTOC.astro 的 SSR 输出保持一致。
  */
 export function renderTocItemHTML(item: TocItem): string {
-	const escaped = escapeHtmlAttr(item.text);
+	const escapedText = escapeHtmlAttr(item.text);
+	const escapedHeadingId = escapeHtmlAttr(item.headingId);
+	const escapedHref = escapeHtmlAttr(item.href);
 	return `
         <a
-          href="${item.href}"
+		  href="${escapedHref}"
 		  class="toc-item toc-level-${item.depthLevel}"
-          data-heading-id="${item.headingId}"
-		  aria-label="${escaped}"
-		  title="${escaped}"
+		  data-heading-id="${escapedHeadingId}"
+		  aria-label="${escapedText}"
+		  title="${escapedText}"
         >
 			  <div class="toc-badge ${item.badgeKind === "index" ? "toc-badge-index" : ""}">
             ${renderBadgeInnerHTML(item)}
           </div>
-			  <div class="toc-label ${item.labelPrimary ? "toc-label-primary" : "toc-label-secondary"}">${item.text}</div>
+			  <div class="toc-label ${item.labelPrimary ? "toc-label-primary" : "toc-label-secondary"}">${escapedText}</div>
         </a>
       `;
 }

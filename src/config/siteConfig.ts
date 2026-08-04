@@ -18,12 +18,7 @@ export const siteConfig: SiteConfig = {
 	description: "个人学习笔记与文档站",
 
 	// 站点关键词
-	keywords: [
-		"学习",
-		"笔记",
-		"技术文档",
-		"博客",
-	],
+	keywords: ["学习", "笔记", "技术文档", "博客"],
 
 	// 主题色
 	themeColor: {

@@ -37,6 +37,7 @@ const items = encrypted ? [] : computeTocItems(headings, { maxLevel: 3 });
   class={className}
   style={style}
 >
+  <span slot="title-prefix" id="desktop-sidebar-toggle-slot" class="toc-toggle-slot"></span>
   <div slot="title-icon" class="toc-title-icons flex items-center gap-1">
     <button
       class="toc-locate-btn"
@@ -110,14 +111,24 @@ const items = encrypted ? [] : computeTocItems(headings, { maxLevel: 3 });
 
 <style>
 /* 标题栏紧凑化 */
-:global(widget-layout#sidebar-toc .widget-title) {
+:global(#left-sidebar-wrapper widget-layout[data-id="sidebar-toc"] .widget-title) {
 	margin-top: 0.5rem !important;
 	margin-bottom: 0.25rem !important;
 	font-size: 0.95rem !important;
 	justify-content: flex-start !important;
+	gap: 0.45rem !important;
 }
-:global(widget-layout#sidebar-toc .widget-name) {
+:global(#left-sidebar-wrapper widget-layout[data-id="sidebar-toc"] .widget-name) {
+	margin-left: 0.15rem !important;
 	margin-right: auto !important;
+}
+.toc-toggle-slot {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.5rem;
+	height: 1.5rem;
+	flex-shrink: 0;
 }
 /* 定位按钮样式 */
 .toc-locate-btn {
@@ -145,28 +156,38 @@ const items = encrypted ? [] : computeTocItems(headings, { maxLevel: 3 });
 .toc-fold-icon {
 	font-size: 1.1rem;
 }
-/* 目录项左对齐+完整显示 — 覆盖 toc.css 的截断和缩进 */
-:global(.toc-item) {
+/* 目录项按正文编号分层排列，不再额外绘制徽章和圆点 */
+:global(#left-sidebar-wrapper #sidebar-toc .toc-badge),
+:global(#left-sidebar-wrapper #sidebar-toc .toc-active-indicator) {
+	display: none !important;
+}
+:global(#left-sidebar-wrapper #sidebar-toc .toc-item) {
 	text-align: left !important;
 	white-space: normal !important;
 	overflow: visible !important;
 	justify-content: flex-start !important;
-	padding-left: 0.25rem !important;
+	padding: 0.32rem 0.25rem !important;
+	min-height: 1.8rem !important;
+	border-radius: 0.375rem !important;
+	background: transparent !important;
+	transform: none !important;
+	gap: 0 !important;
 }
-:global(.toc-item.toc-level-0) {
-	padding-left: 0.25rem !important;
+:global(#left-sidebar-wrapper #sidebar-toc .toc-item.toc-level-0) {
+	padding-left: 0.5rem !important;
+	margin-top: 0.25rem !important;
 }
-:global(.toc-item.toc-level-1) {
-	padding-left: 0.75rem !important;
+:global(#left-sidebar-wrapper #sidebar-toc .toc-item.toc-level-1) {
+	padding-left: 1.5rem !important;
 }
-:global(.toc-item.toc-level-2) {
-	padding-left: 1.25rem !important;
+:global(#left-sidebar-wrapper #sidebar-toc .toc-item.toc-level-2) {
+	padding-left: 2.5rem !important;
 }
-:global(.toc-content) {
+:global(#left-sidebar-wrapper #sidebar-toc .toc-content) {
 	padding: 0.125rem 0 !important;
 	align-items: flex-start !important;
 }
-:global(.toc-label) {
+:global(#left-sidebar-wrapper #sidebar-toc .toc-label) {
 	text-align: left !important;
 	white-space: normal !important;
 	word-break: break-all !important;
@@ -174,11 +195,12 @@ const items = encrypted ? [] : computeTocItems(headings, { maxLevel: 3 });
 	overflow: visible !important;
 	text-overflow: clip !important;
 	text-align-last: left !important;
+	max-width: 100% !important;
 }
-:global(.toc-badge) {
-	flex-shrink: 0 !important;
+:global(#left-sidebar-wrapper #sidebar-toc .toc-item.visible .toc-label) {
+	color: var(--primary) !important;
 }
-:global(widget-layout#sidebar-toc .collapse-wrapper) {
+:global(#left-sidebar-wrapper widget-layout[data-id="sidebar-toc"] > .collapse-wrapper) {
 	padding-left: 0.25rem !important;
 }
 /* 滚动隔离 */
@@ -255,7 +277,7 @@ const items = encrypted ? [] : computeTocItems(headings, { maxLevel: 3 });
 
   // 目录折叠/展开按钮初始化（事件委托，支持 swup 换页后重新绑定）
   function initTocFold() {
-    document.querySelectorAll(".toc-fold-toggle:not([data-bound])").forEach((btn) => {
+    document.querySelectorAll<HTMLButtonElement>(".toc-fold-toggle:not([data-bound])").forEach((btn) => {
       btn.dataset.bound = "true";
       btn.addEventListener("click", () => {
         const widget = btn.closest("widget-layout");
@@ -266,38 +288,6 @@ const items = encrypted ? [] : computeTocItems(headings, { maxLevel: 3 });
     });
   }
 
-  // 目录项点击：事件委托，绑在 document 上，即使 TOC DOM 重建也生效
-  function initTocClicks() {
-    if (document.getElementById("toc-click-delegate")) return;
-    // 标记已绑定，防止重复
-    const marker = document.createElement("div");
-    marker.id = "toc-click-delegate";
-    marker.style.display = "none";
-    document.body.appendChild(marker);
-
-    document.addEventListener("click", (e) => {
-      const item = (e.target as HTMLElement).closest(".toc-item");
-      if (!item) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      const href = item.getAttribute("href") || "";
-      const id = decodeURIComponent(href.replace(/^#/, ""));
-      const target = document.getElementById(id);
-      if (target) {
-        const offset = 80;
-        const top = target.getBoundingClientRect().top + window.pageYOffset - offset;
-        window.scrollTo({ top, behavior: "smooth" });
-        // 移动端点击后关闭侧边栏
-        if (window.innerWidth < 768) {
-          const wrapper = document.getElementById("left-sidebar-wrapper");
-          const overlay = document.getElementById("mobile-sidebar-overlay");
-          if (wrapper) wrapper.classList.remove("mobile-open");
-          if (overlay) overlay.classList.remove("open");
-        }
-      }
-    }, true); // capture 阶段，优先于 TOCManager 的 handler
-  }
-
   // 定位按钮：将侧边栏目录滚动到当前正文所在章节（居中）
   function initLocateBtn() {
     const btn = document.getElementById("toc-locate-btn");
@@ -305,12 +295,11 @@ const items = encrypted ? [] : computeTocItems(headings, { maxLevel: 3 });
     btn.dataset.bound = "true";
     btn.addEventListener("click", () => {
       // TOCManager 用 "visible" 类标记当前正文可见区域对应的 TOC 项
-      const activeItem = document.querySelector(".toc-item.visible");
+      const activeItem = document.querySelector<HTMLElement>("#sidebar-toc-content .toc-item.visible");
       if (!activeItem) return;
       // 将激活项在侧边栏滚动容器内居中
       const scrollContainer = document.getElementById("toc-scroll-area") || activeItem.closest(".toc-scroll-container");
       if (!scrollContainer) return;
-      const containerRect = scrollContainer.getBoundingClientRect();
       const itemRect = activeItem.getBoundingClientRect();
       const itemOffsetTop = activeItem.offsetTop;
       const itemHeight = itemRect.height;
@@ -320,52 +309,47 @@ const items = encrypted ? [] : computeTocItems(headings, { maxLevel: 3 });
     });
   }
 
-  // 初始化
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => {
-      initSidebarTOC();
-      initTocFold();
-      initLocateBtn();
-      initTocClicks();
-    });
-  } else {
-    initSidebarTOC();
-    initTocFold();
-    initLocateBtn();
-    initTocClicks();
+  // 多个页面生命周期可能在一次导航中连续触发，统一合并到下一帧初始化。
+  let sidebarTocInitFrame: number | null = null;
+  function scheduleSidebarTOCInit() {
+	if (sidebarTocInitFrame !== null) return;
+	sidebarTocInitFrame = window.requestAnimationFrame(() => {
+	  sidebarTocInitFrame = null;
+	  initSidebarTOC();
+	  initTocFold();
+	  initLocateBtn();
+	});
   }
 
-  // 页面切换时重新初始化
-  document.addEventListener("swup:contentReplaced", () => {
-    setTimeout(() => {
-      initSidebarTOC();
-      initTocFold();
-      initLocateBtn();
-      initTocClicks();
-    }, 100);
-  });
+  function initSidebarNavigationClose() {
+	if (document.documentElement.dataset.sidebarTocNavigateBound === "true") return;
+	document.documentElement.dataset.sidebarTocNavigateBound = "true";
+	window.addEventListener("toc:navigate", (event) => {
+	  const detail = (event as CustomEvent<{ contentId?: string }>).detail;
+	  if (detail?.contentId !== "sidebar-toc-content" || window.innerWidth >= 768) return;
+	  document.getElementById("left-sidebar-wrapper")?.classList.remove("mobile-open");
+	  document.getElementById("mobile-sidebar-overlay")?.classList.remove("open");
+	  document.body.style.overflow = "";
+	});
+  }
 
-  document.addEventListener("astro:page-load", () => {
-    setTimeout(() => {
-      initSidebarTOC();
-      initTocFold();
-      initLocateBtn();
-      initTocClicks();
-    }, 100);
-  });
+  // 初始化
+  if (document.readyState === "loading") {
+	document.addEventListener("DOMContentLoaded", scheduleSidebarTOCInit, { once: true });
+  } else {
+	scheduleSidebarTOCInit();
+  }
+  initSidebarNavigationClose();
 
-  window.addEventListener("popstate", () => {
-    setTimeout(() => { initSidebarTOC(); initLocateBtn(); initTocClicks(); }, 200);
-  });
+  // 页面切换时重新初始化；组件脚本重复执行时不重复注册生命周期监听。
+  if (document.documentElement.dataset.sidebarTocLifecycleBound !== "true") {
+	document.documentElement.dataset.sidebarTocLifecycleBound = "true";
+	document.addEventListener("swup:contentReplaced", scheduleSidebarTOCInit);
+	document.addEventListener("astro:page-load", scheduleSidebarTOCInit);
+	window.addEventListener("popstate", scheduleSidebarTOCInit);
 
-  window.addEventListener("hashchange", () => {
-    if (!window.tocInternalNavigation) {
-      setTimeout(() => { initSidebarTOC(); initLocateBtn(); }, 100);
-    }
-    window.tocInternalNavigation = false;
-  });
+	window.addEventListener("hashchange", scheduleSidebarTOCInit);
 
-  document.addEventListener("password:decrypted", () => {
-    setTimeout(() => { initSidebarTOC(); initLocateBtn(); }, 200);
-  });
+	document.addEventListener("password:decrypted", scheduleSidebarTOCInit);
+  }
 </script>

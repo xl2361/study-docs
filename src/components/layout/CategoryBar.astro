@@ -2,6 +2,7 @@
 import I18nKey from "@i18n/i18nKey";
 import { i18n } from "@i18n/translation";
 import { Icon } from "astro-icon/components";
+import CategoryBarEditor from "@/components/features/CategoryBarEditor.svelte";
 import { getCategoryList, getSortedPostsList } from "@/utils/content-utils";
 import { url } from "@/utils/url-utils";
 
@@ -85,12 +86,13 @@ function initialActive(categoryName: string): {
               data-active={active.active ? "" : undefined}
               data-soft-active={active.soft ? "" : undefined}
             >
-              {cat.name}
+              <span class="category-name">{cat.name}</span>
               <span class="pill-count">{cat.count}</span>
             </a>
             );
           })
         }
+        <CategoryBarEditor client:load categories={categories} {totalPosts} />
       </div>
       <div class="scroll-fade scroll-fade-right" aria-hidden="true"></div>
     </div>

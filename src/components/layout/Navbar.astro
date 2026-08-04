@@ -6,6 +6,7 @@ import { Icon } from "astro-icon/components";
 import DisplaySettings from "@/components/controls/DisplaySettingsIntegrated.svelte";
 import LightDarkSwitch from "@/components/controls/LightDarkSwitch.svelte";
 import Search from "@/components/controls/Search.svelte";
+import GlobalEditController from "@/components/features/GlobalEditController.svelte";
 import MusicPlayer from "@/components/features/MusicPlayer.astro";
 import {
 	backgroundWallpaper,
@@ -187,6 +188,7 @@ const logoVariants = await Promise.all(
                 })}
             </div>
             <div class="flex col-start-3 justify-self-end">
+                <GlobalEditController client:load />
                 <!--<SearchPanel client:load>-->
                 <Search
                     client:load

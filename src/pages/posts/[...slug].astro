@@ -18,6 +18,7 @@ import { Icon } from "astro-icon/components";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import CoverImage from "@/components/common/CoverImage.astro";
+import ArticleEditor from "@/components/features/ArticleEditor.svelte";
 import PostMetadata from "@/components/layout/PostMeta.astro";
 import RecommendedPost from "@/components/misc/RecommendedPost.astro";
 import SharePoster from "@/components/misc/SharePoster.svelte";
@@ -103,6 +104,13 @@ const jsonLd = {
 };
 
 const relatedPosts = await getRelatedPosts(entry, 5);
+const normalizedEntryPath = entry.filePath?.replace(/\\/g, "/");
+const contentRoot = "src/content/posts/";
+const contentRootIndex = normalizedEntryPath?.lastIndexOf(contentRoot) ?? -1;
+const editorArticlePath =
+	normalizedEntryPath && contentRootIndex >= 0
+		? normalizedEntryPath.slice(contentRootIndex + contentRoot.length)
+		: entry.id;
 ---
 
 <MainGridLayout
@@ -297,6 +305,10 @@ const relatedPosts = await getRelatedPosts(entry, 5);
             />
           </div>
         )
+      }
+
+      {
+        <ArticleEditor client:load slug={editorArticlePath} title={entry.data.title} />
       }
 
       {entry.data.password ? (

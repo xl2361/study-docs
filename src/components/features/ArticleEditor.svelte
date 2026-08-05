@@ -22,7 +22,7 @@ type Draft = {
 	previous?: Omit<Draft, "previous">;
 };
 
-let dialog: HTMLDialogElement;
+let editorOpen = false;
 let content = "";
 let articleTitle = title;
 let published = "";
@@ -53,7 +53,7 @@ onMount(() => {
 			autoOpened = true;
 			await tick();
 			await openEditor();
-		} else if (!enabled && dialog?.open) {
+		} else if (!enabled && editorOpen) {
 			closeEditor();
 		}
 		if (!enabled) autoOpened = false;
@@ -280,16 +280,16 @@ function parseMarkdown(source: string): PreviewBlock[] {
 
 async function openEditor() {
 	error = "";
-	if (!dialog || dialog.open) return;
-	dialog.showModal();
-	previousBodyOverflow = document.body.style.overflow;
-	document.body.style.overflow = "hidden";
+	if (editorOpen) return;
+	editorOpen = true;
+	document.documentElement.classList.add("article-inline-editing");
 	await tick();
 	await loadArticle();
 }
 
 function closeEditor() {
-	dialog.close();
+	editorOpen = false;
+	document.documentElement.classList.remove("article-inline-editing");
 	unlockPage();
 }
 
@@ -299,11 +299,7 @@ function leaveEditor() {
 
 function unlockPage() {
 	document.body.style.overflow = previousBodyOverflow;
-}
-
-function handleCancel(event: Event) {
-	void event;
-	unlockPage();
+	document.documentElement.classList.remove("article-inline-editing");
 }
 
 async function readError(response: Response, fallback: string) {
@@ -432,14 +428,8 @@ function redirectToLogin() {
 }
 </script>
 
-{#if editing}
-	<dialog
-	bind:this={dialog}
-	class="editor-dialog"
-	aria-labelledby="article-editor-title"
-	oncancel={handleCancel}
-	onclose={unlockPage}
->
+{#if editing && editorOpen}
+	<section class="editor-inline" aria-labelledby="article-editor-title">
 	<div class="dialog-shell">
 		<header class="editor-header">
 			<div class="title-group">
@@ -527,7 +517,7 @@ function redirectToLogin() {
 				</section>
 			</div>
 	</div>
-</dialog>
+	</section>
 {/if}
 
 <style>
@@ -535,9 +525,9 @@ function redirectToLogin() {
 	button { cursor: pointer; }
 	button:disabled { cursor: not-allowed; opacity: .55; }
 	button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-	.editor-dialog { width: min(96vw, 1500px); max-width: none; height: min(92dvh, 980px); max-height: none; padding: 0; border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); border-radius: calc(var(--radius-large) + .25rem); color: var(--btn-content); background: var(--card-bg); box-shadow: 0 28px 90px rgb(0 0 0 / .28); overflow: hidden; }
-	.editor-dialog::backdrop { background: rgb(10 15 24 / .66); backdrop-filter: blur(10px); }
-	.dialog-shell { height: 100%; display: flex; flex-direction: column; background: radial-gradient(circle at 12% -20%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 36%), var(--card-bg); }
+	.editor-inline { width: 100%; min-height: 42rem; margin: 0 0 1.5rem; border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); border-radius: calc(var(--radius-large) + .25rem); color: var(--btn-content); background: var(--card-bg); box-shadow: 0 16px 48px rgb(0 0 0 / .12); overflow: hidden; }
+	.dialog-shell { min-height: 42rem; display: flex; flex-direction: column; background: radial-gradient(circle at 12% -20%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 36%), var(--card-bg); }
+	:global(.article-inline-editing .post-view-header), :global(.article-inline-editing .post-view-title), :global(.article-inline-editing .post-view-metadata), :global(.article-inline-editing .markdown-content) { display: none !important; }
 	.editor-header { min-height: 5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .9rem 1.25rem; border-bottom: 1px solid color-mix(in srgb, var(--btn-content) 10%, transparent); }
 	.title-group { min-width: 0; }
 	.eyebrow, .pane-label { color: var(--primary); font-size: .65rem; font-weight: 800; letter-spacing: .15em; }
@@ -592,7 +582,8 @@ function redirectToLogin() {
 	.empty-preview { color: color-mix(in srgb, var(--btn-content) 40%, transparent); }
 
 	@media (max-width: 767px) {
-		.editor-dialog { width: 100vw; height: 100dvh; border: 0; border-radius: 0; }
+		.editor-inline { min-height: calc(100dvh - 6rem); margin-inline: -.75rem; width: calc(100% + 1.5rem); border-radius: .8rem; }
+		.dialog-shell { min-height: calc(100dvh - 6rem); }
 		.editor-header { min-height: 4.4rem; padding: .7rem .85rem; }
 		.title-group .eyebrow, .title-group p { display: none; }
 		.editor-toolbar { min-height: auto; flex-wrap: wrap; gap: .55rem; padding: .55rem .7rem; }

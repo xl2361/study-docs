@@ -20,7 +20,7 @@ interface GitHubDirectoryEntry {
 const API_ROOT = "https://api.github.com";
 const ARTICLE_ROOT = "src/content/posts/";
 const MAX_ARTICLE_BYTES = 1024 * 1024;
-const SESSION_SECONDS = 30 * 24 * 60 * 60;
+const SESSION_SECONDS = 400 * 24 * 60 * 60;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 

@@ -1,5 +1,10 @@
 import type { PagesEnv } from "./_lib/auth";
-import { validateSession } from "./_lib/auth";
+import {
+	getSessionToken,
+	SESSION_MAX_AGE,
+	sessionCookie,
+	validateSession,
+} from "./_lib/auth";
 
 const PUBLIC_PATHS = ["/login", "/api/auth/login"];
 
@@ -13,6 +18,9 @@ export const onRequest: PagesFunction<PagesEnv> = async (context) => {
 		const response = await context.next();
 		const headers = new Headers(response.headers);
 		headers.set("Cache-Control", "private, no-store");
+		const token = getSessionToken(context.request);
+		if (token)
+			headers.append("Set-Cookie", sessionCookie(token, SESSION_MAX_AGE));
 		return new Response(response.body, { status: response.status, headers });
 	}
 

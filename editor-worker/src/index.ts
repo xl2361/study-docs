@@ -100,7 +100,7 @@ async function login(
 
 	const expiresAt = Math.floor(Date.now() / 1000) + SESSION_SECONDS;
 	const payload = toBase64Url(
-		encoder.encode(JSON.stringify({ exp: expiresAt, scope: "article:write" })),
+		encoder.encode(JSON.stringify({ scope: "article:write" })),
 	);
 	const signature = await sign(payload, env.SESSION_SECRET);
 	return json(
@@ -321,16 +321,9 @@ async function requireSession(
 
 	try {
 		const session = JSON.parse(decoder.decode(fromBase64Url(payload))) as {
-			exp?: unknown;
 			scope?: unknown;
 		};
-		if (
-			session.scope !== "article:write" ||
-			typeof session.exp !== "number" ||
-			session.exp <= Date.now() / 1000
-		) {
-			throw new Error("expired");
-		}
+		if (session.scope !== "article:write") throw new Error("invalid scope");
 	} catch {
 		throw new HttpError(401, "登录已失效");
 	}

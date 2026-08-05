@@ -1,6 +1,7 @@
 export type PagesEnv = Record<string, never>;
 
 export const SESSION_COOKIE = "study_session";
+export const SESSION_MAX_AGE = 400 * 24 * 60 * 60;
 const EDITOR_URL = "https://dayu-study-editor.dayu2360.workers.dev";
 
 export function getSessionToken(request: Request): string | null {

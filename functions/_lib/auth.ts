@@ -55,6 +55,21 @@ export async function validateSession(context: {
 	}
 }
 
+export async function validateToken(token: string): Promise<boolean> {
+	try {
+		const response = await fetch(`${EDITOR_URL}/api/session`, {
+			headers: {
+				Authorization: `Bearer ${token}`,
+				Origin: "https://dayu-study.pages.dev",
+			},
+			signal: AbortSignal.timeout(15_000),
+		});
+		return response.ok;
+	} catch {
+		return false;
+	}
+}
+
 export function sessionCookie(token: string, maxAge: number): string {
 	const expires = new Date(Date.now() + maxAge * 1000).toUTCString();
 	return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}; Expires=${expires}; Priority=High`;

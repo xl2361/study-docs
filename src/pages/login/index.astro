@@ -35,14 +35,31 @@
 			</form>
 		</main>
 		<script is:inline>
+			const recoveryKey = "study-auth-recovery";
 			const params = new URLSearchParams(location.search);
 			const next = params.get("next");
-			document.getElementById("next").value = next?.startsWith("/") && !next.startsWith("//") ? next : "/";
+			const destination = next?.startsWith("/") && !next.startsWith("//") ? next : "/";
+			document.getElementById("next").value = destination;
 			const error = document.getElementById("login-error");
 			const message = params.get("error");
 			if (message) {
 				error.textContent = message;
 				error.hidden = false;
+			}
+			const token = localStorage.getItem(recoveryKey);
+			if (token) {
+				document.getElementById("login-form").hidden = true;
+				fetch("/api/auth/restore", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ token }),
+				}).then((response) => {
+					if (!response.ok) throw new Error("restore failed");
+					location.replace(destination);
+				}).catch(() => {
+					localStorage.removeItem(recoveryKey);
+					document.getElementById("login-form").hidden = false;
+				});
 			}
 		</script>
 	</body>

@@ -101,6 +101,7 @@ async function toggleEditing() {
 
 async function logout() {
 	await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
+	localStorage.removeItem("study-auth-recovery");
 	location.href = "/login/";
 }
 

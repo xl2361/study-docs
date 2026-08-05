@@ -6,7 +6,7 @@ import {
 	validateSession,
 } from "./_lib/auth";
 
-const PUBLIC_PATHS = ["/login", "/api/auth/login"];
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/restore"];
 
 export const onRequest: PagesFunction<PagesEnv> = async (context) => {
 	const url = new URL(context.request.url);

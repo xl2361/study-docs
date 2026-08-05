@@ -57,14 +57,21 @@ export const onRequestPost: PagesFunction<PagesEnv> = async (context) => {
 		),
 	);
 	if (isForm) {
-		return new Response(null, {
-			status: 303,
-			headers: {
-				"Cache-Control": "no-store",
-				Location: new URL(next, context.request.url).toString(),
-				"Set-Cookie": sessionCookie(result.token, maxAge),
+		const bootstrap = JSON.stringify({ token: result.token, next }).replace(
+			/<\/script/gi,
+			"<\\/script",
+		);
+		return new Response(
+			`<!doctype html><meta charset="utf-8"><script>const data=${bootstrap};try{localStorage.setItem("study-auth-recovery",data.token)}catch{}location.replace(data.next)</script>`,
+			{
+				status: 200,
+				headers: {
+					"Cache-Control": "no-store",
+					"Content-Type": "text/html; charset=utf-8",
+					"Set-Cookie": sessionCookie(result.token, maxAge),
+				},
 			},
-		});
+		);
 	}
 	return Response.json(
 		{ authenticated: true },

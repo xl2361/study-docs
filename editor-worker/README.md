@@ -29,6 +29,7 @@ pnpm wrangler deploy --config editor-worker/wrangler.jsonc
 - 登录账号固定为 `admin`，每个来源 IP 每分钟最多尝试 5 次。签名会话没有服务端到期时间，每次有效访问都会把 Cookie 续期至现代浏览器通常允许的最长持久期限 400 天；关闭浏览器不会退出登录，主动点击“退出”会立即清除会话。
 - 登录使用浏览器顶层表单导航响应写入 Cookie，避免部分手机浏览器或 WebView 只在当前进程保存 `fetch` 响应 Cookie。
 - 登录令牌只保存在常用的 `HttpOnly`、`Secure`、`SameSite=Lax` Cookie 中，浏览器脚本无法读取；从外部页面或浏览器启动入口打开网站时也会携带 Cookie。
+- 为兼容 Via 等未及时把 WebView Cookie 写入磁盘的浏览器，登录时同时在 `localStorage` 保存签名恢复凭据；Cookie 丢失后登录页会先验签再换取新 Cookie。退出登录会同时清除恢复凭据。
 - 未登录访问首页、文章、RSS、搜索索引和站点资源都会跳转登录页。
 - Worker 严格校验请求 `Origin`，生产环境不要把 `ALLOWED_ORIGIN` 设置为 `*`。
 - 仅支持 `.md`，不允许在线编辑 `.mdx`、站点配置、代码或工作流。

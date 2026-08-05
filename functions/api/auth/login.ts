@@ -21,7 +21,7 @@ export const onRequestPost: PagesFunction<PagesEnv> = async (context) => {
 	const maxAge = Math.max(
 		0,
 		Math.min(
-			4 * 60 * 60,
+			30 * 24 * 60 * 60,
 			(result.expiresAt || 0) - Math.floor(Date.now() / 1000),
 		),
 	);

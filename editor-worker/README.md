@@ -26,7 +26,7 @@ pnpm wrangler deploy --config editor-worker/wrangler.jsonc
 
 ## 安全约束
 
-- 登录账号固定为 `admin`，每个来源 IP 每分钟最多尝试 5 次，会话 4 小时后失效。
+- 登录账号固定为 `admin`，每个来源 IP 每分钟最多尝试 5 次，会话 30 天后失效。关闭浏览器不会退出登录；主动点击“退出”会立即清除会话。
 - 登录令牌只保存在 `HttpOnly`、`Secure`、`SameSite=Strict` Cookie 中，浏览器脚本无法读取。
 - 未登录访问首页、文章、RSS、搜索索引和站点资源都会跳转登录页。
 - Worker 严格校验请求 `Origin`，生产环境不要把 `ALLOWED_ORIGIN` 设置为 `*`。

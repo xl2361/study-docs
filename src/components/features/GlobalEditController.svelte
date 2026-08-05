@@ -101,6 +101,14 @@ async function toggleEditing() {
 		dispatchMode();
 		return;
 	}
+	const flushDetail = { success: true };
+	window.dispatchEvent(
+		new CustomEvent("study-article-editor-flush", { detail: flushDetail }),
+	);
+	if (!flushDetail.success) {
+		message = "当前文章草稿保存失败，请修正后重试";
+		return;
+	}
 
 	let drafts: Record<string, unknown> = {};
 	let categoryRenames: Record<string, string> = {};

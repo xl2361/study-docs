@@ -244,6 +244,10 @@ location: China # 位置
 
 ## 🧩 Markdown 扩展语法
 
+### 在线文章编辑模型
+
+文章在线编辑采用 Tiptap 3 / ProseMirror 的受控结构化文档模型：阅读视图继续由 Astro 服务端渲染，编辑视图独立挂载并维护编辑器状态，两者不会同时作为正文数据源。Markdown 是文章唯一的持久化格式，草稿恢复与保存均通过 Tiptap Markdown 扩展直接读写 Markdown，不从发布 HTML 反向转换。
+
 除了 Astro 默认支持的 [GitHub Flavored Markdown](https://github.github.com/gfm/) 之外，还包含了一些额外的 Markdown 功能：
 
 - 提醒块（Admonitions） - 支持 GitHub, Obsidian, VitePress, Docusaurus 四种风格主题配置 ([预览和用法](https://firefly.cuteleaf.cn/posts/markdown-extended/))

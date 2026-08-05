@@ -29,6 +29,7 @@ export interface Props {
 	showWords?: boolean;
 	showReadingTime?: boolean;
 	variant?: "default" | "cover";
+	articleEditable?: boolean;
 }
 
 const {
@@ -54,6 +55,7 @@ const {
 	showReadingTime = false,
 	password,
 	variant = "default",
+	articleEditable = false,
 } = Astro.props;
 
 const path = customPath || (id ? `/posts/${id}` : "");
@@ -62,6 +64,7 @@ const visibleTags =
 ---
 
 <div
+	data-article-meta={articleEditable ? "" : undefined}
   class:list={[
     "post-meta-root flex flex-wrap items-center gap-4 gap-x-4 gap-y-2",
     {
@@ -90,7 +93,10 @@ const visibleTags =
             class="text-xl"
           />
         </div>
-        <span class="text-50 text-sm font-medium">
+        <span
+		  data-article-published={articleEditable ? "" : undefined}
+		  class="text-50 text-sm font-medium"
+		>
           {formatDateToYYYYMMDD(published)}
         </span>
       </div>
@@ -124,14 +130,15 @@ const visibleTags =
           <Icon is:inline name="material-symbols:book-2-outline-rounded" class="text-xl" />
         </div>
         <div class="flex flex-row flex-nowrap items-center">
-          <a
-            href={getCategoryUrl(category || "")}
-            aria-label={`View all posts in the ${category} category`}
-            class="link-lg transition text-50 text-sm font-medium
-              hover:text-(--primary) dark:hover:text-(--primary) whitespace-nowrap"
-          >
-            {category || i18n(I18nKey.uncategorized)}
-          </a>
+			<a
+			  data-article-category={articleEditable ? "" : undefined}
+			  href={getCategoryUrl(category || "")}
+			  aria-label={`View all posts in the ${category} category`}
+			  class="link-lg transition text-50 text-sm font-medium
+				hover:text-(--primary) dark:hover:text-(--primary) whitespace-nowrap"
+			>
+			  {category || i18n(I18nKey.uncategorized)}
+			</a>
         </div>
       </div>
     )
@@ -148,8 +155,11 @@ const visibleTags =
         <div class="meta-icon">
           <Icon is:inline name="material-symbols:tag-rounded" class="text-xl" />
         </div>
-        <div class="flex flex-row flex-nowrap items-center">
-          {visibleTags &&
+        <div
+		  data-article-tags={articleEditable ? (visibleTags || []).map((tag) => tag.trim()).join(", ") : undefined}
+		  class="flex flex-row flex-nowrap items-center"
+		>
+		  {visibleTags &&
             visibleTags.length > 0 &&
             visibleTags.map((tag, i) => (
               <>

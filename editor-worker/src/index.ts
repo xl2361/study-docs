@@ -9,7 +9,13 @@ interface ArticleDraft {
 	slug?: unknown;
 	content?: unknown;
 	sha?: unknown;
+	create?: unknown;
+	delete?: unknown;
 }
+
+type PendingArticle =
+	| { kind: "create" | "update"; content: string }
+	| { kind: "delete" };
 
 interface GitHubDirectoryEntry {
 	name?: string;
@@ -126,7 +132,8 @@ async function updateArticles(
 		throw new HttpError(400, "单次最多更新 50 篇文章");
 
 	const renames = parseCategoryRenames(body.categoryRenames);
-	const pending = new Map<string, { content: string; sha: string }>();
+	const pending = new Map<string, PendingArticle>();
+	const requestedPaths = new Set<string>();
 	let totalBytes = 0;
 	const head = await githubRequest<{ object?: { sha?: string } }>(
 		env,
@@ -136,25 +143,62 @@ async function updateArticles(
 	if (!headSha) throw new HttpError(502, "GitHub 分支缺少版本信息");
 
 	for (const value of body.articles as ArticleDraft[]) {
-		if (typeof value.content !== "string" || typeof value.sha !== "string") {
-			throw new HttpError(400, "文章草稿缺少内容或版本信息");
+		const path = articlePath(value.slug);
+		if (requestedPaths.has(path))
+			throw new HttpError(400, "单轮请求不能重复修改同一文章路径");
+		requestedPaths.add(path);
+		if (
+			(value.create !== undefined && typeof value.create !== "boolean") ||
+			(value.delete !== undefined && typeof value.delete !== "boolean") ||
+			(value.create === true && value.delete === true)
+		)
+			throw new HttpError(400, "文章草稿操作类型不正确");
+
+		if (value.delete === true) {
+			if (value.content !== undefined || typeof value.sha !== "string")
+				throw new HttpError(400, "删除文章必须提供版本信息且不能包含内容");
+			const current = await fetchGitHubContent(path, env, headSha);
+			if (!current.sha || current.sha !== value.sha)
+				throw new HttpError(
+					409,
+					`${path.slice(ARTICLE_ROOT.length)} 已被其他操作修改，请重新读取`,
+				);
+			pending.set(path, { kind: "delete" });
+			continue;
 		}
+
+		if (typeof value.content !== "string")
+			throw new HttpError(400, "文章草稿缺少内容");
 		const articleBytes = encoder.encode(value.content).byteLength;
 		if (articleBytes === 0 || articleBytes > MAX_ARTICLE_BYTES)
 			throw new HttpError(400, "单篇文章必须小于 1 MB 且不能为空");
-		const path = articlePath(value.slug);
 		validateMarkdown(value.content);
-		const current = await fetchGitHubContent(path, env, headSha);
-		if (!current.sha || current.sha !== value.sha)
-			throw new HttpError(
-				409,
-				`${path.slice(ARTICLE_ROOT.length)} 已被其他操作修改，请重新读取`,
-			);
 		const content = updateFrontmatterDate(
 			renameCategory(value.content, renames),
 		);
+
+		if (value.create === true) {
+			if (value.sha !== undefined)
+				throw new HttpError(400, "新增文章不能提供版本信息");
+			const current = await fetchGitHubContentIfExists(path, env, headSha);
+			if (current)
+				throw new HttpError(
+					409,
+					`${path.slice(ARTICLE_ROOT.length)} 已存在，请重新读取`,
+				);
+			pending.set(path, { kind: "create", content });
+		} else {
+			if (typeof value.sha !== "string")
+				throw new HttpError(400, "文章草稿缺少版本信息");
+			const current = await fetchGitHubContent(path, env, headSha);
+			if (!current.sha || current.sha !== value.sha)
+				throw new HttpError(
+					409,
+					`${path.slice(ARTICLE_ROOT.length)} 已被其他操作修改，请重新读取`,
+				);
+			pending.set(path, { kind: "update", content });
+		}
 		totalBytes += encoder.encode(content).byteLength;
-		pending.set(path, { content, sha: value.sha });
 	}
 
 	if (renames.size > 0) {
@@ -164,8 +208,9 @@ async function updateArticles(
 			const path = entry.path;
 			const existing = pending.get(path);
 			if (existing) {
+				if (existing.kind === "delete") continue;
 				const renamed = renameCategory(existing.content, renames);
-				pending.set(path, { content: renamed, sha: existing.sha });
+				pending.set(path, { ...existing, content: renamed });
 				continue;
 			}
 			const current = await fetchGitHubContent(path, env, headSha);
@@ -176,7 +221,7 @@ async function updateArticles(
 			if (renamed !== original) {
 				const content = updateFrontmatterDate(renamed);
 				totalBytes += encoder.encode(content).byteLength;
-				pending.set(path, { content, sha: current.sha });
+				pending.set(path, { kind: "update", content });
 			}
 		}
 	}
@@ -197,12 +242,16 @@ async function updateArticles(
 			method: "POST",
 			body: JSON.stringify({
 				base_tree: parent.tree.sha,
-				tree: [...pending].map(([path, article]) => ({
-					path,
-					mode: "100644",
-					type: "blob",
-					content: article.content,
-				})),
+				tree: [...pending].map(([path, article]) =>
+					article.kind === "delete"
+						? { path, mode: "100644", type: "blob", sha: null }
+						: {
+								path,
+								mode: "100644",
+								type: "blob",
+								content: article.content,
+							},
+				),
 			}),
 		},
 	);
@@ -231,10 +280,11 @@ async function updateArticles(
 	);
 
 	const commit = commitResult.sha;
+	const changed = pending.size;
 	console.log(
-		JSON.stringify({ event: "articles_saved", files: pending.size, commit }),
+		JSON.stringify({ event: "articles_saved", files: changed, commit }),
 	);
-	return json({ updated: pending.size, commit }, 200, origin, env);
+	return json({ changed, updated: changed, commit }, 200, origin, env);
 }
 
 function parseCategoryRenames(value: unknown): Map<string, string> {
@@ -277,15 +327,9 @@ function renameCategory(content: string, renames: Map<string, string>): string {
 	const current = quote ? match[1].slice(1, -1) : match[1];
 	const target = renames.get(current.trim());
 	if (!target) return content;
-	const escaped =
-		quote === '"'
-			? target.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
-			: quote === "'"
-				? target.replace(/'/g, "''")
-				: target;
 	const next = normalized.replace(
 		/^category\s*:.*$/m,
-		`category: ${quote}${escaped}${quote}`,
+		`category: ${JSON.stringify(target)}`,
 	);
 	return content.includes("\r\n") ? next.replace(/\n/g, "\r\n") : next;
 }
@@ -353,6 +397,19 @@ async function fetchGitHubContent(
 		env,
 		`${githubContentPath(path, env)}?ref=${encodeURIComponent(ref)}`,
 	);
+}
+
+async function fetchGitHubContentIfExists(
+	path: string,
+	env: Cloudflare.Env,
+	ref: string,
+): Promise<GitHubContent | null> {
+	try {
+		return await fetchGitHubContent(path, env, ref);
+	} catch (error) {
+		if (error instanceof HttpError && error.status === 404) return null;
+		throw error;
+	}
 }
 
 function articlePath(slug: unknown): string {

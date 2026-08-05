@@ -15,20 +15,31 @@ type PreviewBlock =
 type Draft = {
 	slug: string;
 	title: string;
-	content: string;
+	content?: string;
 	sha: string;
 	path: string;
+	delete?: boolean;
+	previous?: Omit<Draft, "previous">;
 };
 
 let dialog: HTMLDialogElement;
 let content = "";
+let articleTitle = title;
+let published = "";
+let category = "";
+let tags = "";
+let frontmatterLines: string[] = [];
+let frontmatterSource = "";
 let sha = "";
 let path = "";
 let loading = false;
 let error = "";
+let savedMessage = "";
 let editing = false;
 let mobilePanel: "edit" | "preview" = "edit";
 let previousBodyOverflow = "";
+let autoOpened = false;
+let markedForDeletion = false;
 const editModeKey = "study-edit-mode";
 const draftsKey = "study-edit-drafts";
 
@@ -36,19 +47,143 @@ $: previewBlocks = parseMarkdown(content);
 $: characterCount = content.length;
 
 onMount(() => {
-	editing = sessionStorage.getItem(editModeKey) === "1";
-	const handleModeChange = (event: Event) => {
-		editing = Boolean(
-			(event as CustomEvent<{ editing?: boolean }>).detail?.editing,
-		);
-		if (!editing && dialog?.open) closeEditor();
+	const setEditMode = async (enabled: boolean) => {
+		editing = enabled;
+		if (enabled && !autoOpened) {
+			autoOpened = true;
+			await tick();
+			await openEditor();
+		} else if (!enabled && dialog?.open) {
+			closeEditor();
+		}
+		if (!enabled) autoOpened = false;
 	};
+
+	void setEditMode(sessionStorage.getItem(editModeKey) === "1");
+	const handleModeChange = (event: Event) => {
+		void setEditMode(
+			Boolean((event as CustomEvent<{ editing?: boolean }>).detail?.editing),
+		);
+	};
+	const handleOpen = () => void openEditor();
 	window.addEventListener("study-edit-mode-change", handleModeChange);
+	window.addEventListener("study-article-editor-open", handleOpen);
 	return () => {
 		window.removeEventListener("study-edit-mode-change", handleModeChange);
+		window.removeEventListener("study-article-editor-open", handleOpen);
 		unlockPage();
 	};
 });
+
+function decodeYamlScalar(value: string) {
+	const trimmed = value.trim();
+	if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+		try {
+			return JSON.parse(trimmed) as string;
+		} catch {
+			return trimmed.slice(1, -1);
+		}
+	}
+	if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
+		return trimmed.slice(1, -1).replace(/''/g, "'");
+	}
+	return trimmed;
+}
+
+function splitYamlList(value: string) {
+	const source = value.trim().replace(/^\[/, "").replace(/\]$/, "");
+	const values: string[] = [];
+	let item = "";
+	let quote = "";
+	for (const character of source) {
+		if (
+			(character === '"' || character === "'") &&
+			(!quote || quote === character)
+		) {
+			quote = quote ? "" : character;
+			item += character;
+		} else if (character === "," && !quote) {
+			if (item.trim()) values.push(decodeYamlScalar(item));
+			item = "";
+		} else {
+			item += character;
+		}
+	}
+	if (item.trim()) values.push(decodeYamlScalar(item));
+	return values;
+}
+
+function fieldRange(lines: string[], key: string): [number, number] | null {
+	const start = lines.findIndex((line) =>
+		new RegExp(`^${key}\\s*:`).test(line),
+	);
+	if (start < 0) return null;
+	let end = start + 1;
+	while (end < lines.length && !/^[A-Za-z0-9_-]+\s*:/.test(lines[end])) end++;
+	return [start, end];
+}
+
+function readFrontmatterField(lines: string[], key: string) {
+	const range = fieldRange(lines, key);
+	if (!range) return "";
+	return lines[range[0]].replace(new RegExp(`^${key}\\s*:\\s*`), "");
+}
+
+function readTags(lines: string[]) {
+	const range = fieldRange(lines, "tags");
+	if (!range) return "";
+	const inline = readFrontmatterField(lines, "tags").trim();
+	if (inline) return splitYamlList(inline).join(", ");
+	return lines
+		.slice(range[0] + 1, range[1])
+		.map((line) => line.match(/^\s*-\s*(.+)$/)?.[1])
+		.filter((value): value is string => Boolean(value))
+		.map(decodeYamlScalar)
+		.join(", ");
+}
+
+function parseArticle(source: string) {
+	const normalized = source.replace(/\r\n?/g, "\n");
+	const match = normalized.match(/^---\s*\n([\s\S]*?)\n---\s*(?:\n|$)/);
+	frontmatterLines = match ? match[1].split("\n") : [];
+	frontmatterSource = frontmatterLines.join("\n");
+	content = match ? normalized.slice(match[0].length) : normalized;
+	articleTitle =
+		decodeYamlScalar(readFrontmatterField(frontmatterLines, "title")) || title;
+	published = decodeYamlScalar(
+		readFrontmatterField(frontmatterLines, "published"),
+	);
+	category = decodeYamlScalar(
+		readFrontmatterField(frontmatterLines, "category"),
+	);
+	tags = readTags(frontmatterLines);
+}
+
+function setFrontmatterField(lines: string[], key: string, value: string) {
+	const range = fieldRange(lines, key);
+	const replacement = `${key}: ${value}`;
+	if (range) {
+		lines.splice(range[0], range[1] - range[0], replacement);
+	} else lines.push(replacement);
+}
+
+function buildArticle() {
+	const lines = frontmatterSource.replace(/\r\n?/g, "\n").split("\n");
+	setFrontmatterField(lines, "title", JSON.stringify(articleTitle.trim()));
+	setFrontmatterField(lines, "published", published.trim());
+	setFrontmatterField(lines, "category", JSON.stringify(category.trim()));
+	setFrontmatterField(
+		lines,
+		"tags",
+		JSON.stringify(
+			tags
+				.split(",")
+				.map((tag) => tag.trim())
+				.filter(Boolean),
+		),
+	);
+	return `---\n${lines.join("\n")}\n---\n\n${content.replace(/^\n+/, "")}`;
+}
 
 function parseMarkdown(source: string): PreviewBlock[] {
 	const lines = source.replace(/\r\n?/g, "\n").split("\n");
@@ -145,6 +280,7 @@ function parseMarkdown(source: string): PreviewBlock[] {
 
 async function openEditor() {
 	error = "";
+	if (!dialog || dialog.open) return;
 	dialog.showModal();
 	previousBodyOverflow = document.body.style.overflow;
 	document.body.style.overflow = "hidden";
@@ -155,6 +291,10 @@ async function openEditor() {
 function closeEditor() {
 	dialog.close();
 	unlockPage();
+}
+
+function leaveEditor() {
+	closeEditor();
 }
 
 function unlockPage() {
@@ -184,8 +324,15 @@ async function loadArticle() {
 	try {
 		const drafts = readDrafts();
 		if (drafts[slug]) {
-			({ content, sha, path } = drafts[slug]);
-			return;
+			const draft = drafts[slug];
+			({ sha, path } = draft);
+			if (draft.delete) {
+				markedForDeletion = true;
+			} else {
+				markedForDeletion = false;
+				parseArticle(draft.content || "");
+				return;
+			}
 		}
 		const response = await fetch(
 			`/api/editor/article?slug=${encodeURIComponent(slug)}`,
@@ -201,7 +348,7 @@ async function loadArticle() {
 			sha?: string;
 			path?: string;
 		};
-		content = article.content ?? "";
+		parseArticle(article.content ?? "");
 		sha = article.sha ?? "";
 		path = article.path ?? "";
 	} catch (reason) {
@@ -224,14 +371,59 @@ function readDrafts(): Record<string, Draft> {
 
 function saveArticle() {
 	error = "";
+	savedMessage = "";
 	try {
+		if (!articleTitle.trim() || !published.trim()) {
+			throw new Error("标题和发布日期不能为空");
+		}
 		const drafts = readDrafts();
-		drafts[slug] = { slug, title, content, sha, path };
+		const savedContent = buildArticle();
+		drafts[slug] = {
+			slug,
+			title: articleTitle.trim(),
+			content: savedContent,
+			sha,
+			path,
+		};
 		sessionStorage.setItem(draftsKey, JSON.stringify(drafts));
-		closeEditor();
+		markedForDeletion = false;
+		savedMessage = "已保存到本轮，点击顶部“更新”后提交";
 	} catch (reason) {
 		error =
 			reason instanceof Error ? reason.message : "草稿保存失败，请稍后重试";
+	}
+}
+
+function deleteArticle() {
+	error = "";
+	try {
+		const drafts = readDrafts();
+		if (markedForDeletion) {
+			const previous = drafts[slug]?.previous;
+			if (previous) drafts[slug] = previous;
+			else delete drafts[slug];
+			if (Object.keys(drafts).length > 0)
+				sessionStorage.setItem(draftsKey, JSON.stringify(drafts));
+			else sessionStorage.removeItem(draftsKey);
+			markedForDeletion = false;
+			error = "已撤销删除";
+			return;
+		}
+		if (!confirm(`确认将《${articleTitle.trim() || title}》加入删除列表？`))
+			return;
+		drafts[slug] = {
+			slug,
+			title: articleTitle.trim() || title,
+			sha,
+			path,
+			delete: true,
+			previous: drafts[slug]?.delete ? drafts[slug].previous : drafts[slug],
+		};
+		sessionStorage.setItem(draftsKey, JSON.stringify(drafts));
+		markedForDeletion = true;
+		leaveEditor();
+	} catch (reason) {
+		error = reason instanceof Error ? reason.message : "删除草稿保存失败";
 	}
 }
 
@@ -241,13 +433,6 @@ function redirectToLogin() {
 </script>
 
 {#if editing}
-	<div class="editor-entry">
-		<button class="launch-button" type="button" onclick={openEditor} aria-haspopup="dialog">
-			<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 17.25V20h2.75L17.81 8.94l-2.75-2.75L4 17.25Zm15.71-10.42a1 1 0 0 0 0-1.42l-1.12-1.12a1 1 0 0 0-1.42 0l-.88.88 2.75 2.75.67-.67Z" /></svg>
-			<span>编辑本文</span>
-		</button>
-	</div>
-
 	<dialog
 	bind:this={dialog}
 	class="editor-dialog"
@@ -259,10 +444,10 @@ function redirectToLogin() {
 		<header class="editor-header">
 			<div class="title-group">
 				<span class="eyebrow">ARTICLE STUDIO</span>
-				<h2 id="article-editor-title">{title}</h2>
+				<h2 id="article-editor-title">{articleTitle || title}</h2>
 				{#if path}<p>{path}</p>{/if}
 			</div>
-			<button class="icon-button" type="button" onclick={closeEditor} aria-label="关闭编辑器">
+			<button class="icon-button" type="button" onclick={leaveEditor} aria-label="关闭编辑器">
 				<svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4 6.4 5Z" /></svg>
 			</button>
 		</header>
@@ -275,8 +460,10 @@ function redirectToLogin() {
 				<div class="document-meta" aria-live="polite">
 					<span>{characterCount.toLocaleString()} 字符</span>
 					{#if error}<span class="error" role="alert">● {error}</span>{/if}
+					{#if savedMessage}<span class="success">● {savedMessage}</span>{/if}
 				</div>
 				<div class="toolbar-actions">
+					<button class="delete-button" type="button" onclick={deleteArticle} disabled={loading}>{markedForDeletion ? "撤销删除" : "删除文章"}</button>
 					<button class="secondary-button" type="button" onclick={loadArticle} disabled={loading}>重新读取</button>
 					<button class="primary-button" type="button" onclick={saveArticle} disabled={loading}>
 						保存到本轮
@@ -284,10 +471,33 @@ function redirectToLogin() {
 				</div>
 			</div>
 
+			<div class="frontmatter-editor" aria-label="文章信息">
+				<label>
+					<span>标题</span>
+					<input bind:value={articleTitle} type="text" required disabled={loading} />
+				</label>
+				<label>
+					<span>发布日期</span>
+					<input bind:value={published} type="date" required disabled={loading} />
+				</label>
+				<label>
+					<span>分类</span>
+					<input bind:value={category} type="text" disabled={loading} />
+				</label>
+				<label>
+					<span>标签（逗号分隔）</span>
+					<input bind:value={tags} type="text" disabled={loading} />
+				</label>
+				<label class="frontmatter-source-field">
+					<span>完整 Frontmatter（高级）</span>
+					<textarea bind:value={frontmatterSource} rows="7" spellcheck="false" disabled={loading}></textarea>
+				</label>
+			</div>
+
 			<div class="workspace" class:show-preview={mobilePanel === "preview"} aria-busy={loading}>
 				<section class="edit-pane" aria-label="Markdown 编辑区">
 					<div class="pane-label"><span>MARKDOWN</span><span>UTF-8</span></div>
-					<textarea bind:value={content} aria-label={`编辑《${title}》的 Markdown 内容`} spellcheck="false" disabled={loading}></textarea>
+					<textarea bind:value={content} aria-label={`编辑《${articleTitle || title}》的 Markdown 正文`} spellcheck="false" disabled={loading}></textarea>
 					{#if loading}<div class="loading-layer">正在读取文章…</div>{/if}
 				</section>
 				<section class="preview-pane" aria-label="文章预览">
@@ -321,14 +531,10 @@ function redirectToLogin() {
 {/if}
 
 <style>
-	.editor-entry { display: flex; justify-content: flex-end; margin: -.25rem 0 1rem; }
-	button, textarea { font: inherit; }
+	button, input, textarea { font: inherit; }
 	button { cursor: pointer; }
 	button:disabled { cursor: not-allowed; opacity: .55; }
-	.launch-button { display: inline-flex; align-items: center; gap: .42rem; border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); border-radius: 999px; padding: .42rem .72rem; color: color-mix(in srgb, var(--btn-content) 62%, transparent); background: color-mix(in srgb, var(--btn-regular-bg) 78%, transparent); font-size: .76rem; font-weight: 600; transition: color .2s, border-color .2s, background .2s, transform .2s; }
-	.launch-button:hover { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 38%, transparent); background: color-mix(in srgb, var(--primary) 9%, var(--card-bg)); transform: translateY(-1px); }
-	.launch-button:focus-visible, button:focus-visible, textarea:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-	.launch-button svg { width: .95rem; height: .95rem; fill: currentColor; }
+	button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 	.editor-dialog { width: min(96vw, 1500px); max-width: none; height: min(92dvh, 980px); max-height: none; padding: 0; border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); border-radius: calc(var(--radius-large) + .25rem); color: var(--btn-content); background: var(--card-bg); box-shadow: 0 28px 90px rgb(0 0 0 / .28); overflow: hidden; }
 	.editor-dialog::backdrop { background: rgb(10 15 24 / .66); backdrop-filter: blur(10px); }
 	.dialog-shell { height: 100%; display: flex; flex-direction: column; background: radial-gradient(circle at 12% -20%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 36%), var(--card-bg); }
@@ -340,11 +546,12 @@ function redirectToLogin() {
 	.icon-button { width: 2.5rem; height: 2.5rem; flex: 0 0 auto; display: grid; place-items: center; border: 0; border-radius: 50%; color: inherit; background: var(--btn-regular-bg); transition: background .2s, transform .2s; }
 	.icon-button:hover { background: var(--btn-regular-bg-hover); transform: rotate(4deg); }
 	.icon-button svg { width: 1.25rem; height: 1.25rem; fill: currentColor; }
-	.primary-button, .secondary-button { min-height: 2.55rem; border-radius: .72rem; padding: .58rem 1rem; font-size: .8rem; font-weight: 750; transition: transform .16s, background .16s; }
+	.primary-button, .secondary-button, .delete-button { min-height: 2.55rem; border-radius: .72rem; padding: .58rem 1rem; font-size: .8rem; font-weight: 750; transition: transform .16s, background .16s; }
 	.primary-button { border: 1px solid var(--primary); color: white; background: var(--primary); }
 	:global(.dark) .primary-button { color: rgb(0 0 0 / .75); }
-	.primary-button:not(:disabled):hover, .secondary-button:not(:disabled):hover { transform: translateY(-1px); }
+	.primary-button:not(:disabled):hover, .secondary-button:not(:disabled):hover, .delete-button:not(:disabled):hover { transform: translateY(-1px); }
 	.secondary-button { border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); color: inherit; background: var(--btn-regular-bg); }
+	.delete-button { border: 1px solid color-mix(in srgb, #d84b4b 40%, transparent); color: #d84b4b; background: color-mix(in srgb, #d84b4b 8%, transparent); }
 	.error { color: #e05252 !important; }
 	.success { color: #2d9b70; }
 	.editor-toolbar { min-height: 3.65rem; display: flex; align-items: center; gap: 1rem; padding: .58rem 1rem; border-bottom: 1px solid color-mix(in srgb, var(--btn-content) 10%, transparent); }
@@ -352,6 +559,12 @@ function redirectToLogin() {
 	.document-meta { min-width: 0; display: flex; align-items: center; gap: .8rem; flex: 1; color: color-mix(in srgb, var(--btn-content) 48%, transparent); font-size: .72rem; }
 	.document-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.toolbar-actions { display: flex; gap: .5rem; }
+	.frontmatter-editor { display: grid; grid-template-columns: minmax(12rem, 2fr) minmax(9rem, 1fr) minmax(9rem, 1fr) minmax(12rem, 1.5fr); gap: .7rem; padding: .7rem 1rem; border-bottom: 1px solid color-mix(in srgb, var(--btn-content) 10%, transparent); }
+	.frontmatter-editor label { min-width: 0; display: grid; gap: .25rem; color: color-mix(in srgb, var(--btn-content) 55%, transparent); font-size: .68rem; font-weight: 700; }
+	.frontmatter-editor input, .frontmatter-editor textarea { min-width: 0; border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); border-radius: .55rem; padding: .5rem .65rem; color: var(--btn-content); background: color-mix(in srgb, var(--btn-regular-bg) 58%, transparent); }
+	.frontmatter-editor input { height: 2.3rem; }
+	.frontmatter-source-field { grid-column: 1 / -1; }
+	.frontmatter-source-field textarea { resize: vertical; font-family: var(--font-jetbrains-mono), ui-monospace, monospace; font-size: .75rem; line-height: 1.5; }
 	.workspace { min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 	.edit-pane, .preview-pane { min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column; }
 	.edit-pane { border-right: 1px solid color-mix(in srgb, var(--btn-content) 10%, transparent); }
@@ -379,7 +592,6 @@ function redirectToLogin() {
 	.empty-preview { color: color-mix(in srgb, var(--btn-content) 40%, transparent); }
 
 	@media (max-width: 767px) {
-		.editor-entry { margin-top: -.1rem; }
 		.editor-dialog { width: 100vw; height: 100dvh; border: 0; border-radius: 0; }
 		.editor-header { min-height: 4.4rem; padding: .7rem .85rem; }
 		.title-group .eyebrow, .title-group p { display: none; }
@@ -389,7 +601,8 @@ function redirectToLogin() {
 		.mobile-tabs button.active { color: var(--primary); background: var(--card-bg); box-shadow: 0 2px 8px rgb(0 0 0 / .08); }
 		.document-meta { order: 3; flex-basis: 100%; }
 		.toolbar-actions { order: 2; margin-left: auto; }
-		.primary-button, .secondary-button { min-height: 2.2rem; padding: .42rem .7rem; }
+		.primary-button, .secondary-button, .delete-button { min-height: 2.2rem; padding: .42rem .7rem; }
+		.frontmatter-editor { grid-template-columns: 1fr 1fr; gap: .5rem; padding: .55rem .7rem; }
 		.workspace { display: block; position: relative; }
 		.edit-pane, .preview-pane { position: absolute; inset: 0; border: 0; }
 		.preview-pane { display: none; }
@@ -398,6 +611,6 @@ function redirectToLogin() {
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.launch-button, .icon-button, .primary-button, .secondary-button { transition: none; }
+		.icon-button, .primary-button, .secondary-button, .delete-button { transition: none; }
 	}
 </style>

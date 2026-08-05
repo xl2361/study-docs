@@ -75,16 +75,6 @@ const search = async () => {
 	}
 };
 
-const submitSearch = async (event: SubmitEvent) => {
-	event.preventDefault();
-	const searchKeyword = keyword.trim();
-	const url = new URL(window.location.href);
-	if (searchKeyword) url.searchParams.set("q", searchKeyword);
-	else url.searchParams.delete("q");
-	window.history.replaceState({}, "", url);
-	await search();
-};
-
 // --- Initialization onMount ---
 onMount(() => {
 	const initialize = async () => {
@@ -127,19 +117,6 @@ onMount(() => {
 </script>
 
 <div class="grid grid-cols-1 gap-4">
-    <form class="card-base flex items-center gap-3 rounded-(--radius-large) p-3" on:submit={submitSearch}>
-        <Icon icon="material-symbols:search" class="shrink-0 text-2xl text-50" />
-        <input
-            bind:value={keyword}
-            type="search"
-            placeholder={title}
-            aria-label={title}
-            class="min-w-0 flex-1 bg-transparent px-1 py-2 text-90 outline-none"
-        />
-        <button type="submit" class="btn-regular rounded-lg px-4 py-2 text-sm font-medium">
-            {title}
-        </button>
-    </form>
     <!-- Results Area -->
     <div>
         {#if isSearching}
@@ -152,7 +129,7 @@ onMount(() => {
                     <div class="card-base p-6 block rounded-(--radius-large)">
                         <a href={result.url} class="block group">
                             <h5 class="mb-2 text-2xl font-bold tracking-tight text-90 group-hover:text-(--primary) transition-colors">
-                                {@html result.meta.title}
+                                {result.meta.title}
                             </h5>
                             <p class="font-normal text-75">
                                 {@html result.excerpt}

@@ -478,6 +478,7 @@ async function githubRequest<T = unknown>(
 	const headers = new Headers(init.headers);
 	headers.set("Accept", "application/vnd.github+json");
 	headers.set("Authorization", `Bearer ${env.GITHUB_TOKEN}`);
+	headers.set("User-Agent", "dayu-study-editor/1.0");
 	headers.set("X-GitHub-Api-Version", "2022-11-28");
 	if (init.body) headers.set("Content-Type", "application/json");
 	const response = await fetch(`${API_ROOT}${path}`, { ...init, headers });

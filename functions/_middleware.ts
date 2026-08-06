@@ -7,11 +7,22 @@ import {
 } from "./_lib/auth";
 
 const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/auth/restore"];
+const PUBLIC_PREFIXES = [
+	"/_astro/",
+	"/pagefind/pagefind",
+	"/favicon",
+	"/apple-touch-icon",
+	"/robots.txt",
+	"/site.webmanifest",
+	"/manifest",
+];
 
 export const onRequest: PagesFunction<PagesEnv> = async (context) => {
 	const url = new URL(context.request.url);
 	const pathname = url.pathname.replace(/\/$/, "") || "/";
-	const isPublic = PUBLIC_PATHS.includes(pathname);
+	const isPublic =
+		PUBLIC_PATHS.includes(pathname) ||
+		PUBLIC_PREFIXES.some((prefix) => url.pathname.startsWith(prefix));
 
 	if (isPublic) return context.next();
 	if (await validateSession(context)) {

@@ -33,17 +33,24 @@ import { url } from "@/utils/url-utils";
 
 export async function getStaticPaths() {
 	const blogEntries = await getSortedPosts();
+	const categories = [
+		...new Set(
+			blogEntries
+				.map((post) => post.data.category?.trim())
+				.filter((value): value is string => Boolean(value)),
+		),
+	].sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
 	return blogEntries.map((entry) => {
 		// 将 id 转换为 slug（移除扩展名）以匹配路由参数
 		const slug = removeFileExtension(entry.id);
 		return {
 			params: { slug },
-			props: { entry },
+			props: { entry, categories },
 		};
 	});
 }
 
-const { entry } = Astro.props;
+const { entry, categories = [] } = Astro.props;
 const { Content, headings, remarkPluginFrontmatter } = await render(entry);
 
 const bannerPostMeta = {
@@ -195,6 +202,7 @@ const editorArticlePath =
                 category={entry.data.category || undefined}
                 tags={entry.data.tags}
                 id={entry.id}
+                articleEditable
               />
             </div>
           </div>
@@ -284,6 +292,7 @@ const editorArticlePath =
               tags={entry.data.tags}
               category={entry.data.category || undefined}
               id={entry.id}
+              articleEditable
             />
             {
               !showPostCover && (
@@ -310,7 +319,7 @@ const editorArticlePath =
       }
 
       {
-        <ArticleEditor client:load slug={editorArticlePath} title={entry.data.title} />
+        <ArticleEditor client:load slug={editorArticlePath} title={entry.data.title} categories={categories} />
       }
 
       {entry.data.password ? (

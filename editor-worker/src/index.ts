@@ -86,7 +86,10 @@ async function login(
 	const contentLength = Number(request.headers.get("Content-Length") || 0);
 	if (contentLength > 1024) throw new HttpError(413, "请求内容过大");
 
-	const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+	const ip =
+		request.headers.get("X-Client-IP") ||
+		request.headers.get("CF-Connecting-IP") ||
+		"unknown";
 	const rateLimit = await env.LOGIN_RATE_LIMITER.limit({ key: ip });
 	if (!rateLimit.success)
 		throw new HttpError(429, "尝试次数过多，请一分钟后再试");

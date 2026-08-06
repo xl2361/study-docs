@@ -13,12 +13,18 @@ export const onRequestPost: PagesFunction<PagesEnv> = async (context) => {
 			password: form.get("password"),
 		};
 		const requestedNext = form.get("next");
-		if (
-			typeof requestedNext === "string" &&
-			requestedNext.startsWith("/") &&
-			!requestedNext.startsWith("//")
-		) {
-			next = requestedNext;
+		if (typeof requestedNext === "string") {
+			try {
+				const target = new URL(requestedNext, context.request.url);
+				if (
+					target.origin === new URL(context.request.url).origin &&
+					target.pathname.startsWith("/") &&
+					!target.pathname.startsWith("//")
+				)
+					next = `${target.pathname}${target.search}`;
+			} catch {
+				// 无效的 next 路径忽略，回落到默认主页。
+			}
 		}
 	} else {
 		credentials = (await context.request.json()) as {

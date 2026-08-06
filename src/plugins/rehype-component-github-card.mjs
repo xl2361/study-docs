@@ -15,11 +15,14 @@ export function GithubCardComponent(properties, children) {
 			'Invalid directive. ("github" directive must be leaf type "::github{repo="owner/repo"}")',
 		]);
 
-	if (!properties.repo?.includes("/"))
+	if (
+		!properties.repo?.includes("/") ||
+		!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(properties.repo)
+	)
 		return h(
 			"div",
 			{ class: "hidden" },
-			'Invalid repository. ("repo" attributte must be in the format "owner/repo")',
+			'Invalid repository. ("repo" attributte must be in the format "owner/repo" with alphanumeric owner and repo names)',
 		);
 
 	const repo = properties.repo;

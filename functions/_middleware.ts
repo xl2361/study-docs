@@ -25,13 +25,16 @@ export const onRequest: PagesFunction<PagesEnv> = async (context) => {
 		PUBLIC_PREFIXES.some((prefix) => url.pathname.startsWith(prefix));
 
 	if (isPublic) return context.next();
+	const renewSession = pathname !== "/api/auth/logout";
 	if (await validateSession(context)) {
 		const response = await context.next();
 		const headers = new Headers(response.headers);
 		headers.set("Cache-Control", "private, no-store");
-		const token = getSessionToken(context.request);
-		if (token)
-			headers.append("Set-Cookie", sessionCookie(token, SESSION_MAX_AGE));
+		if (renewSession) {
+			const token = getSessionToken(context.request);
+			if (token)
+				headers.append("Set-Cookie", sessionCookie(token, SESSION_MAX_AGE));
+		}
 		return new Response(response.body, { status: response.status, headers });
 	}
 

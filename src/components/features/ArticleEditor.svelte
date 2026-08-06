@@ -14,6 +14,27 @@ type Draft = {
 	previous?: Omit<Draft, "previous">;
 };
 type OutlineItem = { id: string; level: number; text: string };
+type EmergencyDraft = {
+	slug: string;
+	title: string;
+	published: string;
+	category: string;
+	tags: string;
+	body: string;
+	sha: string;
+	path: string;
+	error: string;
+	at: number;
+};
+type EditorLike = {
+	chain: () => EditorChain;
+	commands: {
+		setContent: (content: string, options: Record<string, unknown>) => void;
+	};
+	getMarkdown: () => string;
+	getJSON: () => JsonNode;
+	destroy: () => void;
+};
 type JsonNode = {
 	type?: string;
 	attrs?: { level?: number };
@@ -35,19 +56,13 @@ type EditorChain = {
 	setHorizontalRule: () => EditorChain;
 	run: () => boolean;
 };
-type EditorLike = {
-	chain: () => EditorChain;
-	commands: {
-		setContent: (content: string, options: Record<string, unknown>) => void;
-	};
-	getMarkdown: () => string;
-	getJSON: () => JsonNode;
-	destroy: () => void;
-};
 
 const draftsKey = "study-edit-drafts";
 const editModeKey = "study-edit-mode";
+const emergencyKey = "study-edit-emergency";
 let editing = false;
+let opening = false;
+let editorCreating = false;
 let loading = false;
 let loaded = false;
 let error = "";
@@ -70,6 +85,7 @@ let editorMount: HTMLElement;
 let sourceValue = "";
 let editor: EditorLike | null = null;
 let outline: OutlineItem[] = [];
+let emergency: EmergencyDraft | null = null;
 
 function scalar(value: string) {
 	const v = value.trim();
@@ -218,7 +234,8 @@ function markDirty(bodyChanged = false) {
 }
 
 async function createEditor() {
-	if (!editorMount || sourceMode || editor) return;
+	if (!editorMount || sourceMode || editor || editorCreating) return;
+	editorCreating = true;
 	editorReady = false;
 	try {
 		const [core, starter, markdown, table, image] = await Promise.all([
@@ -228,6 +245,7 @@ async function createEditor() {
 			import("@tiptap/extension-table"),
 			import("@tiptap/extension-image"),
 		]);
+		if (!editorMount || sourceMode || editor) return;
 		editor = new core.Editor({
 			element: editorMount,
 			extensions: [
@@ -256,6 +274,8 @@ async function createEditor() {
 		sourceValue = originalBody;
 		editorReady = true;
 		error = "本文包含富文本模式无法解析的原始 HTML/XML，已切换为源码模式";
+	} finally {
+		editorCreating = false;
 	}
 }
 
@@ -306,12 +326,55 @@ async function loadArticle() {
 }
 
 async function openEditor() {
-	if (!loaded) await loadArticle();
-	if (!loaded) return;
-	editing = true;
-	document.documentElement.classList.add("study-editor-active");
-	await tick();
-	await createEditor();
+	if (opening) return;
+	opening = true;
+	try {
+		if (!loaded) await loadArticle();
+		if (!loaded) return;
+		editing = true;
+		document.documentElement.classList.add("study-editor-active");
+		await tick();
+		await createEditor();
+	} finally {
+		opening = false;
+	}
+}
+
+function saveEmergencyDraft(reason: unknown) {
+	try {
+		const rawBody = bodyDirty
+			? sourceMode
+				? sourceValue
+				: editor?.getMarkdown() || ""
+			: originalBody;
+		const emergency = {
+			slug,
+			title: articleTitle.trim(),
+			published,
+			category,
+			tags,
+			body: rawBody,
+			sha,
+			path,
+			error: reason instanceof Error ? reason.message : "草稿保存失败",
+			at: Date.now(),
+		};
+		sessionStorage.setItem(
+			`${emergencyKey}:${slug}`,
+			JSON.stringify(emergency),
+		);
+	} catch {
+		// 紧急备份失败时放弃，避免双重异常。
+	}
+}
+
+function loadEmergency(): EmergencyDraft | null {
+	try {
+		const raw = sessionStorage.getItem(`${emergencyKey}:${slug}`);
+		return raw ? (JSON.parse(raw) as EmergencyDraft) : null;
+	} catch {
+		return null;
+	}
 }
 
 function saveDraft(): boolean {
@@ -357,6 +420,7 @@ function saveDraft(): boolean {
 			previous: previous?.delete ? previous.previous : previous,
 		};
 		sessionStorage.setItem(draftsKey, JSON.stringify(drafts));
+		sessionStorage.removeItem(`${emergencyKey}:${slug}`);
 		originalBody = body;
 		sourceValue = body;
 		dirty = false;
@@ -366,9 +430,39 @@ function saveDraft(): boolean {
 		savedMessage = "已保存到本轮，点击顶部“更新”后提交";
 		return true;
 	} catch (reason) {
-		error = reason instanceof Error ? reason.message : "草稿保存失败";
+		saveEmergencyDraft(reason);
+		const detail = reason instanceof Error ? reason.message : "草稿保存失败";
+		error = `${detail}（已临时备份，可稍后恢复）`;
 		return false;
 	}
+}
+
+function restoreEmergencyDraft() {
+	const backup = loadEmergency();
+	if (!backup) return;
+	try {
+		if (editor && !sourceMode) {
+			editor.commands.setContent(backup.body, {
+				contentType: "markdown",
+				emitUpdate: true,
+				errorOnInvalidContent: false,
+			});
+		}
+	} catch {
+		// 编辑器内容同步失败时以源码形式兜底恢复。
+		sourceMode = true;
+		sourceValue = backup.body;
+	}
+	parseArticle(backup.body);
+	articleTitle = backup.title || title;
+	published = backup.published;
+	category = backup.category;
+	bodyDirty = true;
+	dirty = true;
+	sessionStorage.removeItem(`${emergencyKey}:${slug}`);
+	error = "";
+	savedMessage = "已恢复上次未提交的编辑内容，请核对后保存";
+	emergency = null;
 }
 
 function leaveEditor() {
@@ -448,22 +542,27 @@ onMount(() => {
 		if (editing && dirty) detail.success = saveDraft();
 	};
 	const beforeUnload = () => {
-		if (dirty) saveDraft();
+		if (dirty && !saveDraft())
+			saveEmergencyDraft(new Error("页面刷新时保存失败"));
 	};
 	const modeChange = (event: Event) =>
 		setMode(
 			Boolean((event as CustomEvent<{ editing?: boolean }>).detail?.editing),
 		);
+	const onOpen = () => void openEditor();
 	window.addEventListener("study-edit-mode-change", modeChange);
-	window.addEventListener("study-article-editor-open", () => void openEditor());
+	window.addEventListener("study-article-editor-open", onOpen);
 	window.addEventListener("study-article-editor-flush", flush);
 	window.addEventListener("beforeunload", beforeUnload);
 	if (sessionStorage.getItem(editModeKey) === "1") void openEditor();
+	emergency = loadEmergency();
 	return () => {
 		window.removeEventListener("study-edit-mode-change", modeChange);
+		window.removeEventListener("study-article-editor-open", onOpen);
 		window.removeEventListener("study-article-editor-flush", flush);
 		window.removeEventListener("beforeunload", beforeUnload);
-		if (dirty) saveDraft();
+		if (dirty && !saveDraft())
+			saveEmergencyDraft(new Error("页面关闭时保存失败"));
 		destroyEditor();
 		document.documentElement.classList.remove("study-editor-active");
 	};
@@ -475,7 +574,7 @@ onMount(() => {
   <header class="editor-header">
    <div class="header-row"><input class="title-input" bind:value={articleTitle} oninput={() => markDirty()} placeholder="请输入标题" aria-label="文章标题" disabled={!loaded} /><span class="status">{loading ? "正在读取…" : error ? "无法保存" : dirty ? "未保存" : "已保存"}</span><button class="primary" type="button" onclick={saveDraft} disabled={loading || !loaded || !editorReady}>保存</button><button type="button" onclick={complete} disabled={loading || !loaded}>完成</button></div>
    <details><summary>文档属性</summary><div class="properties"><label>发布日期<input type="date" bind:value={published} oninput={() => markDirty()} disabled={!loaded} /></label><label>分类<input bind:value={category} oninput={() => markDirty()} maxlength="50" disabled={!loaded} /></label><label class="wide">标签<input bind:value={tags} oninput={() => markDirty()} placeholder="逗号分隔，最多 30 项" disabled={!loaded} /></label></div></details>
-   <div class="header-row secondary"><button type="button" onclick={markedForDeletion ? deleteArticle : undoDraft} disabled={loading || (!markedForDeletion && !hasDraft)}>{markedForDeletion ? "撤销删除" : "撤销草稿"}</button><button class="danger" type="button" onclick={deleteArticle} disabled={loading || markedForDeletion || !loaded || !sha || !path}>删除</button>{#if error}<span class="error" role="alert">{error}</span>{/if}{#if savedMessage}<span class="success">{savedMessage}</span>{/if}</div>
+   <div class="header-row secondary">{#if emergency}<button class="recover" type="button" onclick={restoreEmergencyDraft} title={emergency.error}>恢复备份</button>{/if}<button type="button" onclick={markedForDeletion ? deleteArticle : undoDraft} disabled={loading || (!markedForDeletion && !hasDraft)}>{markedForDeletion ? "撤销删除" : "撤销草稿"}</button><button class="danger" type="button" onclick={deleteArticle} disabled={loading || markedForDeletion || !loaded || !sha || !path}>删除</button>{#if error}<span class="error" role="alert">{error}</span>{/if}{#if savedMessage}<span class="success">{savedMessage}</span>{/if}</div>
    <details class="advanced"><summary>完整 Frontmatter（高级）</summary><textarea bind:value={frontmatterSource} oninput={() => markDirty()} rows="7" disabled={!loaded}></textarea></details>
   </header>
   <nav class="toolbar" aria-label="正文格式"><button title="撤销" onclick={() => format("undo")} disabled={!editorReady || sourceMode}>↶</button><button title="重做" onclick={() => format("redo")} disabled={!editorReady || sourceMode}>↷</button><button title="一级标题" onclick={() => format("h1")} disabled={!editorReady || sourceMode}>H1</button><button title="二级标题" onclick={() => format("h2")} disabled={!editorReady || sourceMode}>H2</button><button title="三级标题" onclick={() => format("h3")} disabled={!editorReady || sourceMode}>H3</button><button title="粗体" onclick={() => format("bold")} disabled={!editorReady || sourceMode}><b>B</b></button><button title="斜体" onclick={() => format("italic")} disabled={!editorReady || sourceMode}><i>I</i></button><button title="删除线" onclick={() => format("strike")} disabled={!editorReady || sourceMode}><s>S</s></button><button title="无序列表" onclick={() => format("bullet")} disabled={!editorReady || sourceMode}>•</button><button title="有序列表" onclick={() => format("ordered")} disabled={!editorReady || sourceMode}>1.</button><button title="引用" onclick={() => format("quote")} disabled={!editorReady || sourceMode}>❝</button><button title="代码块" onclick={() => format("code")} disabled={!editorReady || sourceMode}>{"</>"}</button><button title="分隔线" onclick={() => format("hr")} disabled={!editorReady || sourceMode}>—</button></nav>
@@ -484,7 +583,7 @@ onMount(() => {
 {/if}
 
 <style>
- .ha-editor { color: var(--btn-content); } .editor-header { display: grid; gap: .65rem; margin-bottom: .75rem; } .header-row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; } .title-input { min-width: 12rem; flex: 1; border: 0; border-bottom: 2px solid color-mix(in srgb, var(--primary) 35%, transparent); padding: .55rem .1rem; color: inherit; background: transparent; font-size: 1.35rem; font-weight: 750; } .status { color: color-mix(in srgb, var(--btn-content) 58%, transparent); font-size: .75rem; } button { border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .4rem .62rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } button:disabled { cursor: not-allowed; opacity: .5; } .primary { border-color: var(--primary); color: white; background: var(--primary); } .danger,.error { color: #c74747; } .success { color: #27845f; font-size: .75rem; } details { font-size: .78rem; } summary { cursor: pointer; color: color-mix(in srgb, var(--btn-content) 65%, transparent); } .properties { display: grid; grid-template-columns: repeat(2, 1fr); gap: .6rem; padding: .65rem 0; } label { display: grid; gap: .25rem; } label.wide { grid-column: 1 / -1; } input, textarea { border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .4rem; padding: .5rem .6rem; color: inherit; background: var(--card-bg); font: inherit; } .advanced textarea { width: 100%; margin-top: .4rem; font-family: var(--font-jetbrains-mono), monospace; } .toolbar { position: sticky; top: 4.5rem; z-index: 20; display: flex; gap: .25rem; overflow-x: auto; margin: 0 -.2rem .8rem; border-block: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); padding: .45rem .2rem; background: color-mix(in srgb, var(--card-bg) 94%, transparent); backdrop-filter: blur(10px); } .toolbar button { flex: 0 0 auto; min-width: 2.1rem; } .editor-shell { display: grid; grid-template-columns: minmax(0, 1fr) 12rem; gap: 1rem; } .paper { min-height: 28rem; border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); border-radius: .5rem; padding: clamp(1rem, 3vw, 2.25rem); background: var(--card-bg); box-shadow: 0 .4rem 1.4rem rgb(0 0 0 / .05); } .tiptap-host :global(.ProseMirror) { min-height: 30rem; outline: none; line-height: 1.75; } .tiptap-host :global(.ProseMirror h1), .tiptap-host :global(.ProseMirror h2), .tiptap-host :global(.ProseMirror h3) { scroll-margin-top: 8rem; } .tiptap-host :global(.ProseMirror pre) { overflow-x: auto; border-radius: .4rem; padding: .8rem; background: color-mix(in srgb, var(--btn-content) 8%, var(--card-bg)); } .tiptap-host :global(.ProseMirror table) { display: block; max-width: 100%; overflow-x: auto; } .source-note { margin-top: 0; color: color-mix(in srgb, var(--btn-content) 65%, transparent); font-size: .8rem; } .source-editor { display: block; width: 100%; min-height: 30rem; resize: vertical; font-family: var(--font-jetbrains-mono), monospace; font-size: .86rem; line-height: 1.65; } .outline { position: sticky; top: 8rem; align-self: start; max-height: 60vh; overflow-y: auto; border-left: 1px solid color-mix(in srgb, var(--btn-content) 13%, transparent); padding-left: .7rem; } .outline h2 { margin: 0 0 .5rem; font-size: .85rem; } .outline button { display: block; width: 100%; border: 0; padding: .3rem 0; text-align: left; background: transparent; font-size: .75rem; } .outline button.indent { padding-left: .65rem; }
+ .ha-editor { color: var(--btn-content); } .editor-header { display: grid; gap: .65rem; margin-bottom: .75rem; } .header-row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; } .title-input { min-width: 12rem; flex: 1; border: 0; border-bottom: 2px solid color-mix(in srgb, var(--primary) 35%, transparent); padding: .55rem .1rem; color: inherit; background: transparent; font-size: 1.35rem; font-weight: 750; } .status { color: color-mix(in srgb, var(--btn-content) 58%, transparent); font-size: .75rem; } button { border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .4rem .62rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } button:disabled { cursor: not-allowed; opacity: .5; } .primary { border-color: var(--primary); color: white; background: var(--primary); } .danger,.error { color: #c74747; } .success { color: #27845f; font-size: .75rem; } .recover { border-color: color-mix(in srgb, #e0a23c 45%, transparent); color: #b7791f; } details { font-size: .78rem; } summary { cursor: pointer; color: color-mix(in srgb, var(--btn-content) 65%, transparent); } .properties { display: grid; grid-template-columns: repeat(2, 1fr); gap: .6rem; padding: .65rem 0; } label { display: grid; gap: .25rem; } label.wide { grid-column: 1 / -1; } input, textarea { border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .4rem; padding: .5rem .6rem; color: inherit; background: var(--card-bg); font: inherit; } .advanced textarea { width: 100%; margin-top: .4rem; font-family: var(--font-jetbrains-mono), monospace; } .toolbar { position: sticky; top: 4.5rem; z-index: 20; display: flex; gap: .25rem; overflow-x: auto; margin: 0 -.2rem .8rem; border-block: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); padding: .45rem .2rem; background: color-mix(in srgb, var(--card-bg) 94%, transparent); backdrop-filter: blur(10px); } .toolbar button { flex: 0 0 auto; min-width: 2.1rem; } .editor-shell { display: grid; grid-template-columns: minmax(0, 1fr) 12rem; gap: 1rem; } .paper { min-height: 28rem; border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); border-radius: .5rem; padding: clamp(1rem, 3vw, 2.25rem); background: var(--card-bg); box-shadow: 0 .4rem 1.4rem rgb(0 0 0 / .05); } .tiptap-host :global(.ProseMirror) { min-height: 30rem; outline: none; line-height: 1.75; } .tiptap-host :global(.ProseMirror h1), .tiptap-host :global(.ProseMirror h2), .tiptap-host :global(.ProseMirror h3) { scroll-margin-top: 8rem; } .tiptap-host :global(.ProseMirror pre) { overflow-x: auto; border-radius: .4rem; padding: .8rem; background: color-mix(in srgb, var(--btn-content) 8%, var(--card-bg)); } .tiptap-host :global(.ProseMirror table) { display: block; max-width: 100%; overflow-x: auto; } .source-note { margin-top: 0; color: color-mix(in srgb, var(--btn-content) 65%, transparent); font-size: .8rem; } .source-editor { display: block; width: 100%; min-height: 30rem; resize: vertical; font-family: var(--font-jetbrains-mono), monospace; font-size: .86rem; line-height: 1.65; } .outline { position: sticky; top: 8rem; align-self: start; max-height: 60vh; overflow-y: auto; border-left: 1px solid color-mix(in srgb, var(--btn-content) 13%, transparent); padding-left: .7rem; } .outline h2 { margin: 0 0 .5rem; font-size: .85rem; } .outline button { display: block; width: 100%; border: 0; padding: .3rem 0; text-align: left; background: transparent; font-size: .75rem; } .outline button.indent { padding-left: .65rem; }
  @media (max-width: 760px) { .editor-shell { display: block; } .outline { display: none; } .properties { grid-template-columns: 1fr; } label.wide { grid-column: auto; } .toolbar { top: 3.7rem; } }
  :global(html.study-editor-active .article-reading-body), :global(html.study-editor-active .post-view-header), :global(html.study-editor-active .post-view-title), :global(html.study-editor-active .post-view-metadata), :global(html.study-editor-active #post-cover) { display: none !important; }
 </style>

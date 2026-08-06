@@ -21,6 +21,8 @@ export function editorRequest(
 	const token = getSessionToken(context.request);
 	const headers = new Headers(init.headers);
 	headers.set("Origin", "https://dayu-study.pages.dev");
+	const clientIp = context.request.headers.get("CF-Connecting-IP");
+	if (clientIp) headers.set("X-Client-IP", clientIp);
 	if (token) headers.set("Authorization", `Bearer ${token}`);
 	return new Request(`https://editor.internal${path}`, { ...init, headers });
 }

@@ -195,7 +195,6 @@ const editorArticlePath =
                 category={entry.data.category || undefined}
                 tags={entry.data.tags}
                 id={entry.id}
-				articleEditable={true}
               />
             </div>
           </div>
@@ -285,7 +284,6 @@ const editorArticlePath =
               tags={entry.data.tags}
               category={entry.data.category || undefined}
               id={entry.id}
-			  articleEditable={true}
             />
             {
               !showPostCover && (
@@ -317,7 +315,7 @@ const editorArticlePath =
 
       {entry.data.password ? (
         <EncryptedPost password={entry.data.password} slug={entry.id} hint={entry.data.passwordHint}>
-          <Markdown class="mb-6 markdown-content onload-animation">
+          <Markdown class="article-reading-body mb-6 markdown-content onload-animation">
             <Content />
           </Markdown>
 
@@ -407,7 +405,7 @@ const editorArticlePath =
         </EncryptedPost>
       ) : (
         <>
-          <Markdown class="mb-6 markdown-content onload-animation">
+          <Markdown class="article-reading-body mb-6 markdown-content onload-animation">
             <Content />
           </Markdown>
 

@@ -248,6 +248,10 @@ location: China # 位置
 
 文章在线编辑采用 Tiptap 3 / ProseMirror 的受控结构化文档模型：阅读视图继续由 Astro 服务端渲染，编辑视图独立挂载并维护编辑器状态，两者不会同时作为正文数据源。Markdown 是文章唯一的持久化格式，草稿恢复与保存均通过 Tiptap Markdown 扩展直接读写 Markdown，不从发布 HTML 反向转换。
 
+包含 Tiptap Schema 无法无损表示的原始 HTML/XML 时，正文会在原页面位置自动切换为 CSDN 式 Markdown 源码编辑模式，避免源码被富文本模型丢弃。
+
+编辑器参考 `haha-note` 的 HAEditor / 语雀式结构：阅读视图和编辑视图完全分离，进入编辑模式后由独立的 Tiptap 文档模型提供标题、属性、工具栏、纸张正文和文章大纲；阅读页的 SSR 标题、元数据和 Markdown DOM 不参与编辑。Tiptap 模型是唯一的富文本状态来源，保存时直接取得 Markdown；无法解析的原始 HTML/XML 则使用同一编辑视图内的源码 textarea 保存。编辑草稿仍使用现有 `{slug,title,content,sha,path,delete?,previous?}` 协议，点击“完成”才回到阅读视图。
+
 除了 Astro 默认支持的 [GitHub Flavored Markdown](https://github.github.com/gfm/) 之外，还包含了一些额外的 Markdown 功能：
 
 - 提醒块（Admonitions） - 支持 GitHub, Obsidian, VitePress, Docusaurus 四种风格主题配置 ([预览和用法](https://firefly.cuteleaf.cn/posts/markdown-extended/))

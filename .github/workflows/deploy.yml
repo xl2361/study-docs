@@ -44,3 +44,9 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: bf7885385fca9c5531852cc8502b42dc
+
+      - name: Deploy editor worker
+        run: pnpm wrangler deploy --config editor-worker/wrangler.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: bf7885385fca9c5531852cc8502b42dc

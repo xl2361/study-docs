@@ -486,7 +486,10 @@ async function githubRequest<T = unknown>(
 	try {
 		result = JSON.parse(text) as T & { message?: string };
 	} catch {
-		throw new HttpError(502, "GitHub 返回了无法解析的数据");
+		throw new HttpError(
+			502,
+			`GitHub 返回了无法解析的数据（status=${response.status}, type=${response.headers.get("Content-Type") || "none"}, body=${JSON.stringify(text.slice(0, 300))}）`,
+		);
 	}
 	if (!response.ok) {
 		const status =

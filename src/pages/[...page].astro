@@ -16,10 +16,14 @@ export const getStaticPaths = (async ({ paginate }) => {
 const { page } = Astro.props;
 
 const len = page.data.length;
+
+// 首页第一页注入全部文章候选，供客户端按访问热度上浮
+const firstPageCandidates =
+	page.currentPage === 1 ? await getSortedPosts() : [];
 ---
 
 <MainGridLayout>
-  <PostPage page={page} />
+  <PostPage page={page} candidates={firstPageCandidates} />
   {
     page.total > page.size && (
       <Pagination

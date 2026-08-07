@@ -5,6 +5,7 @@ import PostCard from "@/components/layout/PostCard.astro";
 import { siteConfig } from "@/config";
 
 const { page } = Astro.props;
+const candidates: PostEntry[] = Astro.props.candidates ?? [];
 
 let delay = 0;
 const interval = 50;
@@ -53,6 +54,32 @@ const initialLayoutClass =
         style={`animation-delay: calc(var(--content-delay) + ${delay++ * interval}ms);`}
       />
     ))
+  }
+  {
+    // 隐藏的热度候选卡：用于客户端将高热度文章上浮显示
+    candidates
+      .filter(
+        (candidate) =>
+          !page.data.some((entry: PostEntry) => entry.id === candidate.id),
+      )
+      .map((candidate) => (
+        <PostCard
+          entry={candidate as PostEntry}
+          title={candidate.data.title}
+          tags={candidate.data.tags}
+          category={candidate.data.category}
+          published={candidate.data.published}
+          updated={candidate.data.updated}
+          url={getPostUrlBySlug(candidate.id)}
+          image={candidate.data.image}
+          description={candidate.data.description}
+          draft={candidate.data.draft}
+          pinned={false}
+          password={!!candidate.data.password}
+          class:list="post-card-item heat-candidate hidden"
+          style=""
+        />
+      ))
   }
 </div>
 
@@ -272,7 +299,7 @@ const initialLayoutClass =
     });
   });
 
-  // -- 热度排序：读取热搜榜，按热度重排当前页卡片 --
+  // -- 热度排序：读取热搜榜，按热度重排卡片，跨页候选卡按热度上浮显示 --
   function heatScoreOrder(slugs: string[]) {
     const order = new Map(slugs.map((s: string, i: number) => [s, i]));
     return (a: Element, b: Element) => {
@@ -296,12 +323,30 @@ const initialLayoutClass =
     })
       .then((response) => (response.ok ? response.json() : Promise.reject()))
       .then((data) => {
-        const rows: { slug: string }[] = Array.isArray(data?.hits) ? data.hits : [];
+        const rows: { slug: string; count?: number }[] = Array.isArray(data?.hits) ? data.hits : [];
         if (!rows.length) return;
-        const items = Array.from(container.querySelectorAll(".post-card-item"));
-        if (items.length < 2) return;
-        items.sort(heatScoreOrder(rows.map((r) => r.slug)));
-        for (const item of items) container.appendChild(item);
+        const allItems = Array.from(container.querySelectorAll(".post-card-item"));
+        if (allItems.length < 2) return;
+
+        // 热度 > 0 的候选卡：移除 hidden 参与显示；其余候选保持隐藏并沉底
+        const heated = new Set(rows.map((r) => r.slug));
+        allItems.forEach((item) => {
+          const slug = item.getAttribute("data-post-slug") || "";
+          if (item.classList.contains("heat-candidate")) {
+            if (heated.has(slug)) {
+              item.classList.remove("hidden");
+            } else {
+              item.classList.add("hidden");
+            }
+          }
+        });
+
+        // 排序：置顶 → 热度榜（含上浮候选）→ 未上榜保持原相对顺序
+        const visible = allItems.filter((item) => !item.classList.contains("hidden"));
+        const visibleSorted = visible.sort(heatScoreOrder(rows.map((r) => r.slug)));
+        const hiddenItems = allItems.filter((item) => item.classList.contains("hidden"));
+        for (const item of visibleSorted) container.appendChild(item);
+        for (const item of hiddenItems) container.appendChild(item);
         // 置顶卡片顺序可能变化，暴露到布局脚本重新布局
         window.dispatchEvent(new CustomEvent("post-heat-sorted"));
       })
@@ -311,6 +356,7 @@ const initialLayoutClass =
   // 页面加载与导航后排序一次
   document.addEventListener("DOMContentLoaded", () => setTimeout(initHeatSort, 120));
   document.addEventListener("astro:page-load", () => setTimeout(initHeatSort, 120));
+  document.addEventListener("swup:contentReplaced", () => setTimeout(initHeatSort, 120));
   // 热度重排后重新计算瀑布流高度
   window.addEventListener("post-heat-sorted", () => {
     const container = document.getElementById("post-list-container");

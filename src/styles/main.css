@@ -601,3 +601,30 @@ img {
   @apply text-sm text-(--text-secondary) text-center mb-2;
 }
 
+/* 编辑模式下隐藏顶部分类导航栏，编辑工具条固定替代其位置 */
+html.study-editor-active #category-bar-wrapper {
+  display: none !important;
+}
+
+/* 主内容容器 overflow-hidden 会破坏内部 sticky，编辑态改用 overflow:clip（不创建滚动容器但保留视觉裁剪） */
+html.study-editor-active div:has(> #editor-topbar:not([hidden])) {
+  overflow: clip;
+}
+
+#editor-topbar[hidden] { display: none !important; }
+#editor-topbar:not([hidden]) {
+  position: sticky;
+  top: 4.5rem;
+  z-index: 30;
+  margin-bottom: .75rem;
+  color: var(--btn-content);
+  background: var(--card-bg);
+}
+#editor-topbar .statusline {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  min-height: 2rem;
+  padding: .15rem 0 .25rem;
+}
+#editor-topbar .toolbar { position: static; margin: 0; }

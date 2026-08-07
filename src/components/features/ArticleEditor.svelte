@@ -94,6 +94,12 @@ let sourceEditEl: HTMLTextAreaElement | null = null;
 let sourceValue = "";
 let editor: EditorLike | null = null;
 let emergency: EmergencyDraft | null = null;
+let editorSectionEl: HTMLElement | null = null;
+let statuslineEl: HTMLElement | null = null;
+let toolbarEl: HTMLElement | null = null;
+const editorInstanceId = `${Date.now()}-${Math.random()}`;
+let mounted = false;
+let openOperation = 0;
 let inTitleEl: HTMLElement | null = null;
 let inCategoryAnchor: HTMLElement | null = null;
 let inCategorySelect: HTMLSelectElement | null = null;
@@ -211,7 +217,7 @@ function markDirty(bodyChanged = false) {
 	savedMessage = "";
 }
 
-async function createEditor() {
+async function createEditor(operation: number) {
 	if (!editorMount || sourceMode || editor || editorCreating) return;
 	editorCreating = true;
 	editorReady = false;
@@ -223,7 +229,15 @@ async function createEditor() {
 			import("@tiptap/extension-table"),
 			import("@tiptap/extension-image"),
 		]);
-		if (!editorMount || sourceMode || editor) return;
+		if (
+			!mounted ||
+			operation !== openOperation ||
+			!editing ||
+			!editorMount ||
+			sourceMode ||
+			editor
+		)
+			return;
 		editor = new core.Editor({
 			element: editorMount,
 			extensions: [
@@ -247,6 +261,7 @@ async function createEditor() {
 		editorReady = true;
 		syncHistoryState();
 	} catch (reason) {
+		if (!mounted || operation !== openOperation || !editing) return;
 		editor?.destroy();
 		editor = null;
 		sourceMode = true;
@@ -269,7 +284,7 @@ function destroyEditor() {
 	editorReady = false;
 }
 
-async function loadArticle() {
+async function loadArticle(operation: number) {
 	loading = true;
 	loaded = false;
 	error = "";
@@ -287,6 +302,7 @@ async function loadArticle() {
 			sha?: string;
 			path?: string;
 		};
+		if (!mounted || operation !== openOperation) return;
 		parseArticle(article.content || "");
 		sha = article.sha || "";
 		path = article.path || "";
@@ -430,18 +446,31 @@ function teardownInPlace() {
 
 async function openEditor() {
 	if (opening) return;
+	const operation = ++openOperation;
 	opening = true;
 	try {
-		if (!loaded) await loadArticle();
-		if (!loaded) return;
+		if (!loaded) await loadArticle(operation);
+		if (!mounted || operation !== openOperation || !loaded) return;
+		const topbar = document.getElementById("editor-topbar");
+		if (topbar) topbar.dataset.editorOwner = editorInstanceId;
 		editing = true;
 		document.documentElement.classList.add("study-editor-active");
 		await tick();
+		if (!mounted || operation !== openOperation || !editing) return;
+		moveTopbar();
 		setupInPlace();
-		await createEditor();
+		await createEditor(operation);
+		if (!mounted || operation !== openOperation || !editing) return;
 		hostIntoReadingBody();
 	} finally {
 		opening = false;
+		if (
+			mounted &&
+			!editing &&
+			sessionStorage.getItem(editModeKey) === "1" &&
+			operation !== openOperation
+		)
+			void openEditor();
 	}
 }
 
@@ -591,6 +620,8 @@ function restoreEmergencyDraft() {
 }
 
 function leaveEditor() {
+	openOperation++;
+	const clearGlobalState = restoreTopbar();
 	if (readingBodyEl) {
 		readingBodyEl.innerHTML = savedReadingHTML;
 		readingBodyEl.classList.remove("article-reading-body-editing");
@@ -601,7 +632,40 @@ function leaveEditor() {
 	destroyEditor();
 	sourceMode = false;
 	editing = false;
-	document.documentElement.classList.remove("study-editor-active");
+	if (clearGlobalState)
+		document.documentElement.classList.remove("study-editor-active");
+}
+
+function moveTopbar() {
+	if (!statuslineEl || !toolbarEl) return;
+	const topbar = document.getElementById("editor-topbar");
+	if (!topbar) return;
+	topbar.dataset.editorOwner = editorInstanceId;
+	topbar.hidden = false;
+	if (statuslineEl.parentElement !== topbar) {
+		topbar.replaceChildren(statuslineEl, toolbarEl);
+	}
+}
+
+function restoreTopbar(): boolean {
+	const topbar = document.getElementById("editor-topbar");
+	const ownsTopbar =
+		!topbar ||
+		!topbar.dataset.editorOwner ||
+		topbar.dataset.editorOwner === editorInstanceId;
+	if (
+		editorSectionEl &&
+		statuslineEl &&
+		toolbarEl &&
+		statuslineEl.parentElement !== editorSectionEl
+	) {
+		editorSectionEl.prepend(statuslineEl, toolbarEl);
+	}
+	if (topbar && ownsTopbar) {
+		delete topbar.dataset.editorOwner;
+		topbar.hidden = true;
+	}
+	return ownsTopbar;
 }
 
 function complete() {
@@ -653,6 +717,7 @@ function format(action: string) {
 }
 
 onMount(() => {
+	mounted = true;
 	const setMode = (enabled: boolean) => {
 		if (enabled) void openEditor();
 		else complete();
@@ -685,16 +750,20 @@ onMount(() => {
 	if (sessionStorage.getItem(editModeKey) === "1") void openEditor();
 	emergency = loadEmergency();
 	return () => {
+		mounted = false;
+		openOperation++;
 		window.removeEventListener("study-edit-mode-change", modeChange);
 		window.removeEventListener("study-article-editor-open", onOpen);
 		window.removeEventListener("study-article-editor-flush", flush);
 		window.removeEventListener("beforeunload", beforeUnload);
 		window.removeEventListener("keydown", onKeydown);
+		const clearGlobalState = restoreTopbar();
 		if (!reverting && dirty && !saveDraft())
 			saveEmergencyDraft(new Error("页面关闭时保存失败"));
 		teardownInPlace();
 		destroyEditor();
-		document.documentElement.classList.remove("study-editor-active");
+		if (clearGlobalState)
+			document.documentElement.classList.remove("study-editor-active");
 	};
 });
 
@@ -703,15 +772,15 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
 </script>
 
 {#if editing}
- <section class="ha-editor" aria-busy={loading} aria-label="文章编辑器">
-  <div class="statusline">
+ <section class="ha-editor" bind:this={editorSectionEl} aria-busy={loading} aria-label="文章编辑器">
+  <div class="statusline" bind:this={statuslineEl} role="status" aria-live="polite">
    <span class="edit-badge">编辑中</span>
    <span class="status">{loading ? "正在读取…" : error ? "保存失败" : dirty ? "未保存" : "已保存"}</span>
    {#if emergency}
      <button class="recover" type="button" onclick={restoreEmergencyDraft} title={emergency.error}>恢复备份</button>
    {/if}
   </div>
-  <nav class="toolbar" aria-label="正文格式"><button title="后退一步" onclick={() => format("undo")} disabled={!editorReady || sourceMode || !canUndo}>↶</button><button title="前进一步" onclick={() => format("redo")} disabled={!editorReady || sourceMode || !canRedo}>↷</button><button title="一级标题" onclick={() => format("h1")} disabled={!editorReady || sourceMode}>H1</button><button title="二级标题" onclick={() => format("h2")} disabled={!editorReady || sourceMode}>H2</button><button title="三级标题" onclick={() => format("h3")} disabled={!editorReady || sourceMode}>H3</button><button title="粗体" onclick={() => format("bold")} disabled={!editorReady || sourceMode}><b>B</b></button><button title="斜体" onclick={() => format("italic")} disabled={!editorReady || sourceMode}><i>I</i></button><button title="删除线" onclick={() => format("strike")} disabled={!editorReady || sourceMode}><s>S</s></button><button title="无序列表" onclick={() => format("bullet")} disabled={!editorReady || sourceMode}>•</button><button title="有序列表" onclick={() => format("ordered")} disabled={!editorReady || sourceMode}>1.</button><button title="引用" onclick={() => format("quote")} disabled={!editorReady || sourceMode}>❝</button><button title="代码块" onclick={() => format("code")} disabled={!editorReady || sourceMode}>{"</>"}</button><button title="分隔线" onclick={() => format("hr")} disabled={!editorReady || sourceMode}>—</button><button class="revert-all" type="button" onclick={undoDraft} disabled={loading || !loaded || (!dirty && !hasDraft)}>撤销草稿</button></nav>
+  <nav class="toolbar" bind:this={toolbarEl} aria-label="正文格式"><button title="后退一步" onclick={() => format("undo")} disabled={!editorReady || sourceMode || !canUndo}>↶</button><button title="前进一步" onclick={() => format("redo")} disabled={!editorReady || sourceMode || !canRedo}>↷</button><button title="一级标题" onclick={() => format("h1")} disabled={!editorReady || sourceMode}>H1</button><button title="二级标题" onclick={() => format("h2")} disabled={!editorReady || sourceMode}>H2</button><button title="三级标题" onclick={() => format("h3")} disabled={!editorReady || sourceMode}>H3</button><button title="粗体" onclick={() => format("bold")} disabled={!editorReady || sourceMode}><b>B</b></button><button title="斜体" onclick={() => format("italic")} disabled={!editorReady || sourceMode}><i>I</i></button><button title="删除线" onclick={() => format("strike")} disabled={!editorReady || sourceMode}><s>S</s></button><button title="无序列表" onclick={() => format("bullet")} disabled={!editorReady || sourceMode}>•</button><button title="有序列表" onclick={() => format("ordered")} disabled={!editorReady || sourceMode}>1.</button><button title="引用" onclick={() => format("quote")} disabled={!editorReady || sourceMode}>❝</button><button title="代码块" onclick={() => format("code")} disabled={!editorReady || sourceMode}>{"</>"}</button><button title="分隔线" onclick={() => format("hr")} disabled={!editorReady || sourceMode}>—</button><button class="revert-all" type="button" onclick={undoDraft} disabled={loading || !loaded || (!dirty && !hasDraft)}>撤销草稿</button></nav>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if savedMessage}<p class="success">{savedMessage}</p>{/if}
   {#if sourceMode}<p class="source-note">源码模式：当前 Markdown 含有富文本编辑器无法解析的原始内容。</p><textarea class="source-editor" bind:this={sourceEditEl} bind:value={sourceValue} oninput={() => markDirty(true)} aria-label="Markdown 正文源码编辑器" spellcheck="false" disabled={!loaded}></textarea>{:else}<div class="tiptap-host prose dark:prose-invert prose-base max-w-none custom-md" bind:this={editorMount}></div>{/if}

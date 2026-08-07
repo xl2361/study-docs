@@ -875,6 +875,8 @@ const hasMultipleImages =
                     
             {/* 主内容区包装器 - 包含静态栏位和swup容器，作为单个grid item */}
             <div class={staticBarClass}>
+                {/* 编辑时由 ArticleEditor 将状态行和工具条挂载到这里。 */}
+                <div id="editor-topbar" class="card-base p-2" aria-label="文章编辑工具" hidden></div>
                 {/* 分类导航栏 - 全站渲染并显示 */}
                 {shouldRenderCategoryBar && <div id="category-bar-wrapper"><CategoryBar currentPostCategory={postCategory} /></div>}
                 {/* 主内容区 - 始终渲染，确保 Swup 容器存在 */}

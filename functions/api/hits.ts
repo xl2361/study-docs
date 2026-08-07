@@ -1,5 +1,5 @@
-import type { PagesEnv } from "../../_lib/auth";
-import { fetchEditor } from "../../_lib/auth";
+import type { PagesEnv } from "../_lib/auth";
+import { fetchEditor } from "../_lib/auth";
 
 export const onRequestGet: PagesFunction<PagesEnv> = async (context) => {
 	const source = new URL(context.request.url);

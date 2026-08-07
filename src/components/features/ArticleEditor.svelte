@@ -106,7 +106,6 @@ let inCategorySelect: HTMLSelectElement | null = null;
 let inTagsEl: HTMLElement | null = null;
 let inTagsInput: HTMLInputElement | null = null;
 let titleEl: HTMLElement | null = null;
-let originalHeadings: { id: string; text: string }[] = [];
 
 function scalar(value: string) {
 	const v = value.trim();
@@ -319,7 +318,6 @@ async function loadArticle(operation: number) {
 		loaded = true;
 		dirty = false;
 		bodyDirty = false;
-		captureOriginalHeadings();
 	} catch (reason) {
 		error = reason instanceof Error ? reason.message : "文章读取失败";
 	} finally {
@@ -478,31 +476,25 @@ async function openEditor() {
 	}
 }
 
-function captureOriginalHeadings() {
-	const body = document.querySelector<HTMLElement>(".article-reading-body");
-	if (!body) { originalHeadings = []; return; }
-	originalHeadings = Array.from(
-		body.querySelectorAll("h1, h2, h3"),
-	).map((h) => ({
-		id: h.id || "",
-		text: (h.textContent || "").replace(/#+\s*$/, "").trim(),
-	}));
-}
-
 function syncEditorHeadingIds() {
 	if (!editorMount) return;
-	const headings = editorMount.querySelectorAll<HTMLElement>("h1, h2, h3");
-	let changed = false;
-	headings.forEach((h) => {
-		if (h.id) return;
-		const text = (h.textContent || "").replace(/#+\s*$/, "").trim();
-		if (!text) return;
-		const match = originalHeadings.find((o) => o.text === text && o.id);
-		if (match) { h.id = match.id; changed = true; }
+	import("github-slugger").then((mod) => {
+		const Slugger = mod.default;
+		const slugger = new Slugger();
+		const headings = editorMount?.querySelectorAll<HTMLElement>("h1, h2, h3");
+		if (!headings) return;
+		let changed = false;
+		headings.forEach((h) => {
+			if (h.id) { slugger.slug(h.textContent || ""); return; }
+			const text = (h.textContent || "").replace(/#+\s*$/, "").trim();
+			if (!text) return;
+			h.id = slugger.slug(text);
+			changed = true;
+		});
+		if (changed && (window as any).SidebarTOC?.manager) {
+			(window as any).SidebarTOC.manager.attach();
+		}
 	});
-	if (changed && (window as any).SidebarTOC?.manager) {
-		(window as any).SidebarTOC.manager.attach();
-	}
 }
 
 function hostIntoReadingBody() {

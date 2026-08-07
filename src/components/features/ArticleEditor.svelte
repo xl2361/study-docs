@@ -198,7 +198,11 @@ function buildArticle(body: string) {
 
 function readDrafts(): Record<string, Draft> {
 	const value = sessionStorage.getItem(draftsKey) || "{}";
-	return JSON.parse(value) as Record<string, Draft>;
+	try {
+		return JSON.parse(value) as Record<string, Draft>;
+	} catch {
+		return {};
+	}
 }
 
 function markDirty(bodyChanged = false) {
@@ -268,7 +272,7 @@ function destroyEditor() {
 async function loadArticle() {
 	loading = true;
 	loaded = false;
-	error = false;
+	error = "";
 	try {
 		const response = await fetch(
 			`/api/editor/article?slug=${encodeURIComponent(slug)}`,
@@ -501,7 +505,7 @@ function loadEmergency(): EmergencyDraft | null {
 }
 
 function saveDraft(): boolean {
-	error = false;
+	error = "";
 	savedMessage = "";
 	try {
 		if (!loaded || !sha || !path) throw new Error("文章尚未成功加载，无法保存");
@@ -566,7 +570,7 @@ function restoreEmergencyDraft() {
 	bodyDirty = true;
 	dirty = true;
 	sessionStorage.removeItem(`${emergencyKey}:${slug}`);
-	error = false;
+	error = "";
 	savedMessage = "已恢复上次未提交的编辑内容，请核对后保存";
 	emergency = null;
 	if (sourceMode) sourceValue = backup.body;
@@ -667,10 +671,17 @@ onMount(() => {
 			Boolean((event as CustomEvent<{ editing?: boolean }>).detail?.editing),
 		);
 	const onOpen = () => void openEditor();
+	const onKeydown = (event: KeyboardEvent) => {
+		if (!event.ctrlKey && !event.metaKey) return;
+		if (event.key.toLowerCase() !== "s") return;
+		event.preventDefault();
+		if (editing) saveDraft();
+	};
 	window.addEventListener("study-edit-mode-change", modeChange);
 	window.addEventListener("study-article-editor-open", onOpen);
 	window.addEventListener("study-article-editor-flush", flush);
 	window.addEventListener("beforeunload", beforeUnload);
+	window.addEventListener("keydown", onKeydown);
 	if (sessionStorage.getItem(editModeKey) === "1") void openEditor();
 	emergency = loadEmergency();
 	return () => {
@@ -678,6 +689,7 @@ onMount(() => {
 		window.removeEventListener("study-article-editor-open", onOpen);
 		window.removeEventListener("study-article-editor-flush", flush);
 		window.removeEventListener("beforeunload", beforeUnload);
+		window.removeEventListener("keydown", onKeydown);
 		if (!reverting && dirty && !saveDraft())
 			saveEmergencyDraft(new Error("页面关闭时保存失败"));
 		teardownInPlace();

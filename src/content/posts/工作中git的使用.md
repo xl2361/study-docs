@@ -4,6 +4,8 @@ published: 2026-08-01
 description: "工作中git的使用"
 category: "开发工具"
 draft: false
+updated: 2026-08-07
+tags: []
 ---
 
 ### 一、git是什么？为什么需要git？

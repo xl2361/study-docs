@@ -106,6 +106,7 @@ let inCategorySelect: HTMLSelectElement | null = null;
 let inTagsEl: HTMLElement | null = null;
 let inTagsInput: HTMLInputElement | null = null;
 let titleEl: HTMLElement | null = null;
+let originalHeadings: { id: string; text: string }[] = [];
 
 function scalar(value: string) {
 	const v = value.trim();
@@ -247,10 +248,11 @@ async function createEditor(operation: number) {
 				image.default,
 			],
 			content: "",
-			onUpdate: () => {
-				markDirty(true);
-				syncHistoryState();
-			},
+		onUpdate: () => {
+			markDirty(true);
+			syncHistoryState();
+			syncEditorHeadingIds();
+		},
 			onTransaction: syncHistoryState,
 		});
 		editor.commands.setContent(originalBody, {
@@ -258,8 +260,9 @@ async function createEditor(operation: number) {
 			emitUpdate: false,
 			errorOnInvalidContent: true,
 		});
-		editorReady = true;
-		syncHistoryState();
+	editorReady = true;
+	syncHistoryState();
+	requestAnimationFrame(syncEditorHeadingIds);
 	} catch (reason) {
 		if (!mounted || operation !== openOperation || !editing) return;
 		editor?.destroy();
@@ -316,6 +319,7 @@ async function loadArticle(operation: number) {
 		loaded = true;
 		dirty = false;
 		bodyDirty = false;
+		captureOriginalHeadings();
 	} catch (reason) {
 		error = reason instanceof Error ? reason.message : "文章读取失败";
 	} finally {
@@ -471,6 +475,33 @@ async function openEditor() {
 			operation !== openOperation
 		)
 			void openEditor();
+	}
+}
+
+function captureOriginalHeadings() {
+	const body = document.querySelector<HTMLElement>(".article-reading-body");
+	if (!body) { originalHeadings = []; return; }
+	originalHeadings = Array.from(
+		body.querySelectorAll("h1, h2, h3"),
+	).map((h) => ({
+		id: h.id || "",
+		text: (h.textContent || "").replace(/#+\s*$/, "").trim(),
+	}));
+}
+
+function syncEditorHeadingIds() {
+	if (!editorMount) return;
+	const headings = editorMount.querySelectorAll<HTMLElement>("h1, h2, h3");
+	let changed = false;
+	headings.forEach((h) => {
+		if (h.id) return;
+		const text = (h.textContent || "").replace(/#+\s*$/, "").trim();
+		if (!text) return;
+		const match = originalHeadings.find((o) => o.text === text && o.id);
+		if (match) { h.id = match.id; changed = true; }
+	});
+	if (changed && (window as any).SidebarTOC?.manager) {
+		(window as any).SidebarTOC.manager.attach();
 	}
 }
 
@@ -773,9 +804,7 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
 
 {#if editing}
  <section class="ha-editor" bind:this={editorSectionEl} aria-busy={loading} aria-label="文章编辑器">
-  <div class="statusline" bind:this={statuslineEl} role="status" aria-live="polite">
-   <span class="edit-badge">编辑中</span>
-   <span class="status">{loading ? "正在读取…" : error ? "保存失败" : dirty ? "未保存" : "已保存"}</span>
+  <div class="statusline" bind:this={statuslineEl} role="status" aria-live="polite" style={!emergency ? 'display:none' : ''}>
    {#if emergency}
      <button class="recover" type="button" onclick={restoreEmergencyDraft} title={emergency.error}>恢复备份</button>
    {/if}

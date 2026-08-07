@@ -194,19 +194,6 @@ const visibleTags =
   }
 
   {
-    !showTags &&
-      articleEditable && (
-        <div
-          data-article-tags={articleEditable ? (visibleTags || []).map((tag) => tag.trim()).join(", ") : undefined}
-          class="sr-only post-meta-tags-hidden"
-          aria-hidden="true"
-        >
-          {(visibleTags || []).join(" / ")}
-        </div>
-      )
-  }
-
-  {
     !isHome &&
       commentConfig.type === "twikoo" &&
       commentConfig.twikoo?.visitorCount &&

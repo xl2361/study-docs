@@ -309,7 +309,11 @@ export class TOCManager {
 		const id = decodeURIComponent(
 			target.getAttribute("href")?.substring(1) || "",
 		);
-		const targetElement = document.getElementById(id);
+		let targetElement = document.getElementById(id);
+
+		if (!targetElement) {
+			targetElement = this.findHeadingInEditor(id, target);
+		}
 
 		if (targetElement) {
 			const targetTop =
@@ -327,6 +331,29 @@ export class TOCManager {
 				}),
 			);
 		}
+	}
+
+	private findHeadingInEditor(id: string, tocAnchor: HTMLAnchorElement): HTMLElement | null {
+		const editor = document.querySelector(".tiptap-host .ProseMirror") || document.querySelector(".tiptap-host");
+		if (!editor) return null;
+		const headings = editor.querySelectorAll<HTMLElement>("h1, h2, h3");
+		if (headings.length === 0) return null;
+		for (const h of headings) {
+			if (h.id === id) return h;
+		}
+		const tocText = (tocAnchor.getAttribute("aria-label") || tocAnchor.textContent || "").replace(/#+\s*$/, "").trim();
+		if (tocText) {
+			for (const h of headings) {
+				const hText = (h.textContent || "").replace(/#+\s*$/, "").trim();
+				if (hText === tocText) return h;
+			}
+		}
+		const tocItems = Array.from(this.clickContainer?.querySelectorAll<HTMLAnchorElement>("a[href^='#']") || []);
+		const clickIndex = tocItems.indexOf(tocAnchor);
+		if (clickIndex >= 0 && clickIndex < headings.length) {
+			return headings[clickIndex];
+		}
+		return null;
 	}
 
 	/**

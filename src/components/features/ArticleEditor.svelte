@@ -483,15 +483,13 @@ function syncEditorHeadingIds() {
 		const slugger = new Slugger();
 		const headings = editorMount?.querySelectorAll<HTMLElement>("h1, h2, h3");
 		if (!headings) return;
-		let changed = false;
 		headings.forEach((h) => {
 			if (h.id) { slugger.slug(h.textContent || ""); return; }
 			const text = (h.textContent || "").replace(/#+\s*$/, "").trim();
 			if (!text) return;
 			h.id = slugger.slug(text);
-			changed = true;
 		});
-		if (changed && (window as any).SidebarTOC?.manager) {
+		if ((window as any).SidebarTOC?.manager) {
 			(window as any).SidebarTOC.manager.attach();
 		}
 	});

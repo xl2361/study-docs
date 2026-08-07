@@ -25,6 +25,12 @@ export const onRequest: PagesFunction<PagesEnv> = async (context) => {
 		PUBLIC_PREFIXES.some((prefix) => url.pathname.startsWith(prefix));
 
 	if (isPublic) return context.next();
+	// GET /api/hits 热度榜公开可读（首页排序依赖，避免无谓会话校验）
+	if (
+		context.request.method === "GET" &&
+		url.pathname === "/api/hits"
+	)
+		return context.next();
 	const renewSession = pathname !== "/api/auth/logout";
 	if (await validateSession(context)) {
 		const response = await context.next();

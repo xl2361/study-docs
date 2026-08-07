@@ -11,8 +11,6 @@ type Draft = {
 	content?: string;
 	sha: string;
 	path: string;
-	delete?: boolean;
-	previous?: Omit<Draft, "previous">;
 };
 type EmergencyDraft = {
 	slug: string;
@@ -30,9 +28,15 @@ type EditorLike = {
 	chain: () => EditorChain;
 	commands: {
 		setContent: (content: string, options: Record<string, unknown>) => void;
+		undo: () => void;
+		redo: () => void;
 	};
 	getMarkdown: () => string;
 	getJSON: () => JsonNode;
+	can: () => {
+		undo: () => boolean;
+		redo: () => boolean;
+	};
 	destroy: () => void;
 };
 type JsonNode = {
@@ -77,11 +81,16 @@ let sha = "";
 let path = "";
 let dirty = false;
 let bodyDirty = false;
+let canUndo = false;
+let canRedo = false;
 let hasDraft = false;
-let markedForDeletion = false;
+let readingBodyEl: HTMLElement | null = null;
+let savedReadingHTML = "";
+let reverting = false;
 let sourceMode = false;
 let editorReady = false;
 let editorMount: HTMLElement;
+let sourceEditEl: HTMLTextAreaElement | null = null;
 let sourceValue = "";
 let editor: EditorLike | null = null;
 let emergency: EmergencyDraft | null = null;
@@ -224,7 +233,11 @@ async function createEditor() {
 				image.default,
 			],
 			content: "",
-			onUpdate: () => markDirty(true),
+			onUpdate: () => {
+				markDirty(true);
+				syncHistoryState();
+			},
+			onTransaction: syncHistoryState,
 		});
 		editor.commands.setContent(originalBody, {
 			contentType: "markdown",
@@ -232,6 +245,7 @@ async function createEditor() {
 			errorOnInvalidContent: true,
 		});
 		editorReady = true;
+		syncHistoryState();
 	} catch (reason) {
 		editor?.destroy();
 		editor = null;
@@ -242,6 +256,11 @@ async function createEditor() {
 	} finally {
 		editorCreating = false;
 	}
+}
+
+function syncHistoryState() {
+	canUndo = Boolean(editor?.can().undo());
+	canRedo = Boolean(editor?.can().redo());
 }
 
 function destroyEditor() {
@@ -276,8 +295,7 @@ async function loadArticle() {
 		if (draft) {
 			sha = draft.sha || sha;
 			path = draft.path || path;
-			markedForDeletion = Boolean(draft.delete);
-			if (!draft.delete && draft.content) parseArticle(draft.content);
+			if (draft.content) parseArticle(draft.content);
 		}
 		loaded = true;
 		dirty = false;
@@ -421,9 +439,32 @@ async function openEditor() {
 		await tick();
 		setupInPlace();
 		await createEditor();
+		hostIntoReadingBody();
 	} finally {
 		opening = false;
 	}
+}
+
+function hostIntoReadingBody() {
+	if (!editing || readingBodyEl) return;
+	const target = document.querySelector<HTMLElement>(".article-reading-body");
+	if (!target) return;
+	readingBodyEl = target;
+	savedReadingHTML = target.innerHTML;
+	target.innerHTML = "";
+	target.classList.add("article-reading-body-editing");
+	syncHostIntoBody();
+}
+
+function currentHostEl(): HTMLElement | null {
+	return sourceMode ? sourceEditEl : editorMount;
+}
+
+function syncHostIntoBody() {
+	const target = readingBodyEl;
+	const host = currentHostEl();
+	if (!target || !host) return;
+	if (host.parentElement !== target) target.appendChild(host);
 }
 
 function saveEmergencyDraft(reason: unknown) {
@@ -495,14 +536,12 @@ function saveDraft(): boolean {
 				: editor?.getMarkdown() || ""
 			: originalBody;
 		const drafts = readDrafts();
-		const previous = drafts[slug];
 		drafts[slug] = {
 			slug,
 			title: articleTitle,
 			content: buildArticle(body),
 			sha,
 			path,
-			previous: previous?.delete ? previous.previous : previous,
 		};
 		sessionStorage.setItem(draftsKey, JSON.stringify(drafts));
 		sessionStorage.removeItem(`${emergencyKey}:${slug}`);
@@ -511,7 +550,6 @@ function saveDraft(): boolean {
 		dirty = false;
 		bodyDirty = false;
 		hasDraft = true;
-		markedForDeletion = false;
 		savedMessage = "已保存到本轮，点击顶部“更新”后提交";
 		return true;
 	} catch (reason) {
@@ -553,6 +591,12 @@ function restoreEmergencyDraft() {
 }
 
 function leaveEditor() {
+	if (readingBodyEl) {
+		readingBodyEl.innerHTML = savedReadingHTML;
+		readingBodyEl.classList.remove("article-reading-body-editing");
+		readingBodyEl = null;
+		savedReadingHTML = "";
+	}
 	teardownInPlace();
 	destroyEditor();
 	sourceMode = false;
@@ -561,7 +605,6 @@ function leaveEditor() {
 }
 
 function complete() {
-  if (dirty && !saveDraft()) return;
   syncArticleMeta();
   leaveEditor();
 }
@@ -576,39 +619,14 @@ function syncArticleMeta() {
 }
 
 function undoDraft() {
+	// 撤销本次所有修改：清空本轮草稿并回到编辑前的原始内容
+	reverting = true;
 	const drafts = readDrafts();
-	const previous = drafts[slug]?.previous;
-	if (previous) drafts[slug] = previous;
-	else delete drafts[slug];
+	delete drafts[slug];
 	if (Object.keys(drafts).length)
 		sessionStorage.setItem(draftsKey, JSON.stringify(drafts));
 	else sessionStorage.removeItem(draftsKey);
 	location.reload();
-}
-function deleteArticle() {
-	if (!loaded || !sha || !path) {
-		error = "文章尚未成功加载，无法删除";
-		return;
-	}
-	const drafts = readDrafts();
-	if (markedForDeletion) {
-		undoDraft();
-		return;
-	}
-	if (!confirm(`确认将《${articleTitle || title}》加入删除列表？`)) return;
-	drafts[slug] = {
-		slug,
-		title: articleTitle || title,
-		sha,
-		path,
-		delete: true,
-		previous: drafts[slug]?.delete ? drafts[slug].previous : drafts[slug],
-	};
-	sessionStorage.setItem(draftsKey, JSON.stringify(drafts));
-	markedForDeletion = true;
-	hasDraft = true;
-	dirty = false;
-	leaveEditor();
 }
 
 function format(action: string) {
@@ -642,6 +660,7 @@ onMount(() => {
 		if (editing && dirty) detail.success = saveDraft();
 	};
 	const beforeUnload = () => {
+		if (reverting) return;
 		if (dirty && !saveDraft())
 			saveEmergencyDraft(new Error("页面刷新时保存失败"));
 	};
@@ -661,13 +680,15 @@ const onOpen = () => void openEditor();
     window.removeEventListener("study-article-editor-open", onOpen);
     window.removeEventListener("study-article-editor-flush", flush);
     window.removeEventListener("beforeunload", beforeUnload);
-		if (dirty && !saveDraft())
+		if (!reverting && dirty && !saveDraft())
 			saveEmergencyDraft(new Error("页面关闭时保存失败"));
 		teardownInPlace();
 		destroyEditor();
 		document.documentElement.classList.remove("study-editor-active");
 	};
 });
+
+$: if (editing && (sourceMode || editorMount || sourceEditEl)) syncHostIntoBody();
 </script>
 
 {#if editing}
@@ -679,10 +700,10 @@ const onOpen = () => void openEditor();
      <button class="recover" type="button" onclick={restoreEmergencyDraft} title={emergency.error}>恢复备份</button>
    {/if}
   </div>
-  <nav class="toolbar" aria-label="正文格式"><button title="撤销" onclick={() => format("undo")} disabled={!editorReady || sourceMode}>↶</button><button title="重做" onclick={() => format("redo")} disabled={!editorReady || sourceMode}>↷</button><button title="一级标题" onclick={() => format("h1")} disabled={!editorReady || sourceMode}>H1</button><button title="二级标题" onclick={() => format("h2")} disabled={!editorReady || sourceMode}>H2</button><button title="三级标题" onclick={() => format("h3")} disabled={!editorReady || sourceMode}>H3</button><button title="粗体" onclick={() => format("bold")} disabled={!editorReady || sourceMode}><b>B</b></button><button title="斜体" onclick={() => format("italic")} disabled={!editorReady || sourceMode}><i>I</i></button><button title="删除线" onclick={() => format("strike")} disabled={!editorReady || sourceMode}><s>S</s></button><button title="无序列表" onclick={() => format("bullet")} disabled={!editorReady || sourceMode}>•</button><button title="有序列表" onclick={() => format("ordered")} disabled={!editorReady || sourceMode}>1.</button><button title="引用" onclick={() => format("quote")} disabled={!editorReady || sourceMode}>❝</button><button title="代码块" onclick={() => format("code")} disabled={!editorReady || sourceMode}>{"</>"}</button><button title="分隔线" onclick={() => format("hr")} disabled={!editorReady || sourceMode}>—</button><button class="primary" type="button" onclick={saveDraft} disabled={loading || !loaded || !editorReady}>保存</button><button type="button" onclick={complete} disabled={loading || !loaded}>完成</button><button type="button" onclick={markedForDeletion ? deleteArticle : undoDraft} disabled={loading || (!markedForDeletion && !hasDraft)}>{markedForDeletion ? "撤销删除" : "撤销草稿"}</button><button class="danger" type="button" onclick={deleteArticle} disabled={loading || markedForDeletion || !loaded || !sha || !path}>删除</button></nav>
+  <nav class="toolbar" aria-label="正文格式"><button title="后退一步" onclick={() => format("undo")} disabled={!editorReady || sourceMode || !canUndo}>↶</button><button title="前进一步" onclick={() => format("redo")} disabled={!editorReady || sourceMode || !canRedo}>↷</button><button title="一级标题" onclick={() => format("h1")} disabled={!editorReady || sourceMode}>H1</button><button title="二级标题" onclick={() => format("h2")} disabled={!editorReady || sourceMode}>H2</button><button title="三级标题" onclick={() => format("h3")} disabled={!editorReady || sourceMode}>H3</button><button title="粗体" onclick={() => format("bold")} disabled={!editorReady || sourceMode}><b>B</b></button><button title="斜体" onclick={() => format("italic")} disabled={!editorReady || sourceMode}><i>I</i></button><button title="删除线" onclick={() => format("strike")} disabled={!editorReady || sourceMode}><s>S</s></button><button title="无序列表" onclick={() => format("bullet")} disabled={!editorReady || sourceMode}>•</button><button title="有序列表" onclick={() => format("ordered")} disabled={!editorReady || sourceMode}>1.</button><button title="引用" onclick={() => format("quote")} disabled={!editorReady || sourceMode}>❝</button><button title="代码块" onclick={() => format("code")} disabled={!editorReady || sourceMode}>{"</>"}</button><button title="分隔线" onclick={() => format("hr")} disabled={!editorReady || sourceMode}>—</button><button class="revert-all" type="button" onclick={undoDraft} disabled={loading || !loaded || (!dirty && !hasDraft)}>撤销草稿</button></nav>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if savedMessage}<p class="success">{savedMessage}</p>{/if}
-  {#if sourceMode}<p class="source-note">源码模式：当前 Markdown 含有富文本编辑器无法解析的原始内容。</p><textarea class="source-editor" bind:value={sourceValue} oninput={() => markDirty(true)} aria-label="Markdown 正文源码编辑器" spellcheck="false" disabled={!loaded}></textarea>{:else}<div class="tiptap-host prose dark:prose-invert prose-base max-w-none custom-md" bind:this={editorMount}></div>{/if}
+  {#if sourceMode}<p class="source-note">源码模式：当前 Markdown 含有富文本编辑器无法解析的原始内容。</p><textarea class="source-editor" bind:this={sourceEditEl} bind:value={sourceValue} oninput={() => markDirty(true)} aria-label="Markdown 正文源码编辑器" spellcheck="false" disabled={!loaded}></textarea>{:else}<div class="tiptap-host prose dark:prose-invert prose-base max-w-none custom-md" bind:this={editorMount}></div>{/if}
  </section>
 {/if}
 
@@ -691,6 +712,6 @@ const onOpen = () => void openEditor();
  :global([data-article-title].article-title-editing) { outline: 2px dashed color-mix(in srgb, var(--primary) 45%, transparent); outline-offset: 2px; border-radius: .25rem; }
  :global(.article-category-select), :global(.article-tags-input) { display: inline-block; max-width: 14rem; border: 1px dashed color-mix(in srgb, var(--primary) 45%, transparent); border-radius: .3rem; padding: .08rem .3rem; color: inherit; background: var(--card-bg); font: inherit; font-size: .78rem; }
  :global(.post-meta-cover .article-category-select), :global(.post-meta-cover .article-tags-input) { color: white; background: rgb(0 0 0 / .35); }
- :global(html.study-editor-active .article-reading-body) { display: none !important; }
+ :global(html.study-editor-active .article-reading-body:not(.article-reading-body-editing)) { display: none !important; }
  @media (max-width: 760px) { .toolbar { top: 3.6rem; } }
 </style>

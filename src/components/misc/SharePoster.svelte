@@ -620,13 +620,11 @@ function portal(node: HTMLElement) {
 </script>
 
 <!-- Trigger Button -->
-<button 
-  class="btn-regular rounded-lg h-12 px-6 gap-2 hover:scale-105 active:scale-95 whitespace-nowrap"
+<button
+  class="btn-regular rounded-lg h-9 w-9 items-center justify-center hover:scale-110 active:scale-95"
   on:click={generatePoster}
-  aria-label="Generate Share Poster"
->
-  <Icon icon="material-symbols:share" />
-  <span>{i18n(I18nKey.shareArticle)}</span>
+  aria-label="generate">
+  <Icon icon="material-symbols:share" class="text-lg" />
 </button>
 
 

@@ -17,6 +17,7 @@ export interface Props {
 	className?: string;
 	id?: string;
 	showPublished?: boolean;
+	hidePublished?: boolean;
 	showCategory?: boolean;
 	showTags?: boolean;
 	maxTags?: number;
@@ -43,6 +44,7 @@ const {
 	className = "",
 	id,
 	showPublished = true,
+	hidePublished = false,
 	showCategory = true,
 	showTags = true,
 	maxTags,
@@ -84,7 +86,7 @@ const visibleTags =
   }
 
   {
-    showPublished && (
+    showPublished && !hidePublished && (
       <div class="flex items-center">
         <div class="meta-icon">
           <Icon
@@ -158,8 +160,8 @@ const visibleTags =
         <div
 		  data-article-tags={articleEditable ? (visibleTags || []).map((tag) => tag.trim()).join(", ") : undefined}
 		  class="flex flex-row flex-nowrap items-center"
-		>
-		  {visibleTags &&
+        >
+          {visibleTags &&
             visibleTags.length > 0 &&
             visibleTags.map((tag, i) => (
               <>
@@ -189,6 +191,19 @@ const visibleTags =
         </div>
       </div>
     )
+  }
+
+  {
+    !showTags &&
+      articleEditable && (
+        <div
+          data-article-tags={articleEditable ? (visibleTags || []).map((tag) => tag.trim()).join(", ") : undefined}
+          class="sr-only post-meta-tags-hidden"
+          aria-hidden="true"
+        >
+          {(visibleTags || []).join(" / ")}
+        </div>
+      )
   }
 
   {

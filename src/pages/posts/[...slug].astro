@@ -614,3 +614,25 @@ const editorArticlePath =
   <!-- 评论 -->
   {entry.data.comment && !entry.data.password && <Comment post={entry} />}
 </MainGridLayout>
+
+<script is:inline define:vars={{ selfSlug: removeFileExtension(entry.id) }}>
+  // 访问热度上报：后台主体由 editor-worker 的 KV 统计，前端同域代理写入。
+  // 失败静默，不影响阅读。
+  (function () {
+    try {
+      const payload = JSON.stringify({ slug: selfSlug });
+      if (navigator.sendBeacon) {
+        const blob = new Blob([payload], { type: "application/json" });
+        navigator.sendBeacon("/api/hits", blob);
+      } else {
+        void fetch("/api/hits", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: payload,
+        });
+      }
+    } catch {
+      /* 忽略上报异常 */
+    }
+  })();
+</script>

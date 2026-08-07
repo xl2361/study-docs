@@ -38,6 +38,7 @@ const dateStr = published.toLocaleDateString("zh-CN", {
     "card-base flex flex-col w-full rounded-(--radius-large) overflow-hidden relative",
     className,
   ]}
+  data-post-slug={entry.id.replace(/\.(md|mdx|markdown)$/i, "")}
   style={style}
 >
   <div class="post-card-content px-4 md:px-6 py-2 md:py-3 relative flex flex-col h-full w-full">

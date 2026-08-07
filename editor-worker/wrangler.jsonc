@@ -15,6 +15,12 @@
 			"simple": { "limit": 5, "period": 60 }
 		}
 	],
+	"kv_namespaces": [
+		{
+			"binding": "HITS_KV",
+			"id": "3feef367d2544b508b359b4a1f124dfc"
+		}
+	],
 	"observability": {
 		"enabled": true,
 		"head_sampling_rate": 1

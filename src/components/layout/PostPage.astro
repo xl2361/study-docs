@@ -272,6 +272,51 @@ const initialLayoutClass =
     });
   });
 
+  // -- 热度排序：读取热搜榜，按热度重排当前页卡片 --
+  function heatScoreOrder(slugs: string[]) {
+    const order = new Map(slugs.map((s: string, i: number) => [s, i]));
+    return (a: Element, b: Element) => {
+      const aPinned = a.classList.contains("pinned");
+      const bPinned = b.classList.contains("pinned");
+      if (aPinned !== bPinned) return aPinned ? -1 : 1;
+      const as = a.getAttribute("data-post-slug") || "";
+      const bs = b.getAttribute("data-post-slug") || "";
+      const ai = order.has(as) ? order.get(as) as number : Number.MAX_SAFE_INTEGER;
+      const bi = order.has(bs) ? order.get(bs) as number : Number.MAX_SAFE_INTEGER;
+      return ai - bi;
+    };
+  }
+
+  function initHeatSort() {
+    const container = document.getElementById("post-list-container");
+    if (!container) return;
+    void fetch("/api/hits", {
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    })
+      .then((response) => (response.ok ? response.json() : Promise.reject()))
+      .then((data) => {
+        const rows: { slug: string }[] = Array.isArray(data?.hits) ? data.hits : [];
+        if (!rows.length) return;
+        const items = Array.from(container.querySelectorAll(".post-card-item"));
+        if (items.length < 2) return;
+        items.sort(heatScoreOrder(rows.map((r) => r.slug)));
+        for (const item of items) container.appendChild(item);
+        // 置顶卡片顺序可能变化，暴露到布局脚本重新布局
+        window.dispatchEvent(new CustomEvent("post-heat-sorted"));
+      })
+      .catch(() => {});
+  }
+
+  // 页面加载与导航后排序一次
+  document.addEventListener("DOMContentLoaded", () => setTimeout(initHeatSort, 120));
+  document.addEventListener("astro:page-load", () => setTimeout(initHeatSort, 120));
+  // 热度重排后重新计算瀑布流高度
+  window.addEventListener("post-heat-sorted", () => {
+    const container = document.getElementById("post-list-container");
+    if (container?.classList.contains("grid-mode")) applyMasonryLayout();
+  });
+
   // 页面显示时也初始化布局（处理页面切换）
   document.addEventListener("visibilitychange", function () {
     if (!document.hidden) {

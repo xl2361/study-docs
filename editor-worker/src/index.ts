@@ -23,6 +23,11 @@ interface GitHubDirectoryEntry {
 	type?: string;
 }
 
+interface HitRecord {
+	count: number;
+	lastAt: number;
+}
+
 const API_ROOT = "https://api.github.com";
 const ARTICLE_ROOT = "src/content/posts/";
 const MAX_ARTICLE_BYTES = 1024 * 1024;
@@ -53,6 +58,12 @@ export default {
 			if (url.pathname === "/api/articles" && request.method === "PUT") {
 				await requireSession(request, env);
 				return await updateArticles(request, env, origin);
+			}
+			if (url.pathname === "/api/hits" && request.method === "GET") {
+				return await listHits(env, origin);
+			}
+			if (url.pathname === "/api/hits" && request.method === "POST") {
+				return await recordHit(request, env, origin);
 			}
 			return json({ message: "接口不存在" }, 404, origin, env);
 		} catch (error) {
@@ -374,6 +385,50 @@ async function requireSession(
 	} catch {
 		throw new HttpError(401, "登录已失效");
 	}
+}
+
+const HITS_KEY = "hits:v1";
+
+function hitSlug(raw: unknown): string {
+	if (typeof raw !== "string") throw new HttpError(400, "缺少文章标识");
+	const slug = raw.trim();
+	if (
+		!slug ||
+		slug.length > 240 ||
+		/[\x00-\x1f\x7f/\\]/.test(slug) ||
+		slug.includes("..")
+	)
+		throw new HttpError(400, "文章标识不合法");
+	return slug;
+}
+
+async function readHits(env: Cloudflare.Env): Promise<Record<string, HitRecord>> {
+	const raw = await env.HITS_KV.get(HITS_KEY, "json");
+	return raw && typeof raw === "object" ? (raw as Record<string, HitRecord>) : {};
+}
+
+async function recordHit(
+	request: Request,
+	env: Cloudflare.Env,
+	origin: string,
+): Promise<Response> {
+	const body = await readJson<{ slug?: string }>(request);
+	const slug = hitSlug(body.slug ?? "");
+	const hits = await readHits(env);
+	const current = hits[slug] ?? { count: 0, lastAt: 0 };
+	current.count += 1;
+	current.lastAt = Date.now();
+	hits[slug] = current;
+	await env.HITS_KV.put(HITS_KEY, JSON.stringify(hits));
+	return json({ count: current.count }, 200, origin, env);
+}
+
+async function listHits(env: Cloudflare.Env, origin: string): Promise<Response> {
+	const hits = await readHits(env);
+	const rows = Object.entries(hits)
+		.map(([slug, hit]) => ({ slug, ...hit }))
+		.sort((a, b) => b.count - a.count || b.lastAt - a.lastAt);
+	return json({ hits: rows }, 200, origin, env);
 }
 
 async function getArticle(

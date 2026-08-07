@@ -3,5 +3,6 @@ declare namespace Cloudflare {
 		ADMIN_PASSWORD: string;
 		SESSION_SECRET: string;
 		GITHUB_TOKEN: string;
+		HITS_KV: KVNamespace;
 	}
 }

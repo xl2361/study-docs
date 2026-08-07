@@ -241,7 +241,7 @@ onMount(() => {
         >
         {#if keywordDesktop}
             <button type="button" on:click={() => clearSearchInput(false)} aria-label="清空搜索" class="absolute right-2 flex items-center justify-center text-black/30 dark:text-white/30 hover:text-(--primary) transition-colors">
-                <Icon icon="material-symbols:close-rounded" class="text-[1rem]" />
+                <svg viewBox="0 0 24 24" class="text-[1rem]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="m8.5 8.5 7 7M15.5 8.5l-7 7"></path></svg>
             </button>
         {/if}
     </div>
@@ -275,7 +275,7 @@ onMount(() => {
         >
         {#if keywordMobile}
             <button type="button" on:click={() => clearSearchInput(true)} aria-label="清空搜索" class="absolute right-2 z-10 flex items-center justify-center text-black/30 dark:text-white/30 hover:text-(--primary) transition-colors">
-                <Icon icon="material-symbols:close-rounded" class="text-[1rem]" />
+                <svg viewBox="0 0 24 24" class="text-[1rem]" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="m8.5 8.5 7 7M15.5 8.5l-7 7"></path></svg>
             </button>
         {/if}
     </div>

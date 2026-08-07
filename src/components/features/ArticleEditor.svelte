@@ -737,6 +737,64 @@ function format(action: string) {
 	actions[action]?.().run();
 }
 
+function normalizeHeadingText(value: string) {
+	return value.replace(/#+\s*$/, "").replace(/\s+/g, " ").trim();
+}
+
+function handleEditorTocClick(event: Event) {
+	if (!editing || sourceMode) return;
+	const eventTarget = event.target as Element | null;
+	const tocAnchor = eventTarget?.closest<HTMLAnchorElement>(
+		"#sidebar-toc-content a.toc-item",
+	);
+	if (!tocAnchor) return;
+
+	const editorRoot = document.querySelector<HTMLElement>(
+		".article-reading-body-editing .ProseMirror",
+	);
+	if (!editorRoot) return;
+
+	const headings = Array.from(
+		editorRoot.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6"),
+	);
+	const headingId = decodeURIComponent(
+		tocAnchor.getAttribute("href")?.replace(/^#/, "") || "",
+	);
+	const tocText = normalizeHeadingText(
+		tocAnchor.getAttribute("aria-label") || tocAnchor.textContent || "",
+	);
+	let heading = headings.find((item) => item.id === headingId);
+	if (!heading && tocText) {
+		heading = headings.find(
+			(item) => normalizeHeadingText(item.textContent || "") === tocText,
+		);
+	}
+	if (!heading) {
+		const tocItems = Array.from(
+			document.querySelectorAll<HTMLAnchorElement>(
+				"#sidebar-toc-content a.toc-item",
+			),
+		);
+		const index = tocItems.indexOf(tocAnchor);
+		if (index >= 0) heading = headings[index];
+	}
+	if (!heading) return;
+
+	event.preventDefault();
+	event.stopImmediatePropagation();
+	const targetTop =
+		heading.getBoundingClientRect().top + window.scrollY - 88;
+	window.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+	window.dispatchEvent(
+		new CustomEvent("toc:navigate", {
+			detail: {
+				contentId: "sidebar-toc-content",
+				headingId: headingId || heading.id,
+			},
+		}),
+	);
+}
+
 onMount(() => {
 	mounted = true;
 	const setMode = (enabled: boolean) => {
@@ -768,6 +826,7 @@ onMount(() => {
 	window.addEventListener("study-article-editor-flush", flush);
 	window.addEventListener("beforeunload", beforeUnload);
 	window.addEventListener("keydown", onKeydown);
+	document.addEventListener("click", handleEditorTocClick, true);
 	if (sessionStorage.getItem(editModeKey) === "1") void openEditor();
 	emergency = loadEmergency();
 	return () => {
@@ -778,6 +837,7 @@ onMount(() => {
 		window.removeEventListener("study-article-editor-flush", flush);
 		window.removeEventListener("beforeunload", beforeUnload);
 		window.removeEventListener("keydown", onKeydown);
+		document.removeEventListener("click", handleEditorTocClick, true);
 		const clearGlobalState = restoreTopbar();
 		if (!reverting && dirty && !saveDraft())
 			saveEmergencyDraft(new Error("页面关闭时保存失败"));

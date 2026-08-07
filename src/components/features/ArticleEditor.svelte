@@ -181,11 +181,7 @@ function buildArticle(body: string) {
 	const lines = frontmatterSource.replace(/\r\n?/g, "\n").split("\n");
 	setField(lines, "title", JSON.stringify(articleTitle.trim()));
 	setField(lines, "published", published.trim());
-	setField(
-		lines,
-		"updated",
-		JSON.stringify(todayString()),
-	);
+	setField(lines, "updated", JSON.stringify(todayString()));
 	setField(lines, "category", JSON.stringify(category.trim()));
 	setField(
 		lines,
@@ -605,14 +601,16 @@ function leaveEditor() {
 }
 
 function complete() {
-  syncArticleMeta();
-  leaveEditor();
+	syncArticleMeta();
+	leaveEditor();
 }
 
 function syncArticleMeta() {
 	if (titleEl) titleEl.textContent = articleTitle;
 	if (inCategoryAnchor) {
-		const textEl = inCategoryAnchor.querySelector("[data-article-category-text]");
+		const textEl = inCategoryAnchor.querySelector(
+			"[data-article-category-text]",
+		);
 		if (textEl) textEl.textContent = category || "未分类";
 		else inCategoryAnchor.textContent = category || "未分类";
 	}
@@ -668,18 +666,18 @@ onMount(() => {
 		setMode(
 			Boolean((event as CustomEvent<{ editing?: boolean }>).detail?.editing),
 		);
-const onOpen = () => void openEditor();
-  window.addEventListener("study-edit-mode-change", modeChange);
-  window.addEventListener("study-article-editor-open", onOpen);
-  window.addEventListener("study-article-editor-flush", flush);
-  window.addEventListener("beforeunload", beforeUnload);
-  if (sessionStorage.getItem(editModeKey) === "1") void openEditor();
-  emergency = loadEmergency();
-  return () => {
-    window.removeEventListener("study-edit-mode-change", modeChange);
-    window.removeEventListener("study-article-editor-open", onOpen);
-    window.removeEventListener("study-article-editor-flush", flush);
-    window.removeEventListener("beforeunload", beforeUnload);
+	const onOpen = () => void openEditor();
+	window.addEventListener("study-edit-mode-change", modeChange);
+	window.addEventListener("study-article-editor-open", onOpen);
+	window.addEventListener("study-article-editor-flush", flush);
+	window.addEventListener("beforeunload", beforeUnload);
+	if (sessionStorage.getItem(editModeKey) === "1") void openEditor();
+	emergency = loadEmergency();
+	return () => {
+		window.removeEventListener("study-edit-mode-change", modeChange);
+		window.removeEventListener("study-article-editor-open", onOpen);
+		window.removeEventListener("study-article-editor-flush", flush);
+		window.removeEventListener("beforeunload", beforeUnload);
 		if (!reverting && dirty && !saveDraft())
 			saveEmergencyDraft(new Error("页面关闭时保存失败"));
 		teardownInPlace();
@@ -688,7 +686,8 @@ const onOpen = () => void openEditor();
 	};
 });
 
-$: if (editing && (sourceMode || editorMount || sourceEditEl)) syncHostIntoBody();
+$: if (editing && (sourceMode || editorMount || sourceEditEl))
+	syncHostIntoBody();
 </script>
 
 {#if editing}

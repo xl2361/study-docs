@@ -4,6 +4,8 @@ published: 2026-08-01
 description: "工作中ES的使用"
 category: "技术篇"
 draft: false
+updated: 2026-08-07
+tags: []
 ---
 
 ## 一、ES到底是什么？
@@ -16,34 +18,40 @@ draft: false
 
 你可能会问：MySQL也能查询啊，为什么还要ES？
 
-| 对比项 | MySQL | ES |
-| --- | --- | --- |
-| 模糊查询 | LIKE '%xxx%'，很慢 | 分词搜索，很快 |
-| 百万级数据 | 查询变慢 | 依然很快 |
-| 复杂搜索 | 写复杂SQL | 简单API调用 |
-| 全文检索 | 效率低 | 专门干这个的 |
+
+| 对比项   | MySQL           | ES      |
+| ----- | --------------- | ------- |
+| 模糊查询  | LIKE '%xxx%'，很慢 | 分词搜索，很快 |
+| 百万级数据 | 查询变慢            | 依然很快    |
+| 复杂搜索  | 写复杂SQL          | 简单API调用 |
+| 全文检索  | 效率低             | 专门干这个的  |
+
 
 **结论：搜索功能、大量数据的查询，用ES。**
 
 ### 2、ES和MySQL概念对比
 
-| MySQL | ES | 说明 |
-| --- | --- | --- |
-| 数据库 | 索引（Index） | 数据的集合 |
-| 表 | 类型（Type） | 7.x后已废弃，一个索引就是一个表 |
-| 行 | 文档（Document） | 一条数据 |
-| 列 | 字段（Field） | 一个属性 |
-| 表结构 | 映射（Mapping） | 字段定义 |
+
+| MySQL | ES           | 说明                |
+| ----- | ------------ | ----------------- |
+| 数据库   | 索引（Index）    | 数据的集合             |
+| 表     | 类型（Type）     | 7.x后已废弃，一个索引就是一个表 |
+| 行     | 文档（Document） | 一条数据              |
+| 列     | 字段（Field）    | 一个属性              |
+| 表结构   | 映射（Mapping）  | 字段定义              |
+
 
 ### 3、什么时候用ES？
 
-| 场景 | 是否用ES |
-| --- | --- |
-| 商品搜索 | 是 |
-| 日志分析 | 是 |
-| 百万级数据查询 | 是 |
+
+| 场景      | 是否用ES    |
+| ------- | -------- |
+| 商品搜索    | 是        |
+| 日志分析    | 是        |
+| 百万级数据查询 | 是        |
 | 简单的增删改查 | 否，用MySQL |
-| 事务操作 | 否，用MySQL |
+| 事务操作    | 否，用MySQL |
+
 
 ## 二、核心概念
 
@@ -89,14 +97,16 @@ draft: false
 
 **常用字段类型：**
 
-| 类型 | 说明 | 例子 |
-| --- | --- | --- |
-| text | 可分词的文本 | 商品描述 |
-| keyword | 精确匹配 | 品牌、状态 |
-| integer/long | 整数 | 价格、数量 |
-| double | 小数 | 金额 |
-| date | 日期 | 创建时间 |
-| boolean | 布尔 | 是否上架 |
+
+| 类型           | 说明     | 例子    |
+| ------------ | ------ | ----- |
+| text         | 可分词的文本 | 商品描述  |
+| keyword      | 精确匹配   | 品牌、状态 |
+| integer/long | 整数     | 价格、数量 |
+| double       | 小数     | 金额    |
+| date         | 日期     | 创建时间  |
+| boolean      | 布尔     | 是否上架  |
+
 
 ### 4、倒排索引
 
@@ -120,11 +130,13 @@ draft: false
 
 ### 方案选择
 
-| 方案 | 说明 | 推荐度 |
-| --- | --- | --- |
-| Spring Data Elasticsearch | 像用JPA一样用ES | 推荐，简单 |
-| RestHighLevelClient | 官方客户端（7.x） | 推荐，灵活 |
+
+| 方案                        | 说明          | 推荐度       |
+| ------------------------- | ----------- | --------- |
+| Spring Data Elasticsearch | 像用JPA一样用ES  | 推荐，简单     |
+| RestHighLevelClient       | 官方客户端（7.x）  | 推荐，灵活     |
 | Elasticsearch Java Client | 官方新客户端（8.x） | ES 8.x用这个 |
+
 
 **新人建议：先学Spring Data Elasticsearch，最简单。**
 
@@ -268,17 +280,17 @@ public class ProductSearchService {
         // bool查询（组合查询）
         BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
 
-        // 关键字搜索（must：必须满足）
+        // 条件1：关键字搜索（must：必须满足）
         if (StringUtils.isNotBlank(keyword)) {
             boolQuery.must(QueryBuilders.matchQuery("name", keyword));
         }
 
-        // 分类筛选（filter：过滤，不参与评分）
+        // 条件2：分类筛选（filter：过滤，不参与评分）
         if (StringUtils.isNotBlank(category)) {
             boolQuery.filter(QueryBuilders.termQuery("category", category));
         }
 
-        // 价格区间
+        // 条件3：价格区间
         if (minPrice != null && maxPrice != null) {
             boolQuery.filter(QueryBuilders.rangeQuery("price")
                     .gte(minPrice)
@@ -327,13 +339,15 @@ public class ProductSearchService {
 
 ## 六、常用查询类型
 
-| 查询类型 | 说明 | 示例 |
-| --- | --- | --- |
-| match | 分词匹配 | 搜索"苹果手机"会分词 |
-| term | 精确匹配 | 搜索"iPhone15"必须完全一致 |
-| range | 范围查询 | 价格100-500 |
-| bool | 组合查询 | 多条件组合 |
-| wildcard | 通配符 | "apple*" |
+
+| 查询类型     | 说明   | 示例                 |
+| -------- | ---- | ------------------ |
+| match    | 分词匹配 | 搜索"苹果手机"会分词        |
+| term     | 精确匹配 | 搜索"iPhone15"必须完全一致 |
+| range    | 范围查询 | 价格100-500          |
+| bool     | 组合查询 | 多条件组合              |
+| wildcard | 通配符  | "apple\*"          |
+
 
 ```java
 // match查询（分词）
@@ -357,11 +371,13 @@ boolQuery.filter(QueryBuilders.termQuery("category", "手机"));
 
 ### 常见方案
 
-| 方案 | 说明 | 优缺点 |
-| --- | --- | --- |
-| 同步双写 | 写MySQL同时写ES | 简单，但可能不一致 |
-| 异步消息 | 写MySQL发MQ，消费写ES | 解耦，推荐 |
-| Canal监听 | 监听MySQL binlog | 无侵入，复杂 |
+
+| 方案      | 说明              | 优缺点       |
+| ------- | --------------- | --------- |
+| 同步双写    | 写MySQL同时写ES     | 简单，但可能不一致 |
+| 异步消息    | 写MySQL发MQ，消费写ES | 解耦，推荐     |
+| Canal监听 | 监听MySQL binlog  | 无侵入，复杂    |
+
 
 ### 简单示例：同步双写
 
@@ -413,34 +429,38 @@ public class ProductServiceImpl implements ProductService {
 
 ## 八、新人避坑指南
 
-| 坑 | 正确做法 |
-| --- | --- |
-| 连不上ES | 检查地址、端口、账号密码 |
-| 搜索不到数据 | 检查分词器配置，字段类型 |
-| 中文搜索不准 | 安装IK分词器 |
-| 字段类型错误 | text支持分词，keyword精确匹配 |
-| 数据不同步 | 写MySQL后记得同步到ES |
-| 没建索引就存数据 | 先创建索引和映射 |
+
+| 坑        | 正确做法                 |
+| -------- | -------------------- |
+| 连不上ES    | 检查地址、端口、账号密码         |
+| 搜索不到数据   | 检查分词器配置，字段类型         |
+| 中文搜索不准   | 安装IK分词器              |
+| 字段类型错误   | text支持分词，keyword精确匹配 |
+| 数据不同步    | 写MySQL后记得同步到ES       |
+| 没建索引就存数据 | 先创建索引和映射             |
+
 
 ## 九、问同事的问题
 
 刚入职用ES时，可以问同事：
 
-| 问题 | 说明 |
-| --- | --- |
-| "ES地址是什么？" | 配置需要 |
+
+| 问题            | 说明     |
+| ------------- | ------ |
+| "ES地址是什么？"    | 配置需要   |
 | "索引命名有什么规范吗？" | 了解命名规范 |
-| "用的哪个客户端？" | 确认技术方案 |
-| "有IK分词器吗？" | 中文搜索需要 |
-| "数据怎么同步的？" | 了解同步方案 |
+| "用的哪个客户端？"    | 确认技术方案 |
+| "有IK分词器吗？"    | 中文搜索需要 |
+| "数据怎么同步的？"    | 了解同步方案 |
+
 
 ## 十、注意事项
 
-1.  **ES不是数据库**：主要用来搜索，不是用来存数据
-2.  **分词器很重要**：中文要用IK分词器
-3.  **字段类型要选对**：text分词，keyword精确匹配
-4.  **数据要同步**：MySQL和ES数据要一致
-5.  **不要深度分页**：from+size不要超过10000
+1. **ES不是数据库**：主要用来搜索，不是用来存数据
+2. **分词器很重要**：中文要用IK分词器
+3. **字段类型要选对**：text分词，keyword精确匹配
+4. **数据要同步**：MySQL和ES数据要一致
+5. **不要深度分页**：from+size不要超过10000
 
 ## 十一、ES 8.x 新客户端（了解）
 
@@ -462,10 +482,10 @@ public class ProductServiceImpl implements ProductService {
 
 **使用步骤记住五步：**
 
-1.  确认ES地址和版本
-2.  引入依赖
-3.  定义实体类（加@Document注解）
-4.  定义Repository（继承ElasticsearchRepository）
-5.  直接调用方法使用
+1. 确认ES地址和版本
+2. 引入依赖
+3. 定义实体类（加@Document注解）
+4. 定义Repository（继承ElasticsearchRepository）
+5. 直接调用方法使用
 
 **记住：搜索功能、大量数据查询用ES，普通CRUD用MySQL！**

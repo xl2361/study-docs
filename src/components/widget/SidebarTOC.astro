@@ -309,6 +309,71 @@ const items = encrypted ? [] : computeTocItems(headings, { maxLevel: 3 });
     });
   }
 
+  function normalizeHeadingText(value: string) {
+    return value.replace(/#+\s*$/, "").replace(/\s+/g, " ").trim();
+  }
+
+  function getEditorHeading(anchor: HTMLAnchorElement): HTMLElement | null {
+    const editor = document.querySelector(".article-reading-body-editing .ProseMirror");
+    if (!editor) return null;
+
+    const headings = Array.from(editor.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6"));
+    const id = decodeURIComponent((anchor.getAttribute("href") || "").replace(/^#/, ""));
+    const label = normalizeHeadingText(anchor.getAttribute("aria-label") || anchor.textContent || "");
+    return headings.find((heading) => heading.id === id) ||
+      headings.find((heading) => normalizeHeadingText(heading.textContent || "") === label) ||
+      headings[Array.from(document.querySelectorAll("#sidebar-toc-content a.toc-item")).indexOf(anchor)] ||
+      null;
+  }
+
+  function scrollEditorHeading(heading: HTMLElement | null) {
+    if (!heading) return;
+
+    let scroller: HTMLElement | null = heading.parentElement;
+    while (scroller && scroller !== document.body) {
+      const style = getComputedStyle(scroller);
+      const canScroll = /(auto|scroll|overlay)/.test(style.overflowY) &&
+        scroller.scrollHeight > scroller.clientHeight;
+      if (canScroll) break;
+      scroller = scroller.parentElement;
+    }
+
+    if (scroller && scroller !== document.body) {
+      const headingRect = heading.getBoundingClientRect();
+      const scrollerRect = scroller.getBoundingClientRect();
+      scroller.scrollTo({
+        top: scroller.scrollTop + headingRect.top - scrollerRect.top - 88,
+        behavior: "smooth",
+      });
+      return;
+    }
+
+    window.scrollTo({
+      top: Math.max(0, heading.getBoundingClientRect().top + window.scrollY - 88),
+      behavior: "smooth",
+    });
+  }
+
+  function handleEditorTocClick(event: Event) {
+    // 编辑器组件可能先于全局编辑状态完成更新，以右侧 ProseMirror 是否存在为准。
+    if (!document.querySelector(".article-reading-body-editing .ProseMirror")) return;
+    const target = event.target instanceof Element
+      ? event.target.closest<HTMLAnchorElement>("#sidebar-toc-content a.toc-item")
+      : null;
+    if (!target) return;
+    const heading = getEditorHeading(target);
+    if (!heading) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    scrollEditorHeading(heading);
+    window.dispatchEvent(new CustomEvent("toc:navigate", {
+      detail: {
+        contentId: "sidebar-toc-content",
+        headingId: target.dataset.headingId || heading.id,
+      },
+    }));
+  }
+
   // 多个页面生命周期可能在一次导航中连续触发，统一合并到下一帧初始化。
   let sidebarTocInitFrame: number | null = null;
   function scheduleSidebarTOCInit() {
@@ -340,6 +405,7 @@ const items = encrypted ? [] : computeTocItems(headings, { maxLevel: 3 });
 	scheduleSidebarTOCInit();
   }
   initSidebarNavigationClose();
+  document.addEventListener("click", handleEditorTocClick, true);
 
   // 页面切换时重新初始化；组件脚本重复执行时不重复注册生命周期监听。
   if (document.documentElement.dataset.sidebarTocLifecycleBound !== "true") {

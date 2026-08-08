@@ -1,5 +1,6 @@
 <script lang="ts">
 import { onMount, tick } from "svelte";
+import GithubSlugger from "github-slugger";
 
 export let slug: string;
 export let title: string;
@@ -261,7 +262,7 @@ async function createEditor(operation: number) {
 		});
 	editorReady = true;
 	syncHistoryState();
-	requestAnimationFrame(syncEditorHeadingIds);
+	syncEditorHeadingIds();
 	} catch (reason) {
 		if (!mounted || operation !== openOperation || !editing) return;
 		editor?.destroy();
@@ -478,20 +479,13 @@ async function openEditor() {
 
 function syncEditorHeadingIds() {
 	if (!editorMount) return;
-	import("github-slugger").then((mod) => {
-		const Slugger = mod.default;
-		const slugger = new Slugger();
-		const headings = editorMount?.querySelectorAll<HTMLElement>("h1, h2, h3");
-		if (!headings) return;
-		headings.forEach((h) => {
-			if (h.id) { slugger.slug(h.textContent || ""); return; }
-			const text = (h.textContent || "").replace(/#+\s*$/, "").trim();
-			if (!text) return;
-			h.id = slugger.slug(text);
-		});
-		if ((window as any).SidebarTOC?.manager) {
-			(window as any).SidebarTOC.manager.attach();
-		}
+	const slugger = new GithubSlugger();
+	const headings = editorMount.querySelectorAll<HTMLElement>("h1, h2, h3");
+	headings.forEach((h) => {
+		if (h.id) return;
+		const text = (h.textContent || "").replace(/#+\s*$/, "").trim();
+		if (!text) return;
+		h.id = slugger.slug(text);
 	});
 }
 
@@ -782,9 +776,8 @@ function handleEditorTocClick(event: Event) {
 
 	event.preventDefault();
 	event.stopImmediatePropagation();
-	const targetTop =
-		heading.getBoundingClientRect().top + window.scrollY - 88;
-	window.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+	heading.scrollIntoView({ behavior: "smooth", block: "start" });
+	window.setTimeout(() => window.scrollBy({ top: -88, behavior: "smooth" }), 20);
 	window.dispatchEvent(
 		new CustomEvent("toc:navigate", {
 			detail: {

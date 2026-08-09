@@ -647,8 +647,7 @@ function moveTopbar() {
 function restoreTopbar(): boolean {
 	const topbar = document.getElementById("editor-topbar");
 	const ownsTopbar =
-		!topbar ||
-		!topbar.dataset.editorOwner ||
+		!topbar?.dataset.editorOwner ||
 		topbar.dataset.editorOwner === editorInstanceId;
 	if (
 		editorSectionEl &&

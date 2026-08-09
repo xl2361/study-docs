@@ -1,6 +1,5 @@
 <script lang="ts">
 import { onMount, tick } from "svelte";
-import GithubSlugger from "github-slugger";
 
 export let slug: string;
 export let title: string;
@@ -84,7 +83,6 @@ let dirty = false;
 let bodyDirty = false;
 let canUndo = false;
 let canRedo = false;
-let hasDraft = false;
 let readingBodyEl: HTMLElement | null = null;
 let savedReadingHTML = "";
 let reverting = false;
@@ -248,11 +246,10 @@ async function createEditor(operation: number) {
 				image.default,
 			],
 			content: "",
-		onUpdate: () => {
-			markDirty(true);
-			syncHistoryState();
-			syncEditorHeadingIds();
-		},
+			onUpdate: () => {
+				markDirty(true);
+				syncHistoryState();
+			},
 			onTransaction: syncHistoryState,
 		});
 		editor.commands.setContent(originalBody, {
@@ -260,9 +257,8 @@ async function createEditor(operation: number) {
 			emitUpdate: false,
 			errorOnInvalidContent: true,
 		});
-	editorReady = true;
-	syncHistoryState();
-	syncEditorHeadingIds();
+		editorReady = true;
+		syncHistoryState();
 	} catch (reason) {
 		if (!mounted || operation !== openOperation || !editing) return;
 		editor?.destroy();
@@ -310,7 +306,6 @@ async function loadArticle(operation: number) {
 		sha = article.sha || "";
 		path = article.path || "";
 		const draft = readDrafts()[slug];
-		hasDraft = Boolean(draft);
 		if (draft) {
 			sha = draft.sha || sha;
 			path = draft.path || path;
@@ -477,18 +472,6 @@ async function openEditor() {
 	}
 }
 
-function syncEditorHeadingIds() {
-	if (!editorMount) return;
-	const slugger = new GithubSlugger();
-	const headings = editorMount.querySelectorAll<HTMLElement>("h1, h2, h3");
-	headings.forEach((h) => {
-		if (h.id) return;
-		const text = (h.textContent || "").replace(/#+\s*$/, "").trim();
-		if (!text) return;
-		h.id = slugger.slug(text);
-	});
-}
-
 function hostIntoReadingBody() {
 	if (!editing || readingBodyEl) return;
 	const target = document.querySelector<HTMLElement>(".article-reading-body");
@@ -593,7 +576,6 @@ function saveDraft(): boolean {
 		sourceValue = body;
 		dirty = false;
 		bodyDirty = false;
-		hasDraft = true;
 		savedMessage = "已保存到本轮，点击顶部“更新”后提交";
 		return true;
 	} catch (reason) {
@@ -699,17 +681,6 @@ function syncArticleMeta() {
 	}
 }
 
-function undoDraft() {
-	// 撤销本次所有修改：清空本轮草稿并回到编辑前的原始内容
-	reverting = true;
-	const drafts = readDrafts();
-	delete drafts[slug];
-	if (Object.keys(drafts).length)
-		sessionStorage.setItem(draftsKey, JSON.stringify(drafts));
-	else sessionStorage.removeItem(draftsKey);
-	location.reload();
-}
-
 function format(action: string) {
 	if (!editor) return;
 	const chain = editor.chain().focus();
@@ -731,65 +702,11 @@ function format(action: string) {
 	actions[action]?.().run();
 }
 
-function normalizeHeadingText(value: string) {
-	return value.replace(/#+\s*$/, "").replace(/\s+/g, " ").trim();
-}
-
-function handleEditorTocClick(event: Event) {
-	if (!editing || sourceMode) return;
-	const eventTarget = event.target as Element | null;
-	const tocAnchor = eventTarget?.closest<HTMLAnchorElement>(
-		"#sidebar-toc-content a.toc-item",
-	);
-	if (!tocAnchor) return;
-
-	const editorRoot = document.querySelector<HTMLElement>(
-		".article-reading-body-editing .ProseMirror",
-	);
-	if (!editorRoot) return;
-
-	const headings = Array.from(
-		editorRoot.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6"),
-	);
-	const headingId = decodeURIComponent(
-		tocAnchor.getAttribute("href")?.replace(/^#/, "") || "",
-	);
-	const tocText = normalizeHeadingText(
-		tocAnchor.getAttribute("aria-label") || tocAnchor.textContent || "",
-	);
-	let heading = headings.find((item) => item.id === headingId);
-	if (!heading && tocText) {
-		heading = headings.find(
-			(item) => normalizeHeadingText(item.textContent || "") === tocText,
-		);
-	}
-	if (!heading) {
-		const tocItems = Array.from(
-			document.querySelectorAll<HTMLAnchorElement>(
-				"#sidebar-toc-content a.toc-item",
-			),
-		);
-		const index = tocItems.indexOf(tocAnchor);
-		if (index >= 0) heading = headings[index];
-	}
-	if (!heading) return;
-
-	event.preventDefault();
-	event.stopImmediatePropagation();
-	heading.scrollIntoView({ behavior: "smooth", block: "start" });
-	window.setTimeout(() => window.scrollBy({ top: -88, behavior: "smooth" }), 20);
-	window.dispatchEvent(
-		new CustomEvent("toc:navigate", {
-			detail: {
-				contentId: "sidebar-toc-content",
-				headingId: headingId || heading.id,
-			},
-		}),
-	);
-}
-
 onMount(() => {
 	mounted = true;
+	// 注意：不要通过 DOM 直接给 ProseMirror 内 heading 赋 id——
+	// 会触发编辑器观察器连续重绘，导致页面滚动时"乱跳"。
+	// 目录点击定位依赖 SidebarTOC 的 getEditorHeading 文本匹配兜底，无需 DOM id。
 	const setMode = (enabled: boolean) => {
 		if (enabled) void openEditor();
 		else complete();
@@ -808,6 +725,10 @@ onMount(() => {
 			Boolean((event as CustomEvent<{ editing?: boolean }>).detail?.editing),
 		);
 	const onOpen = () => void openEditor();
+	const onRevert = () => {
+		// 顶栏“退出”触发：丢弃本轮修改后页面将重载，标记本次不落盘
+		reverting = true;
+	};
 	const onKeydown = (event: KeyboardEvent) => {
 		if (!event.ctrlKey && !event.metaKey) return;
 		if (event.key.toLowerCase() !== "s") return;
@@ -816,10 +737,10 @@ onMount(() => {
 	};
 	window.addEventListener("study-edit-mode-change", modeChange);
 	window.addEventListener("study-article-editor-open", onOpen);
+	window.addEventListener("study-article-editor-revert", onRevert);
 	window.addEventListener("study-article-editor-flush", flush);
 	window.addEventListener("beforeunload", beforeUnload);
 	window.addEventListener("keydown", onKeydown);
-	document.addEventListener("click", handleEditorTocClick, true);
 	if (sessionStorage.getItem(editModeKey) === "1") void openEditor();
 	emergency = loadEmergency();
 	return () => {
@@ -827,10 +748,10 @@ onMount(() => {
 		openOperation++;
 		window.removeEventListener("study-edit-mode-change", modeChange);
 		window.removeEventListener("study-article-editor-open", onOpen);
+		window.removeEventListener("study-article-editor-revert", onRevert);
 		window.removeEventListener("study-article-editor-flush", flush);
 		window.removeEventListener("beforeunload", beforeUnload);
 		window.removeEventListener("keydown", onKeydown);
-		document.removeEventListener("click", handleEditorTocClick, true);
 		const clearGlobalState = restoreTopbar();
 		if (!reverting && dirty && !saveDraft())
 			saveEmergencyDraft(new Error("页面关闭时保存失败"));
@@ -852,7 +773,7 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
      <button class="recover" type="button" onclick={restoreEmergencyDraft} title={emergency.error}>恢复备份</button>
    {/if}
   </div>
-  <nav class="toolbar" bind:this={toolbarEl} aria-label="正文格式"><button title="后退一步" onclick={() => format("undo")} disabled={!editorReady || sourceMode || !canUndo}>↶</button><button title="前进一步" onclick={() => format("redo")} disabled={!editorReady || sourceMode || !canRedo}>↷</button><button title="一级标题" onclick={() => format("h1")} disabled={!editorReady || sourceMode}>H1</button><button title="二级标题" onclick={() => format("h2")} disabled={!editorReady || sourceMode}>H2</button><button title="三级标题" onclick={() => format("h3")} disabled={!editorReady || sourceMode}>H3</button><button title="粗体" onclick={() => format("bold")} disabled={!editorReady || sourceMode}><b>B</b></button><button title="斜体" onclick={() => format("italic")} disabled={!editorReady || sourceMode}><i>I</i></button><button title="删除线" onclick={() => format("strike")} disabled={!editorReady || sourceMode}><s>S</s></button><button title="无序列表" onclick={() => format("bullet")} disabled={!editorReady || sourceMode}>•</button><button title="有序列表" onclick={() => format("ordered")} disabled={!editorReady || sourceMode}>1.</button><button title="引用" onclick={() => format("quote")} disabled={!editorReady || sourceMode}>❝</button><button title="代码块" onclick={() => format("code")} disabled={!editorReady || sourceMode}>{"</>"}</button><button title="分隔线" onclick={() => format("hr")} disabled={!editorReady || sourceMode}>—</button><button class="revert-all" type="button" onclick={undoDraft} disabled={loading || !loaded || (!dirty && !hasDraft)}>撤销草稿</button></nav>
+  <nav class="toolbar" bind:this={toolbarEl} aria-label="正文格式"><button title="后退一步" onclick={() => format("undo")} disabled={!editorReady || sourceMode || !canUndo}>↶</button><button title="前进一步" onclick={() => format("redo")} disabled={!editorReady || sourceMode || !canRedo}>↷</button><button title="一级标题" onclick={() => format("h1")} disabled={!editorReady || sourceMode}>H1</button><button title="二级标题" onclick={() => format("h2")} disabled={!editorReady || sourceMode}>H2</button><button title="三级标题" onclick={() => format("h3")} disabled={!editorReady || sourceMode}>H3</button><button title="粗体" onclick={() => format("bold")} disabled={!editorReady || sourceMode}><b>B</b></button><button title="斜体" onclick={() => format("italic")} disabled={!editorReady || sourceMode}><i>I</i></button><button title="删除线" onclick={() => format("strike")} disabled={!editorReady || sourceMode}><s>S</s></button><button title="无序列表" onclick={() => format("bullet")} disabled={!editorReady || sourceMode}>•</button><button title="有序列表" onclick={() => format("ordered")} disabled={!editorReady || sourceMode}>1.</button><button title="引用" onclick={() => format("quote")} disabled={!editorReady || sourceMode}>❝</button><button title="代码块" onclick={() => format("code")} disabled={!editorReady || sourceMode}>{"</>"}</button><button title="分隔线" onclick={() => format("hr")} disabled={!editorReady || sourceMode}>—</button></nav>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if savedMessage}<p class="success">{savedMessage}</p>{/if}
   {#if sourceMode}<p class="source-note">源码模式：当前 Markdown 含有富文本编辑器无法解析的原始内容。</p><textarea class="source-editor" bind:this={sourceEditEl} bind:value={sourceValue} oninput={() => markDirty(true)} aria-label="Markdown 正文源码编辑器" spellcheck="false" disabled={!loaded}></textarea>{:else}<div class="tiptap-host prose dark:prose-invert prose-base max-w-none custom-md" bind:this={editorMount}></div>{/if}

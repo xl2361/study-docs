@@ -5,6 +5,7 @@ import type { ImageMetadata } from "astro";
 import { Icon } from "astro-icon/components";
 import DisplaySettings from "@/components/controls/DisplaySettingsIntegrated.svelte";
 import LightDarkSwitch from "@/components/controls/LightDarkSwitch.svelte";
+import LogoutButton from "@/components/controls/LogoutButton.svelte";
 import Search from "@/components/controls/Search.svelte";
 import GlobalEditController from "@/components/features/GlobalEditController.svelte";
 import MusicPlayer from "@/components/features/MusicPlayer.astro";
@@ -193,6 +194,7 @@ const logoVariants = await Promise.all(
                 <Search
                     client:load
                 />
+                <LogoutButton client:load />
                 <button aria-label={i18n(I18nKey.announcement)} class="btn-plain scale-animation rounded-lg h-9 w-9 md:h-11 md:w-11 active:scale-90" id="announcement-switch">
                     <Icon is:inline name="material-symbols:notifications-outline" class="text-[1.25rem]"></Icon>
                 </button>

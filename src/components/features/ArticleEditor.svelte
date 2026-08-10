@@ -123,7 +123,6 @@ let inTagsInput: HTMLInputElement | null = null;
 let titleEl: HTMLElement | null = null;
 let pendingOptimisticHTML: string | null = null;
 let editScrollY = 0;
-let editScrollTargetHeading = "";
 let scrollRestored = false;
 let tableToolbar = { visible: false, left: 0, top: 0 };
 
@@ -282,6 +281,10 @@ async function createEditor(operation: number) {
 		syncHistoryState();
 		editor.on("selectionUpdate", onTableSelectionChange);
 		editor.on("transaction", onTableSelectionChange);
+		window.addEventListener("scroll", onWindowScrollOrResize, {
+			passive: true,
+		});
+		window.addEventListener("resize", onWindowScrollOrResize);
 	} catch (reason) {
 		if (!mounted || operation !== openOperation || !editing) return;
 		editor?.destroy();
@@ -301,37 +304,40 @@ function syncHistoryState() {
 }
 
 function onTableSelectionChange() {
-	if (!editor) {
+	const tableEl = positionTableToolbar();
+	if (!tableEl) {
 		tableToolbar = { visible: false, left: 0, top: 0 };
-		return;
 	}
+}
+
+function positionTableToolbar(): HTMLElement | null {
+	if (!editor) return null;
 	let active = false;
 	try {
 		active = editor.isActive("table");
 	} catch {
 		active = false;
 	}
-	if (!active) {
-		tableToolbar = { visible: false, left: 0, top: 0 };
-		return;
-	}
+	if (!active) return null;
 	const tableEl = document.querySelector<HTMLElement>(
 		".article-reading-body-editing .ProseMirror table",
 	);
-	if (!tableEl) {
-		tableToolbar = { visible: false, left: 0, top: 0 };
-		return;
-	}
+	if (!tableEl) return null;
+	// 工具条定位在激活表格上方，fixed 相对视口，滚动时由 onWindowScroll 重新计算
 	const rect = tableEl.getBoundingClientRect();
-	const containerRect = editorMount?.getBoundingClientRect();
-	const baseTop = containerRect
-		? containerRect.top + window.scrollY
-		: window.scrollY;
+	const toolbarHeight = 48;
+	let top = rect.top - toolbarHeight - 8;
+	if (top < 80) top = rect.bottom + 8;
 	tableToolbar = {
 		visible: true,
-		left: rect.left + window.scrollX,
-		top: baseTop - 48,
+		left: Math.max(8, Math.min(rect.left, window.innerWidth - 420)),
+		top: Math.max(8, top),
 	};
+	return tableEl;
+}
+
+function onWindowScrollOrResize() {
+	if (tableToolbar.visible && editor) positionTableToolbar();
 }
 
 function runTableCommand(name: string) {
@@ -364,6 +370,8 @@ function destroyEditor() {
 	editor = null;
 	editorReady = false;
 	tableToolbar = { visible: false, left: 0, top: 0 };
+	window.removeEventListener("scroll", onWindowScrollOrResize);
+	window.removeEventListener("resize", onWindowScrollOrResize);
 }
 
 async function loadArticle(operation: number) {
@@ -527,50 +535,34 @@ function teardownInPlace() {
 
 function captureScrollAnchor() {
 	editScrollY = window.scrollY;
-	editScrollTargetHeading = "";
-	const viewportTop = window.scrollY + 120;
-	const headings = Array.from(
-		document.querySelectorAll<HTMLElement>(
-			".article-reading-body h1, .article-reading-body h2, .article-reading-body h3, .article-reading-body h4, .article-reading-body h5, .article-reading-body h6",
-		),
-	);
-	let best: HTMLElement | null = null;
-	for (const heading of headings) {
-		const top = heading.getBoundingClientRect().top + window.scrollY;
-		if (top <= viewportTop) best = heading;
-		else break;
-	}
-	if (best)
-		editScrollTargetHeading = normalizeHeadingText(best.textContent || "");
 }
 
 function restoreScrollAfterEdit() {
-	const target = document.querySelector<HTMLElement>(
-		".article-reading-body-editing .ProseMirror",
-	);
-	if (target && editScrollTargetHeading) {
-		const headings = Array.from(
-			target.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6"),
-		);
-		const match = headings.find(
-			(heading) =>
-				normalizeHeadingText(heading.textContent || "") ===
-				editScrollTargetHeading,
-		);
-		if (match) {
-			const top = match.getBoundingClientRect().top + window.scrollY - 96;
-			window.scrollTo(0, Math.max(0, top));
-			return;
+	// 优先精确恢复原滚动位置（编辑区正文与读模式内容一致，高度基本不变）。
+	// 若编辑模式下页面更矮（editScrollY 超出 maxScroll），则按 clamp 后位置滚动，
+	// 绝不能停在浏览器默认锚定位置。
+	const maxScrollNow = () =>
+		document.documentElement.scrollHeight - window.innerHeight;
+	const scrollToEditY = () => {
+		if (!mounted || !editing || editScrollY <= 0) return;
+		const target = Math.min(editScrollY, Math.max(0, maxScrollNow()));
+		window.scrollTo(0, target);
+	};
+	scrollToEditY();
+	// 字体/图片等资源加载完成后，若页面高度恢复导致 scrollY 被 clamp 或偏移，再精确校准一次
+	let tries = 0;
+	const finalize = scrollToEditY;
+	const waitThenFinalize = () => {
+		if (tries++ > 12) return;
+		if (editScrollY > 0) finalize();
+		if (document.fonts?.ready) {
+			void document.fonts.ready.then(() => {
+				if (mounted && editing) finalize();
+			});
 		}
-	}
-	if (editScrollY > 0) window.scrollTo(0, editScrollY);
-}
-
-function normalizeHeadingText(value: string) {
-	return value
-		.replace(/#+\s*$/, "")
-		.replace(/\s+/g, " ")
-		.trim();
+		requestAnimationFrame(waitThenFinalize);
+	};
+	requestAnimationFrame(waitThenFinalize);
 }
 
 async function openEditor() {
@@ -961,6 +953,6 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
  :global(.article-category-select), :global(.article-tags-input) { display: inline-block; max-width: 14rem; border: 1px dashed color-mix(in srgb, var(--primary) 45%, transparent); border-radius: .3rem; padding: .08rem .3rem; color: inherit; background: var(--card-bg); font: inherit; font-size: .78rem; }
  :global(.post-meta-cover .article-category-select), :global(.post-meta-cover .article-tags-input) { color: white; background: rgb(0 0 0 / .35); }
  :global(html.study-editor-active .article-reading-body:not(.article-reading-body-editing)) { display: none !important; }
- .table-toolbar { position: absolute; z-index: 24; display: flex; flex-wrap: wrap; gap: .35rem; padding: .45rem .55rem; border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); border-radius: .7rem; background: color-mix(in srgb, var(--card-bg) 94%, transparent); backdrop-filter: blur(10px); box-shadow: 0 10px 28px color-mix(in srgb, var(--btn-content) 10%, transparent); } .table-toolbar button { flex: 0 0 auto; min-width: 3.6rem; border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .3rem .55rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } .table-toolbar button:hover { border-color: color-mix(in srgb, var(--primary) 45%, transparent); transform: translateY(-1px); } .table-toolbar .danger { color: #c74747; }
+ .table-toolbar { position: fixed; z-index: 24; display: flex; flex-wrap: wrap; gap: .35rem; padding: .45rem .55rem; border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); border-radius: .7rem; background: color-mix(in srgb, var(--card-bg) 94%, transparent); backdrop-filter: blur(10px); box-shadow: 0 10px 28px color-mix(in srgb, var(--btn-content) 10%, transparent); } .table-toolbar button { flex: 0 0 auto; min-width: 3.6rem; border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .3rem .55rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } .table-toolbar button:hover { border-color: color-mix(in srgb, var(--primary) 45%, transparent); transform: translateY(-1px); } .table-toolbar .danger { color: #c74747; }
  @media (max-width: 760px) { .toolbar { top: 3.6rem; } }
 </style>

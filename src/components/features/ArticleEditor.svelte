@@ -567,55 +567,90 @@ function captureScrollAnchor() {
 	editBodyAnchor = bodyEl
 		? Math.round(bodyEl.getBoundingClientRect().top + window.scrollY)
 		: 0;
-	// 内容级锚点：记录视口顶部附近最近的标题文本及其相对视口顶部偏移。
-	// ProseMirror 与阅读模式的内容高度分布不同（图片/代码块渲染差异会累积偏移，
-	// 实测中后部标题偏移可达 +1300px），仅靠正文容器 top 对齐不够。
-	// 进入编辑后用同一标题在编辑器内定位，可保证用户看到同一段内容不跳动。
+	// 内容级锚点：记录视口顶部附近实际可见的内容块（标题/段落/列表项等）
+	// 的文本指纹及其相对视口顶部偏移。ProseMirror 与阅读模式的内容高度分布
+	// 不同（图片/代码块渲染差异会累积偏移，实测中后部标题偏移可达 +1300px），
+	// 仅靠正文容器 top 对齐不够，必须按内容块在编辑器内重新定位。
+	// 用"视口顶部实际元素"而非"远处最近标题"，可保证用户在任何滚动位置
+	// （包括标题之间、段落中部）都能精确对齐，不产生上下滑动的残留跳动。
 	editAnchorText = "";
 	editAnchorOffset = 0;
 	if (!bodyEl) return;
-	// 从视口顶部向下找最近的标题元素（正文内），用于内容级锚点对齐
-	const heads = Array.from(
-		bodyEl.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6"),
-	);
-	let target: HTMLElement | null = null;
-	for (const h of heads) {
-		const top = h.getBoundingClientRect().top + window.scrollY;
-		if (top >= editScrollY - 200) {
-			target = h;
-			break;
+	// 在视口上部取一个正文内可见的内容块
+	const probeY = Math.min(160, window.innerHeight - 100);
+	const hit = document.elementFromPoint(window.innerWidth / 2, probeY);
+	let block: HTMLElement | null = null;
+	let cur: Element | null = hit;
+	while (cur && cur !== document.body) {
+		if (bodyEl.contains(cur)) {
+			const tag = cur.tagName;
+			if (/^(H1|H2|H3|H4|H5|H6|P|LI|PRE|BLOCKQUOTE|TD|TH|DT|DD)$/.test(tag)) {
+				const el = cur as HTMLElement;
+				if ((el.textContent || "").trim()) {
+					block = el;
+					break;
+				}
+			}
+		}
+		cur = cur.parentElement;
+	}
+	if (!block) {
+		// 视口顶部无文本块（如图片），退回最近标题
+		const heads = Array.from(
+			bodyEl.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6"),
+		);
+		for (const h of heads) {
+			const top = h.getBoundingClientRect().top + window.scrollY;
+			if (top >= editScrollY - 200) {
+				block = h;
+				break;
+			}
 		}
 	}
-	if (!target) return;
-	editAnchorText = normalizeAnchorText(target.textContent || "");
+	if (!block) return;
+	editAnchorText = normalizeAnchorText(block.textContent || "");
 	editAnchorOffset = Math.max(
 		0,
-		Math.round(target.getBoundingClientRect().top + window.scrollY - editScrollY),
+		Math.round(block.getBoundingClientRect().top + window.scrollY - editScrollY),
 	);
 }
 
 function restoreScrollAfterEdit() {
-	// 优先按内容锚点恢复：让编辑模式下视口顶部对齐到与读模式相同的标题。
+	// 优先按内容锚点恢复：让编辑模式下视口顶部对齐到与读模式相同的内容块。
 	// 因为 ProseMirror 与阅读模式内容高度分布不同，正文容器 top 对齐仍会让
-	// 用户看到不同内容；按标题文本在编辑器内重新定位可精确对齐。
-	// 若编辑器内找不到同标题，则回退到正文相对位置。
+	// 用户看到不同内容；按内容块文本在编辑器内重新定位可精确对齐。
+	// 若编辑器内找不到同内容块，则回退到正文相对位置。
 	const maxScrollNow = () =>
 		document.documentElement.scrollHeight - window.innerHeight;
 	const scrollToEditY = () => {
 		if (!mounted || !editing || editScrollY <= 0) return;
 		let target: number | null = null;
-		// 尝试按标题锚点定位
+		// 尝试按内容锚点定位
 		if (editAnchorText) {
 			const pm = document.querySelector<HTMLElement>(
 				".article-reading-body-editing .ProseMirror",
 			);
 			if (pm) {
-				const heads = Array.from(
-					pm.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6"),
+				const blocks = Array.from(
+					pm.querySelectorAll<HTMLElement>(
+						"h1, h2, h3, h4, h5, h6, p, li, pre, blockquote, td, th",
+					),
 				);
-				const match = heads.find(
-					(h) => normalizeAnchorText(h.textContent || "") === editAnchorText,
+				// 先精确匹配，再允许前缀匹配（ProseMirror 文本可能与渲染文本略有差异）
+				const exact = blocks.find(
+					(b) => normalizeAnchorText(b.textContent || "") === editAnchorText,
 				);
+				const prefix = exact
+					? null
+					: blocks.find((b) => {
+							const n = normalizeAnchorText(b.textContent || "");
+							return (
+								editAnchorText.length > 6 &&
+								(n.startsWith(editAnchorText.slice(0, 10)) ||
+									editAnchorText.startsWith(n.slice(0, 10)))
+							);
+						});
+				const match = exact || prefix;
 				if (match) {
 					const matchTop =
 						match.getBoundingClientRect().top + window.scrollY;

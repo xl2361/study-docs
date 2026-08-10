@@ -34,10 +34,13 @@ type EditorLike = {
 	getMarkdown: () => string;
 	getHTML: () => string;
 	getJSON: () => JsonNode;
+	isActive: (name: string) => boolean;
 	can: () => {
 		undo: () => boolean;
 		redo: () => boolean;
 	};
+	on: (event: string, handler: () => void) => void;
+	off: (event: string, handler: () => void) => void;
 	destroy: () => void;
 };
 type JsonNode = {
@@ -59,6 +62,18 @@ type EditorChain = {
 	toggleBlockquote: () => EditorChain;
 	toggleCodeBlock: () => EditorChain;
 	setHorizontalRule: () => EditorChain;
+	addRowBefore: () => EditorChain;
+	addRowAfter: () => EditorChain;
+	addColumnBefore: () => EditorChain;
+	addColumnAfter: () => EditorChain;
+	deleteRow: () => EditorChain;
+	deleteColumn: () => EditorChain;
+	deleteTable: () => EditorChain;
+	mergeCells: () => EditorChain;
+	splitCell: () => EditorChain;
+	toggleHeaderRow: () => EditorChain;
+	toggleHeaderColumn: () => EditorChain;
+	toggleHeaderCell: () => EditorChain;
 	run: () => boolean;
 };
 
@@ -107,6 +122,10 @@ let inTagsEl: HTMLElement | null = null;
 let inTagsInput: HTMLInputElement | null = null;
 let titleEl: HTMLElement | null = null;
 let pendingOptimisticHTML: string | null = null;
+let editScrollY = 0;
+let editScrollTargetHeading = "";
+let scrollRestored = false;
+let tableToolbar = { visible: false, left: 0, top: 0 };
 
 function scalar(value: string) {
 	const v = value.trim();
@@ -261,6 +280,8 @@ async function createEditor(operation: number) {
 		});
 		editorReady = true;
 		syncHistoryState();
+		editor.on("selectionUpdate", onTableSelectionChange);
+		editor.on("transaction", onTableSelectionChange);
 	} catch (reason) {
 		if (!mounted || operation !== openOperation || !editing) return;
 		editor?.destroy();
@@ -279,10 +300,70 @@ function syncHistoryState() {
 	canRedo = Boolean(editor?.can().redo());
 }
 
+function onTableSelectionChange() {
+	if (!editor) {
+		tableToolbar = { visible: false, left: 0, top: 0 };
+		return;
+	}
+	let active = false;
+	try {
+		active = editor.isActive("table");
+	} catch {
+		active = false;
+	}
+	if (!active) {
+		tableToolbar = { visible: false, left: 0, top: 0 };
+		return;
+	}
+	const tableEl = document.querySelector<HTMLElement>(
+		".article-reading-body-editing .ProseMirror table",
+	);
+	if (!tableEl) {
+		tableToolbar = { visible: false, left: 0, top: 0 };
+		return;
+	}
+	const rect = tableEl.getBoundingClientRect();
+	const containerRect = editorMount?.getBoundingClientRect();
+	const baseTop = containerRect
+		? containerRect.top + window.scrollY
+		: window.scrollY;
+	tableToolbar = {
+		visible: true,
+		left: rect.left + window.scrollX,
+		top: baseTop - 48,
+	};
+}
+
+function runTableCommand(name: string) {
+	if (!editor) return;
+	const chain = editor.chain().focus();
+	const actions: Record<string, () => unknown> = {
+		addRowBefore: () => chain.addRowBefore(),
+		addRowAfter: () => chain.addRowAfter(),
+		addColumnBefore: () => chain.addColumnBefore(),
+		addColumnAfter: () => chain.addColumnAfter(),
+		deleteRow: () => chain.deleteRow(),
+		deleteColumn: () => chain.deleteColumn(),
+		deleteTable: () => chain.deleteTable(),
+		mergeCells: () => chain.mergeCells(),
+		splitCell: () => chain.splitCell(),
+		toggleHeaderRow: () => chain.toggleHeaderRow(),
+		toggleHeaderColumn: () => chain.toggleHeaderColumn(),
+		toggleHeaderCell: () => chain.toggleHeaderCell(),
+	};
+	const fn = actions[name];
+	if (fn) fn().run();
+}
+
 function destroyEditor() {
-	editor?.destroy();
+	if (editor) {
+		editor.off("selectionUpdate", onTableSelectionChange);
+		editor.off("transaction", onTableSelectionChange);
+		editor.destroy();
+	}
 	editor = null;
 	editorReady = false;
+	tableToolbar = { visible: false, left: 0, top: 0 };
 }
 
 async function loadArticle(operation: number) {
@@ -444,6 +525,54 @@ function teardownInPlace() {
 	titleEl = null;
 }
 
+function captureScrollAnchor() {
+	editScrollY = window.scrollY;
+	editScrollTargetHeading = "";
+	const viewportTop = window.scrollY + 120;
+	const headings = Array.from(
+		document.querySelectorAll<HTMLElement>(
+			".article-reading-body h1, .article-reading-body h2, .article-reading-body h3, .article-reading-body h4, .article-reading-body h5, .article-reading-body h6",
+		),
+	);
+	let best: HTMLElement | null = null;
+	for (const heading of headings) {
+		const top = heading.getBoundingClientRect().top + window.scrollY;
+		if (top <= viewportTop) best = heading;
+		else break;
+	}
+	if (best)
+		editScrollTargetHeading = normalizeHeadingText(best.textContent || "");
+}
+
+function restoreScrollAfterEdit() {
+	const target = document.querySelector<HTMLElement>(
+		".article-reading-body-editing .ProseMirror",
+	);
+	if (target && editScrollTargetHeading) {
+		const headings = Array.from(
+			target.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6"),
+		);
+		const match = headings.find(
+			(heading) =>
+				normalizeHeadingText(heading.textContent || "") ===
+				editScrollTargetHeading,
+		);
+		if (match) {
+			const top = match.getBoundingClientRect().top + window.scrollY - 96;
+			window.scrollTo(0, Math.max(0, top));
+			return;
+		}
+	}
+	if (editScrollY > 0) window.scrollTo(0, editScrollY);
+}
+
+function normalizeHeadingText(value: string) {
+	return value
+		.replace(/#+\s*$/, "")
+		.replace(/\s+/g, " ")
+		.trim();
+}
+
 async function openEditor() {
 	if (opening) return;
 	const operation = ++openOperation;
@@ -453,6 +582,9 @@ async function openEditor() {
 		if (!mounted || operation !== openOperation || !loaded) return;
 		const topbar = document.getElementById("editor-topbar");
 		if (topbar) topbar.dataset.editorOwner = editorInstanceId;
+		scrollRestored = false;
+		// 在 editing=true（正文将被 CSS 隐藏、页面高度骤变）之前记录当前滚动位置
+		captureScrollAnchor();
 		editing = true;
 		document.documentElement.classList.add("study-editor-active");
 		await tick();
@@ -462,6 +594,14 @@ async function openEditor() {
 		await createEditor(operation);
 		if (!mounted || operation !== openOperation || !editing) return;
 		hostIntoReadingBody();
+		// 编辑器内容渲染完成后恢复滚动位置（分帧等待布局稳定）
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => {
+				if (!mounted || !editing || scrollRestored) return;
+				scrollRestored = true;
+				restoreScrollAfterEdit();
+			});
+		});
 	} finally {
 		opening = false;
 		if (
@@ -795,6 +935,20 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
    {/if}
   </div>
   <nav class="toolbar" bind:this={toolbarEl} aria-label="正文格式"><button title="后退一步" onclick={() => format("undo")} disabled={!editorReady || sourceMode || !canUndo}>↶</button><button title="前进一步" onclick={() => format("redo")} disabled={!editorReady || sourceMode || !canRedo}>↷</button><button title="一级标题" onclick={() => format("h1")} disabled={!editorReady || sourceMode}>H1</button><button title="二级标题" onclick={() => format("h2")} disabled={!editorReady || sourceMode}>H2</button><button title="三级标题" onclick={() => format("h3")} disabled={!editorReady || sourceMode}>H3</button><button title="粗体" onclick={() => format("bold")} disabled={!editorReady || sourceMode}><b>B</b></button><button title="斜体" onclick={() => format("italic")} disabled={!editorReady || sourceMode}><i>I</i></button><button title="删除线" onclick={() => format("strike")} disabled={!editorReady || sourceMode}><s>S</s></button><button title="无序列表" onclick={() => format("bullet")} disabled={!editorReady || sourceMode}>•</button><button title="有序列表" onclick={() => format("ordered")} disabled={!editorReady || sourceMode}>1.</button><button title="引用" onclick={() => format("quote")} disabled={!editorReady || sourceMode}>❝</button><button title="代码块" onclick={() => format("code")} disabled={!editorReady || sourceMode}>{"</>"}</button><button title="分隔线" onclick={() => format("hr")} disabled={!editorReady || sourceMode}>—</button></nav>
+  {#if tableToolbar.visible && !sourceMode}
+    <div class="table-toolbar" style={`left:${tableToolbar.left}px;top:${tableToolbar.top}px;`} role="toolbar" aria-label="表格操作">
+      <button type="button" title="上方插入行" onclick={() => runTableCommand("addRowBefore")}>上插行</button>
+      <button type="button" title="下方插入行" onclick={() => runTableCommand("addRowAfter")}>下插行</button>
+      <button type="button" title="左侧插入列" onclick={() => runTableCommand("addColumnBefore")}>左插列</button>
+      <button type="button" title="右侧插入列" onclick={() => runTableCommand("addColumnAfter")}>右插列</button>
+      <button type="button" title="合并单元格" onclick={() => runTableCommand("mergeCells")}>合并</button>
+      <button type="button" title="拆分单元格" onclick={() => runTableCommand("splitCell")}>拆分</button>
+      <button type="button" title="删除当前行" onclick={() => runTableCommand("deleteRow")}>删行</button>
+      <button type="button" title="删除当前列" onclick={() => runTableCommand("deleteColumn")}>删列</button>
+      <button type="button" title="表头行" onclick={() => runTableCommand("toggleHeaderRow")}>表头</button>
+      <button type="button" class="danger" title="删除整个表格" onclick={() => runTableCommand("deleteTable")}>删表</button>
+    </div>
+  {/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if savedMessage}<p class="success">{savedMessage}</p>{/if}
   {#if sourceMode}<p class="source-note">源码模式：当前 Markdown 含有富文本编辑器无法解析的原始内容。</p><textarea class="source-editor" bind:this={sourceEditEl} bind:value={sourceValue} oninput={() => markDirty(true)} aria-label="Markdown 正文源码编辑器" spellcheck="false" disabled={!loaded}></textarea>{:else}<div class="tiptap-host prose dark:prose-invert prose-base max-w-none custom-md" bind:this={editorMount}></div>{/if}
@@ -807,5 +961,6 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
  :global(.article-category-select), :global(.article-tags-input) { display: inline-block; max-width: 14rem; border: 1px dashed color-mix(in srgb, var(--primary) 45%, transparent); border-radius: .3rem; padding: .08rem .3rem; color: inherit; background: var(--card-bg); font: inherit; font-size: .78rem; }
  :global(.post-meta-cover .article-category-select), :global(.post-meta-cover .article-tags-input) { color: white; background: rgb(0 0 0 / .35); }
  :global(html.study-editor-active .article-reading-body:not(.article-reading-body-editing)) { display: none !important; }
+ .table-toolbar { position: absolute; z-index: 24; display: flex; flex-wrap: wrap; gap: .35rem; padding: .45rem .55rem; border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); border-radius: .7rem; background: color-mix(in srgb, var(--card-bg) 94%, transparent); backdrop-filter: blur(10px); box-shadow: 0 10px 28px color-mix(in srgb, var(--btn-content) 10%, transparent); } .table-toolbar button { flex: 0 0 auto; min-width: 3.6rem; border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .3rem .55rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } .table-toolbar button:hover { border-color: color-mix(in srgb, var(--primary) 45%, transparent); transform: translateY(-1px); } .table-toolbar .danger { color: #c74747; }
  @media (max-width: 760px) { .toolbar { top: 3.6rem; } }
 </style>

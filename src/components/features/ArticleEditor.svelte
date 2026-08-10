@@ -128,6 +128,7 @@ let inTagsInput: HTMLInputElement | null = null;
 let titleEl: HTMLElement | null = null;
 let pendingOptimisticHTML: string | null = null;
 let editScrollY = 0;
+let editBodyAnchor = 0;
 let scrollRestored = false;
 let tableToolbar = { visible: false, left: 0, top: 0 };
 
@@ -549,17 +550,36 @@ function teardownInPlace() {
 
 function captureScrollAnchor() {
 	editScrollY = window.scrollY;
+	// 记录正文顶部在文档中的偏移，作为滚动恢复锚点：
+	// 编辑模式会因 category-bar 隐藏/编辑器 UI 占位改变正文顶部位置，
+	// 若直接恢复绝对 scrollY，正文相对视口会偏移导致视觉跳动。
+	// 改为恢复"正文相对位置"（scrollY - 正文顶部偏移），使正文内容对齐。
+	const bodyEl = document.querySelector<HTMLElement>(".article-reading-body");
+	editBodyAnchor = bodyEl
+		? Math.round(bodyEl.getBoundingClientRect().top + window.scrollY)
+		: 0;
 }
 
 function restoreScrollAfterEdit() {
-	// 优先精确恢复原滚动位置（编辑区正文与读模式内容一致，高度基本不变）。
-	// 若编辑模式下页面更矮（editScrollY 超出 maxScroll），则按 clamp 后位置滚动，
-	// 绝不能停在浏览器默认锚定位置。
+	// 恢复滚动到"正文相对位置"：让编辑模式下视口顶部对应正文的偏移与读模式一致，
+	// 从而避免 category-bar 隐藏 / 编辑器占位导致的正文位置偏移引起视觉跳动。
+	// 若编辑模式下页面更矮（目标超出 maxScroll），则按 clamp 后位置滚动。
 	const maxScrollNow = () =>
 		document.documentElement.scrollHeight - window.innerHeight;
 	const scrollToEditY = () => {
 		if (!mounted || !editing || editScrollY <= 0) return;
-		const target = Math.min(editScrollY, Math.max(0, maxScrollNow()));
+		// 计算编辑模式下正文顶部的当前文档偏移
+		const bodyEl = document.querySelector<HTMLElement>(
+			".article-reading-body",
+		);
+		const newAnchor = bodyEl
+			? Math.round(bodyEl.getBoundingClientRect().top + window.scrollY)
+			: editBodyAnchor;
+		// 视口顶部相对正文的偏移 = 读模式时 (editScrollY - editBodyAnchor)
+		const target = Math.min(
+			editScrollY + (newAnchor - editBodyAnchor),
+			Math.max(0, maxScrollNow()),
+		);
 		window.scrollTo(0, target);
 	};
 	scrollToEditY();

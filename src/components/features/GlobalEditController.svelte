@@ -147,7 +147,7 @@ onMount(() => {
 {/if}
 
 <style>
-	.global-editor { position: relative; display: flex; align-items: center; gap: .3rem; margin-right: .25rem; }
+	.global-editor { position: relative; display: flex; align-items: center; gap: .3rem; margin-right: .25rem; align-self: center; }
 	button { height: 2.25rem; border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); border-radius: .7rem; padding: 0 .7rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .75rem; font-weight: 750; cursor: pointer; transition: transform .16s, border-color .16s, background .16s; }
 	button:hover { border-color: color-mix(in srgb, var(--primary) 45%, transparent); transform: translateY(-1px); }
 	.edit-toggle { border-color: var(--primary); color: white; background: var(--primary); }

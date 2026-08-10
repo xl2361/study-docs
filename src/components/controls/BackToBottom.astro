@@ -1,0 +1,84 @@
+---
+import FloatingButton from "@/components/common/FloatingButton.astro";
+---
+
+<!-- 一键到底：仅在文章详情页显示，接近底部时自动隐藏 -->
+<FloatingButton
+  id="back-to-bottom-btn"
+  icon="material-symbols:keyboard-arrow-down-rounded"
+  ariaLabel="Back to Bottom"
+  onclick="backToBottom()"
+  class="hide"
+/>
+
+<script is:raw is:inline>
+  function backToBottom() {
+    // 直接使用原生滚动，避免OverlayScrollbars冲突
+    window.scroll({
+      top: document.documentElement.scrollHeight,
+      behavior: "smooth",
+    });
+  }
+
+  function isArticlePage() {
+    const pathname = window.location.pathname;
+    return pathname.includes("/posts/") || pathname.includes("/post/");
+  }
+
+  // 响应式一键到底按钮管理器
+  if (typeof window.BackToBottomManager === "undefined") {
+    window.BackToBottomManager = class BackToBottomManager {
+      constructor() {
+        this.button = document.getElementById("back-to-bottom-btn");
+        this.init();
+      }
+
+      init() {
+        if (!this.button) return;
+        this.updateVisibility = this.updateVisibility.bind(this);
+        this.setupListeners();
+        this.updateVisibility();
+      }
+
+      setupListeners() {
+        window.addEventListener("scroll", this.updateVisibility, {
+          passive: true,
+        });
+        window.addEventListener("resize", this.updateVisibility, {
+          passive: true,
+        });
+        // swup 页面切换后重新判断（文章页 <-> 首页）
+        document.addEventListener("swup:page:view", this.updateVisibility);
+      }
+
+      updateVisibility() {
+        if (!this.button) return;
+        const scrollTop =
+          window.pageYOffset || document.documentElement.scrollTop;
+        const scrollHeight = document.documentElement.scrollHeight;
+        const viewport = window.innerHeight;
+
+        // 距底部不足一屏（视为已到底）或非文章页时隐藏
+        const nearBottom = scrollHeight - scrollTop - viewport < 600;
+        if (isArticlePage() && !nearBottom) {
+          this.button.classList.remove("hide");
+        } else {
+          this.button.classList.add("hide");
+        }
+      }
+    };
+  }
+
+  // 页面加载完成后初始化
+  document.addEventListener("DOMContentLoaded", () => {
+    new BackToBottomManager();
+  });
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      new BackToBottomManager();
+    });
+  } else {
+    new BackToBottomManager();
+  }
+</script>

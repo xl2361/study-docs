@@ -260,6 +260,12 @@ export class TOCManager {
 	private scrollToActiveItem(activeItem: HTMLElement): void {
 		if (!activeItem) return;
 
+		// 编辑模式下不自动滚动目录容器：
+		// 正文增删改/滚动会频繁改变 active 项，若每次都把目录平滑滚到该项，
+		// 会打乱用户手动滑动目录的位置，表现为"目录乱滑"。
+		if (document.documentElement.classList.contains("study-editor-active"))
+			return;
+
 		const tocContainer = document
 			.querySelector(`#${this.contentId}`)
 			?.closest(".toc-scroll-container");

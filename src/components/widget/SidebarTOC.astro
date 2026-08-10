@@ -355,16 +355,22 @@ const items = encrypted ? [] : computeTocItems(headings, { maxLevel: 3 });
   }
 
   function handleEditorTocClick(event: Event) {
-    // 编辑器组件可能先于全局编辑状态完成更新，以右侧 ProseMirror 是否存在为准。
-    if (!document.querySelector(".article-reading-body-editing .ProseMirror")) return;
+    const editingActive = document.documentElement.classList.contains("study-editor-active");
     const target = event.target instanceof Element
       ? event.target.closest<HTMLAnchorElement>("#sidebar-toc-content a.toc-item")
       : null;
     if (!target) return;
-    const heading = getEditorHeading(target);
-    if (!heading) return;
+    if (!editingActive) {
+      // 静态模式走默认 hash + TOCManager；不拦截。
+      return;
+    }
+    // 编辑模式：只用 pointerdown 定位（click 因 ProseMirror 编辑器焦点/默认
+    // hash 跳转可能被吞或重复触发），避免双滚动造成"乱跳"。
+    if (event.type !== "pointerdown") return;
     event.preventDefault();
     event.stopImmediatePropagation();
+    const heading = getEditorHeading(target);
+    if (!heading) return;
     scrollEditorHeading(heading);
     window.dispatchEvent(new CustomEvent("toc:navigate", {
       detail: {
@@ -406,6 +412,7 @@ const items = encrypted ? [] : computeTocItems(headings, { maxLevel: 3 });
   }
   initSidebarNavigationClose();
   document.addEventListener("click", handleEditorTocClick, true);
+  document.addEventListener("pointerdown", handleEditorTocClick, true);
 
   // 页面切换时重新初始化；组件脚本重复执行时不重复注册生命周期监听。
   if (document.documentElement.dataset.sidebarTocLifecycleBound !== "true") {

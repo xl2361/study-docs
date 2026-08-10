@@ -32,6 +32,7 @@ type EditorLike = {
 		redo: () => void;
 	};
 	getMarkdown: () => string;
+	getHTML: () => string;
 	getJSON: () => JsonNode;
 	can: () => {
 		undo: () => boolean;
@@ -105,6 +106,7 @@ let inCategorySelect: HTMLSelectElement | null = null;
 let inTagsEl: HTMLElement | null = null;
 let inTagsInput: HTMLInputElement | null = null;
 let titleEl: HTMLElement | null = null;
+let pendingOptimisticHTML: string | null = null;
 
 function scalar(value: string) {
 	const v = value.trim();
@@ -622,6 +624,10 @@ function leaveEditor() {
 	if (readingBodyEl) {
 		readingBodyEl.innerHTML = savedReadingHTML;
 		readingBodyEl.classList.remove("article-reading-body-editing");
+		if (pendingOptimisticHTML) {
+			readingBodyEl.innerHTML = pendingOptimisticHTML;
+			pendingOptimisticHTML = null;
+		}
 		readingBodyEl = null;
 		savedReadingHTML = "";
 	}
@@ -631,6 +637,14 @@ function leaveEditor() {
 	editing = false;
 	if (clearGlobalState)
 		document.documentElement.classList.remove("study-editor-active");
+}
+
+function captureOptimisticHTML() {
+	if (pendingOptimisticHTML) return;
+	// 源码模式（含原始 HTML/XML 无法被富文本解析）无法在前端还原渲染效果，
+	// 不做乐观更新，等待后台部署后的静态页面。
+	if (sourceMode) return;
+	pendingOptimisticHTML = editor?.getHTML() || null;
 }
 
 function moveTopbar() {
@@ -738,6 +752,10 @@ onMount(() => {
 	window.addEventListener("study-article-editor-open", onOpen);
 	window.addEventListener("study-article-editor-revert", onRevert);
 	window.addEventListener("study-article-editor-flush", flush);
+	window.addEventListener(
+		"study-article-commit-success",
+		captureOptimisticHTML,
+	);
 	window.addEventListener("beforeunload", beforeUnload);
 	window.addEventListener("keydown", onKeydown);
 	if (sessionStorage.getItem(editModeKey) === "1") void openEditor();
@@ -749,6 +767,10 @@ onMount(() => {
 		window.removeEventListener("study-article-editor-open", onOpen);
 		window.removeEventListener("study-article-editor-revert", onRevert);
 		window.removeEventListener("study-article-editor-flush", flush);
+		window.removeEventListener(
+			"study-article-commit-success",
+			captureOptimisticHTML,
+		);
 		window.removeEventListener("beforeunload", beforeUnload);
 		window.removeEventListener("keydown", onKeydown);
 		const clearGlobalState = restoreTopbar();

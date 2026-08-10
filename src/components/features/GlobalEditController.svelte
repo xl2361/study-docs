@@ -113,8 +113,9 @@ async function toggleEditing() {
 		}
 		sessionStorage.removeItem(draftsKey);
 		sessionStorage.removeItem(categoryDraftsKey);
+		window.dispatchEvent(new CustomEvent("study-article-commit-success"));
 		stopEditing();
-		message = "已提交，等待网站重新部署";
+		message = "已提交，网站正在后台部署";
 	} catch (reason) {
 		message = reason instanceof Error ? reason.message : "提交失败，请稍后重试";
 	} finally {

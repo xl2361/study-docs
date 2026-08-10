@@ -74,6 +74,11 @@ type EditorChain = {
 	toggleHeaderRow: () => EditorChain;
 	toggleHeaderColumn: () => EditorChain;
 	toggleHeaderCell: () => EditorChain;
+	insertTable: (options: {
+		rows: number;
+		cols: number;
+		withHeaderRow: boolean;
+	}) => EditorChain;
 	run: () => boolean;
 };
 
@@ -340,6 +345,15 @@ function onWindowScrollOrResize() {
 	if (tableToolbar.visible && editor) positionTableToolbar();
 }
 
+function insertTable() {
+	if (!editor) return;
+	editor
+		.chain()
+		.focus()
+		.insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+		.run();
+}
+
 function runTableCommand(name: string) {
 	if (!editor) return;
 	const chain = editor.chain().focus();
@@ -575,10 +589,9 @@ async function openEditor() {
 		const topbar = document.getElementById("editor-topbar");
 		if (topbar) topbar.dataset.editorOwner = editorInstanceId;
 		scrollRestored = false;
-		// 在 editing=true（正文将被 CSS 隐藏、页面高度骤变）之前记录当前滚动位置
+		// 在 editing=true 之前记录当前滚动位置
 		captureScrollAnchor();
 		editing = true;
-		document.documentElement.classList.add("study-editor-active");
 		await tick();
 		if (!mounted || operation !== openOperation || !editing) return;
 		moveTopbar();
@@ -586,14 +599,14 @@ async function openEditor() {
 		await createEditor(operation);
 		if (!mounted || operation !== openOperation || !editing) return;
 		hostIntoReadingBody();
-		// 编辑器内容渲染完成后恢复滚动位置（分帧等待布局稳定）
-		requestAnimationFrame(() => {
-			requestAnimationFrame(() => {
-				if (!mounted || !editing || scrollRestored) return;
-				scrollRestored = true;
-				restoreScrollAfterEdit();
-			});
-		});
+		// 编辑器就绪并替换正文后再切换全局编辑态样式，
+		// 避免异步加载期间分类栏消失/正文位移导致跳动
+		document.documentElement.classList.add("study-editor-active");
+		// 立即恢复滚动位置（与 class 切换同一帧，避免分类栏隐藏导致的位移被用户看到）
+		if (mounted && editing && !scrollRestored) {
+			scrollRestored = true;
+			restoreScrollAfterEdit();
+		}
 	} finally {
 		opening = false;
 		if (
@@ -926,7 +939,7 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
      <button class="recover" type="button" onclick={restoreEmergencyDraft} title={emergency.error}>恢复备份</button>
    {/if}
   </div>
-  <nav class="toolbar" bind:this={toolbarEl} aria-label="正文格式"><button title="后退一步" onclick={() => format("undo")} disabled={!editorReady || sourceMode || !canUndo}>↶</button><button title="前进一步" onclick={() => format("redo")} disabled={!editorReady || sourceMode || !canRedo}>↷</button><button title="一级标题" onclick={() => format("h1")} disabled={!editorReady || sourceMode}>H1</button><button title="二级标题" onclick={() => format("h2")} disabled={!editorReady || sourceMode}>H2</button><button title="三级标题" onclick={() => format("h3")} disabled={!editorReady || sourceMode}>H3</button><button title="粗体" onclick={() => format("bold")} disabled={!editorReady || sourceMode}><b>B</b></button><button title="斜体" onclick={() => format("italic")} disabled={!editorReady || sourceMode}><i>I</i></button><button title="删除线" onclick={() => format("strike")} disabled={!editorReady || sourceMode}><s>S</s></button><button title="无序列表" onclick={() => format("bullet")} disabled={!editorReady || sourceMode}>•</button><button title="有序列表" onclick={() => format("ordered")} disabled={!editorReady || sourceMode}>1.</button><button title="引用" onclick={() => format("quote")} disabled={!editorReady || sourceMode}>❝</button><button title="代码块" onclick={() => format("code")} disabled={!editorReady || sourceMode}>{"</>"}</button><button title="分隔线" onclick={() => format("hr")} disabled={!editorReady || sourceMode}>—</button></nav>
+  <nav class="toolbar" bind:this={toolbarEl} aria-label="正文格式"><button title="后退一步" onclick={() => format("undo")} disabled={!editorReady || sourceMode || !canUndo}>↶</button><button title="前进一步" onclick={() => format("redo")} disabled={!editorReady || sourceMode || !canRedo}>↷</button><button title="一级标题" onclick={() => format("h1")} disabled={!editorReady || sourceMode}>H1</button><button title="二级标题" onclick={() => format("h2")} disabled={!editorReady || sourceMode}>H2</button><button title="三级标题" onclick={() => format("h3")} disabled={!editorReady || sourceMode}>H3</button><button title="粗体" onclick={() => format("bold")} disabled={!editorReady || sourceMode}><b>B</b></button><button title="斜体" onclick={() => format("italic")} disabled={!editorReady || sourceMode}><i>I</i></button><button title="删除线" onclick={() => format("strike")} disabled={!editorReady || sourceMode}><s>S</s></button><button title="无序列表" onclick={() => format("bullet")} disabled={!editorReady || sourceMode}>•</button><button title="有序列表" onclick={() => format("ordered")} disabled={!editorReady || sourceMode}>1.</button><button title="引用" onclick={() => format("quote")} disabled={!editorReady || sourceMode}>❝</button><button title="代码块" onclick={() => format("code")} disabled={!editorReady || sourceMode}>{"</>"}</button><button title="分隔线" onclick={() => format("hr")} disabled={!editorReady || sourceMode}>—</button><button title="插入表格" onclick={() => insertTable()} disabled={!editorReady || sourceMode}>▦</button></nav>
   {#if tableToolbar.visible && !sourceMode}
     <div class="table-toolbar" style={`left:${tableToolbar.left}px;top:${tableToolbar.top}px;`} role="toolbar" aria-label="表格操作">
       <button type="button" title="上方插入行" onclick={() => runTableCommand("addRowBefore")}>上插行</button>
@@ -952,7 +965,6 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
  :global([data-article-title].article-title-editing) { outline: 2px dashed color-mix(in srgb, var(--primary) 45%, transparent); outline-offset: 2px; border-radius: .25rem; }
  :global(.article-category-select), :global(.article-tags-input) { display: inline-block; max-width: 14rem; border: 1px dashed color-mix(in srgb, var(--primary) 45%, transparent); border-radius: .3rem; padding: .08rem .3rem; color: inherit; background: var(--card-bg); font: inherit; font-size: .78rem; }
  :global(.post-meta-cover .article-category-select), :global(.post-meta-cover .article-tags-input) { color: white; background: rgb(0 0 0 / .35); }
- :global(html.study-editor-active .article-reading-body:not(.article-reading-body-editing)) { display: none !important; }
  .table-toolbar { position: fixed; z-index: 24; display: flex; flex-wrap: wrap; gap: .35rem; padding: .45rem .55rem; border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); border-radius: .7rem; background: color-mix(in srgb, var(--card-bg) 94%, transparent); backdrop-filter: blur(10px); box-shadow: 0 10px 28px color-mix(in srgb, var(--btn-content) 10%, transparent); } .table-toolbar button { flex: 0 0 auto; min-width: 3.6rem; border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .3rem .55rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } .table-toolbar button:hover { border-color: color-mix(in srgb, var(--primary) 45%, transparent); transform: translateY(-1px); } .table-toolbar .danger { color: #c74747; }
  @media (max-width: 760px) { .toolbar { top: 3.6rem; } }
 </style>

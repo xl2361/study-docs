@@ -129,6 +129,8 @@ let titleEl: HTMLElement | null = null;
 let pendingOptimisticHTML: string | null = null;
 let editScrollY = 0;
 let editBodyAnchor = 0;
+let editAnchorText = "";
+let editAnchorOffset = 0;
 let scrollRestored = false;
 let tableToolbar = { visible: false, left: 0, top: 0 };
 
@@ -548,38 +550,90 @@ function teardownInPlace() {
 	titleEl = null;
 }
 
+function normalizeAnchorText(value: string) {
+	return (value || "")
+		.replace(/#+\s*$/, "")
+		.replace(/\s+/g, " ")
+		.trim()
+		.slice(0, 30);
+}
+
 function captureScrollAnchor() {
 	editScrollY = window.scrollY;
-	// 记录正文顶部在文档中的偏移，作为滚动恢复锚点：
+	// 记录正文顶部在文档中的偏移，作为滚动恢复兜底锚点：
 	// 编辑模式会因 category-bar 隐藏/编辑器 UI 占位改变正文顶部位置，
 	// 若直接恢复绝对 scrollY，正文相对视口会偏移导致视觉跳动。
-	// 改为恢复"正文相对位置"（scrollY - 正文顶部偏移），使正文内容对齐。
 	const bodyEl = document.querySelector<HTMLElement>(".article-reading-body");
 	editBodyAnchor = bodyEl
 		? Math.round(bodyEl.getBoundingClientRect().top + window.scrollY)
 		: 0;
+	// 内容级锚点：记录视口顶部附近最近的标题文本及其相对视口顶部偏移。
+	// ProseMirror 与阅读模式的内容高度分布不同（图片/代码块渲染差异会累积偏移，
+	// 实测中后部标题偏移可达 +1300px），仅靠正文容器 top 对齐不够。
+	// 进入编辑后用同一标题在编辑器内定位，可保证用户看到同一段内容不跳动。
+	editAnchorText = "";
+	editAnchorOffset = 0;
+	if (!bodyEl) return;
+	// 从视口顶部向下找最近的标题元素（正文内），用于内容级锚点对齐
+	const heads = Array.from(
+		bodyEl.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6"),
+	);
+	let target: HTMLElement | null = null;
+	for (const h of heads) {
+		const top = h.getBoundingClientRect().top + window.scrollY;
+		if (top >= editScrollY - 200) {
+			target = h;
+			break;
+		}
+	}
+	if (!target) return;
+	editAnchorText = normalizeAnchorText(target.textContent || "");
+	editAnchorOffset = Math.max(
+		0,
+		Math.round(target.getBoundingClientRect().top + window.scrollY - editScrollY),
+	);
 }
 
 function restoreScrollAfterEdit() {
-	// 恢复滚动到"正文相对位置"：让编辑模式下视口顶部对应正文的偏移与读模式一致，
-	// 从而避免 category-bar 隐藏 / 编辑器占位导致的正文位置偏移引起视觉跳动。
-	// 若编辑模式下页面更矮（目标超出 maxScroll），则按 clamp 后位置滚动。
+	// 优先按内容锚点恢复：让编辑模式下视口顶部对齐到与读模式相同的标题。
+	// 因为 ProseMirror 与阅读模式内容高度分布不同，正文容器 top 对齐仍会让
+	// 用户看到不同内容；按标题文本在编辑器内重新定位可精确对齐。
+	// 若编辑器内找不到同标题，则回退到正文相对位置。
 	const maxScrollNow = () =>
 		document.documentElement.scrollHeight - window.innerHeight;
 	const scrollToEditY = () => {
 		if (!mounted || !editing || editScrollY <= 0) return;
-		// 计算编辑模式下正文顶部的当前文档偏移
-		const bodyEl = document.querySelector<HTMLElement>(
-			".article-reading-body",
-		);
-		const newAnchor = bodyEl
-			? Math.round(bodyEl.getBoundingClientRect().top + window.scrollY)
-			: editBodyAnchor;
-		// 视口顶部相对正文的偏移 = 读模式时 (editScrollY - editBodyAnchor)
-		const target = Math.min(
-			editScrollY + (newAnchor - editBodyAnchor),
-			Math.max(0, maxScrollNow()),
-		);
+		let target: number | null = null;
+		// 尝试按标题锚点定位
+		if (editAnchorText) {
+			const pm = document.querySelector<HTMLElement>(
+				".article-reading-body-editing .ProseMirror",
+			);
+			if (pm) {
+				const heads = Array.from(
+					pm.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6"),
+				);
+				const match = heads.find(
+					(h) => normalizeAnchorText(h.textContent || "") === editAnchorText,
+				);
+				if (match) {
+					const matchTop =
+						match.getBoundingClientRect().top + window.scrollY;
+					target = Math.round(matchTop - editAnchorOffset);
+				}
+			}
+		}
+		// 回退：正文相对位置对齐
+		if (target === null) {
+			const bodyEl = document.querySelector<HTMLElement>(
+				".article-reading-body",
+			);
+			const newAnchor = bodyEl
+				? Math.round(bodyEl.getBoundingClientRect().top + window.scrollY)
+				: editBodyAnchor;
+			target = editScrollY + (newAnchor - editBodyAnchor);
+		}
+		target = Math.min(Math.round(target), Math.max(0, maxScrollNow()));
 		window.scrollTo(0, target);
 	};
 	scrollToEditY();

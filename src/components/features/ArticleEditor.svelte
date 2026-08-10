@@ -612,6 +612,11 @@ async function openEditor() {
 		// 在 editing=true 之前记录当前滚动位置
 		captureScrollAnchor();
 		editing = true;
+		// 立即切换全局编辑态样式：隐藏分类栏、让 editor-topbar 容器 overflow:clip。
+		// 必须与 moveTopbar（显示 editor-topbar）在同一渲染帧完成，
+		// 否则会出现 "editor-topbar 出现(+75px) 但分类栏尚未隐藏(-75px)" 的中间帧，
+		// 导致正文下移产生视觉跳动。正文不再由 CSS display:none 隐藏，此处安全。
+		document.documentElement.classList.add("study-editor-active");
 		await tick();
 		if (!mounted || operation !== openOperation || !editing) return;
 		moveTopbar();
@@ -619,9 +624,6 @@ async function openEditor() {
 		await createEditor(operation);
 		if (!mounted || operation !== openOperation || !editing) return;
 		hostIntoReadingBody();
-		// 编辑器就绪并替换正文后再切换全局编辑态样式，
-		// 避免异步加载期间分类栏消失/正文位移导致跳动
-		document.documentElement.classList.add("study-editor-active");
 		// 立即恢复滚动位置（与 class 切换同一帧，避免分类栏隐藏导致的位移被用户看到）
 		if (mounted && editing && !scrollRestored) {
 			scrollRestored = true;

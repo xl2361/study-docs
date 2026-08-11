@@ -574,9 +574,7 @@ function restoreScrollAfterEdit() {
 		document.documentElement.scrollHeight - window.innerHeight;
 	const scrollToEditY = () => {
 		if (!mounted || !editing || editScrollY <= 0) return;
-		const bodyEl = document.querySelector<HTMLElement>(
-			".article-reading-body",
-		);
+		const bodyEl = document.querySelector<HTMLElement>(".article-reading-body");
 		const newAnchor = bodyEl
 			? Math.round(bodyEl.getBoundingClientRect().top + window.scrollY)
 			: editBodyAnchor;

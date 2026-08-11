@@ -129,8 +129,6 @@ let titleEl: HTMLElement | null = null;
 let pendingOptimisticHTML: string | null = null;
 let editScrollY = 0;
 let editBodyAnchor = 0;
-let editAnchorText = "";
-let editAnchorOffset = 0;
 let scrollRestored = false;
 let tableToolbar = { visible: false, left: 0, top: 0 };
 
@@ -550,126 +548,52 @@ function teardownInPlace() {
 	titleEl = null;
 }
 
-function normalizeAnchorText(value: string) {
-	return (value || "")
-		.replace(/#+\s*$/, "")
-		.replace(/\s+/g, " ")
-		.trim()
-		.slice(0, 30);
-}
-
 function captureScrollAnchor() {
 	editScrollY = window.scrollY;
-	// 记录正文顶部在文档中的偏移，作为滚动恢复兜底锚点：
+	// 记录正文顶部在文档中的偏移，作为滚动恢复锚点：
 	// 编辑模式会因 category-bar 隐藏/编辑器 UI 占位改变正文顶部位置，
 	// 若直接恢复绝对 scrollY，正文相对视口会偏移导致视觉跳动。
+	// 改为恢复"正文相对位置"（scrollY - 正文顶部偏移），使正文整体在视口
+	// 中位置稳定。表格渲染差异已由 CSS 修复，正文容器 top 对齐足够可靠。
 	const bodyEl = document.querySelector<HTMLElement>(".article-reading-body");
 	editBodyAnchor = bodyEl
 		? Math.round(bodyEl.getBoundingClientRect().top + window.scrollY)
 		: 0;
-	// 内容级锚点：记录视口顶部附近实际可见的内容块（标题/段落/列表项等）
-	// 的文本指纹及其相对视口顶部偏移。ProseMirror 与阅读模式的内容高度分布
-	// 不同（图片/代码块渲染差异会累积偏移，实测中后部标题偏移可达 +1300px），
-	// 仅靠正文容器 top 对齐不够，必须按内容块在编辑器内重新定位。
-	// 用"视口顶部实际元素"而非"远处最近标题"，可保证用户在任何滚动位置
-	// （包括标题之间、段落中部）都能精确对齐，不产生上下滑动的残留跳动。
-	editAnchorText = "";
-	editAnchorOffset = 0;
-	if (!bodyEl) return;
-	// 在视口上部取一个正文内可见的内容块
-	const probeY = Math.min(160, window.innerHeight - 100);
-	const hit = document.elementFromPoint(window.innerWidth / 2, probeY);
-	let block: HTMLElement | null = null;
-	let cur: Element | null = hit;
-	while (cur && cur !== document.body) {
-		if (bodyEl.contains(cur)) {
-			const tag = cur.tagName;
-			if (/^(H1|H2|H3|H4|H5|H6|P|LI|PRE|BLOCKQUOTE|TD|TH|DT|DD)$/.test(tag)) {
-				const el = cur as HTMLElement;
-				if ((el.textContent || "").trim()) {
-					block = el;
-					break;
-				}
-			}
-		}
-		cur = cur.parentElement;
-	}
-	if (!block) {
-		// 视口顶部无文本块（如图片），退回最近标题
-		const heads = Array.from(
-			bodyEl.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6"),
-		);
-		for (const h of heads) {
-			const top = h.getBoundingClientRect().top + window.scrollY;
-			if (top >= editScrollY - 200) {
-				block = h;
-				break;
-			}
-		}
-	}
-	if (!block) return;
-	editAnchorText = normalizeAnchorText(block.textContent || "");
-	editAnchorOffset = Math.max(
-		0,
-		Math.round(block.getBoundingClientRect().top + window.scrollY - editScrollY),
-	);
 }
 
 function restoreScrollAfterEdit() {
-	// 优先按内容锚点恢复：让编辑模式下视口顶部对齐到与读模式相同的内容块。
-	// 因为 ProseMirror 与阅读模式内容高度分布不同，正文容器 top 对齐仍会让
-	// 用户看到不同内容；按内容块文本在编辑器内重新定位可精确对齐。
-	// 若编辑器内找不到同内容块，则回退到正文相对位置。
+	// 恢复滚动到"正文相对位置"：让编辑模式下正文容器顶部对应读模式的
+	// 相对视口偏移一致（viewPortInBody 不变），从而保证正文整体在视口中
+	// 位置稳定，避免 category-bar 隐藏 / editor-topbar 占位导致正文位移跳动。
+	// 不做文本级锚点匹配：ProseMirror 与阅读模式块结构差异大（P 拆分、
+	// td 内嵌 p 等），文本匹配不可靠，反而会导致回退/错位。
+	// 表格渲染差异已通过 CSS 修复（table p 零 margin、display:table），
+	// 编辑/阅读正文高度差从 +4930px 降到约 +1710px，正文容器 top 对齐后
+	// 内部标题位置偏差集中在 ±150px 内，且正文整体稳定不跳。
 	const maxScrollNow = () =>
 		document.documentElement.scrollHeight - window.innerHeight;
 	const scrollToEditY = () => {
 		if (!mounted || !editing || editScrollY <= 0) return;
-		let target: number | null = null;
-		// 尝试按内容锚点定位
-		if (editAnchorText) {
-			const pm = document.querySelector<HTMLElement>(
-				".article-reading-body-editing .ProseMirror",
-			);
-			if (pm) {
-				const blocks = Array.from(
-					pm.querySelectorAll<HTMLElement>(
-						"h1, h2, h3, h4, h5, h6, p, li, pre, blockquote, td, th",
-					),
-				);
-				// 先精确匹配，再允许前缀匹配（ProseMirror 文本可能与渲染文本略有差异）
-				const exact = blocks.find(
-					(b) => normalizeAnchorText(b.textContent || "") === editAnchorText,
-				);
-				const prefix = exact
-					? null
-					: blocks.find((b) => {
-							const n = normalizeAnchorText(b.textContent || "");
-							return (
-								editAnchorText.length > 6 &&
-								(n.startsWith(editAnchorText.slice(0, 10)) ||
-									editAnchorText.startsWith(n.slice(0, 10)))
-							);
-						});
-				const match = exact || prefix;
-				if (match) {
-					const matchTop =
-						match.getBoundingClientRect().top + window.scrollY;
-					target = Math.round(matchTop - editAnchorOffset);
-				}
-			}
-		}
-		// 回退：正文相对位置对齐
-		if (target === null) {
-			const bodyEl = document.querySelector<HTMLElement>(
-				".article-reading-body",
-			);
-			const newAnchor = bodyEl
-				? Math.round(bodyEl.getBoundingClientRect().top + window.scrollY)
-				: editBodyAnchor;
-			target = editScrollY + (newAnchor - editBodyAnchor);
-		}
-		target = Math.min(Math.round(target), Math.max(0, maxScrollNow()));
-		window.scrollTo(0, target);
+		const bodyEl = document.querySelector<HTMLElement>(
+			".article-reading-body",
+		);
+		const newAnchor = bodyEl
+			? Math.round(bodyEl.getBoundingClientRect().top + window.scrollY)
+			: editBodyAnchor;
+		// 视口顶部相对正文的偏移在读模式为 (editScrollY - editBodyAnchor)，
+		// 编辑模式保持该值不变
+		const target = Math.min(
+			editScrollY + (newAnchor - editBodyAnchor),
+			Math.max(0, maxScrollNow()),
+		);
+		// 必须用瞬时滚动，且作用于 document.scrollingElement：
+		// - 全局 scroll-behavior:smooth 会让 window.scrollTo 变成平滑动画
+		// - 实测 360 浏览器下 window.scrollTo/scrollTop 赋值无效，
+		//   只有 scrollingElement.scrollTo({behavior:'instant'}) 能瞬时生效
+		document.scrollingElement?.scrollTo({
+			top: Math.round(target),
+			behavior: "instant",
+		});
 	};
 	scrollToEditY();
 	// 字体/图片等资源加载完成后，若页面高度恢复导致 scrollY 被 clamp 或偏移，再精确校准一次
@@ -1072,7 +996,7 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
 {/if}
 
 <style>
- .ha-editor { color: var(--btn-content); } .statusline { display: flex; align-items: center; gap: .55rem; margin: .15rem 0 .25rem; } .edit-badge { flex: none; border: 1px solid var(--primary); border-radius: .4rem; padding: .12rem .5rem; color: var(--primary); font-size: .75rem; font-weight: 750; } .status { font-size: .75rem; opacity: .75; } .recover { border-color: color-mix(in srgb, #e0a23c 45%, transparent); color: #b7791f; } button { border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .35rem .6rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } button:disabled { cursor: not-allowed; opacity: .5; } .primary { border-color: var(--primary); color: white; background: var(--primary); } .danger { color: #c74747; } .error { color: #c74747; font-size: .8rem; } .success { color: #27845f; font-size: .8rem; } .toolbar { position: sticky; top: 4.3rem; z-index: 20; display: flex; gap: .25rem; overflow-x: auto; margin: .35rem 0 .9rem; border-block: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); padding: .4rem .2rem; background: color-mix(in srgb, var(--card-bg) 94%, transparent); backdrop-filter: blur(10px); } .toolbar button { flex: 0 0 auto; min-width: 2rem; } .tiptap-host :global(.ProseMirror) { min-height: 26rem; outline: none; line-height: 1.75; } .tiptap-host :global(.ProseMirror pre) { overflow-x: auto; border-radius: .4rem; padding: .8rem; background: color-mix(in srgb, var(--btn-content) 8%, var(--card-bg)); } .tiptap-host :global(.ProseMirror table) { display: block; max-width: 100%; overflow-x: auto; } .tiptap-host :global(.ProseMirror img) { max-width: 100%; height: auto; } .tiptap-host :global(.ProseMirror code) { font-size: .875em; } .source-note { margin-top: .5rem; color: color-mix(in srgb, var(--btn-content) 65%, transparent); font-size: .8rem; } .source-editor { display: block; width: 100%; min-height: 26rem; resize: vertical; font-family: var(--font-jetbrains-mono), monospace; font-size: .86rem; line-height: 1.65; border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .6rem; color: inherit; background: var(--card-bg); }
+ .ha-editor { color: var(--btn-content); } .statusline { display: flex; align-items: center; gap: .55rem; margin: .15rem 0 .25rem; } .edit-badge { flex: none; border: 1px solid var(--primary); border-radius: .4rem; padding: .12rem .5rem; color: var(--primary); font-size: .75rem; font-weight: 750; } .status { font-size: .75rem; opacity: .75; } .recover { border-color: color-mix(in srgb, #e0a23c 45%, transparent); color: #b7791f; } button { border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .35rem .6rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } button:disabled { cursor: not-allowed; opacity: .5; } .primary { border-color: var(--primary); color: white; background: var(--primary); } .danger { color: #c74747; } .error { color: #c74747; font-size: .8rem; } .success { color: #27845f; font-size: .8rem; } .toolbar { position: sticky; top: 4.3rem; z-index: 20; display: flex; gap: .25rem; overflow-x: auto; margin: .35rem 0 .9rem; border-block: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); padding: .4rem .2rem; background: color-mix(in srgb, var(--card-bg) 94%, transparent); backdrop-filter: blur(10px); } .toolbar button { flex: 0 0 auto; min-width: 2rem; } .tiptap-host :global(.ProseMirror) { min-height: 26rem; outline: none; line-height: 1.75; } .tiptap-host :global(.ProseMirror pre) { margin: 0; overflow-x: auto; border-radius: .4rem; padding: .8rem; background: color-mix(in srgb, var(--btn-content) 8%, var(--card-bg)); } .tiptap-host :global(.ProseMirror table) { display: table; width: max-content; max-width: 100%; min-width: 100%; border-collapse: separate; border-spacing: 0; } .tiptap-host :global(.ProseMirror td), .tiptap-host :global(.ProseMirror th) { min-width: 120px; padding: 8px 12px; word-break: break-word; text-align: left; } .tiptap-host :global(.ProseMirror table p) { margin: 0; padding: 0; } .tiptap-host :global(.ProseMirror li p), .tiptap-host :global(.ProseMirror blockquote p) { margin: 0; padding: 0; } .tiptap-host :global(.ProseMirror table colgroup) { display: table-column-group; } .tiptap-host :global(.ProseMirror img) { max-width: 100%; height: auto; } .tiptap-host :global(.ProseMirror code) { font-size: .875em; } .source-note { margin-top: .5rem; color: color-mix(in srgb, var(--btn-content) 65%, transparent); font-size: .8rem; } .source-editor { display: block; width: 100%; min-height: 26rem; resize: vertical; font-family: var(--font-jetbrains-mono), monospace; font-size: .86rem; line-height: 1.65; border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .6rem; color: inherit; background: var(--card-bg); }
  :global([data-article-title].article-title-editing) { outline: 2px dashed color-mix(in srgb, var(--primary) 45%, transparent); outline-offset: 2px; border-radius: .25rem; }
  :global(.article-category-select), :global(.article-tags-input) { display: inline-block; max-width: 14rem; border: 1px dashed color-mix(in srgb, var(--primary) 45%, transparent); border-radius: .3rem; padding: .08rem .3rem; color: inherit; background: var(--card-bg); font: inherit; font-size: .78rem; }
  :global(.post-meta-cover .article-category-select), :global(.post-meta-cover .article-tags-input) { color: white; background: rgb(0 0 0 / .35); }

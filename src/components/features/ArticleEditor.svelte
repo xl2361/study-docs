@@ -350,21 +350,23 @@ function pointerOverTableOrToolbar() {
 		el?.closest(".table-toolbar")
 	)
 		return true;
-	// 工具条与表格之间的间隙带视为保持区：鼠标从表格移向工具条途中
-	// 会经过这段空隙，360 下事件节流导致 mousemove 延迟到达时，
-	// 定时器兜底判定若只认 elementFromPoint 会把间隙误判为"已离开"而闪隐。
-	if (tableToolbar.visible && tableToolbarEl && activeTableEl) {
-		const tb = tableToolbarEl.getBoundingClientRect();
-		const tr = activeTableEl.getBoundingClientRect();
-		const xOk =
-			lastMouseX >= Math.min(tb.left, tr.left) - 4 &&
-			lastMouseX <= Math.max(tb.right, tr.right) + 4;
-		const yOk =
-			lastMouseY >= Math.min(tb.top, tr.top) - 4 &&
-			lastMouseY <= Math.max(tb.bottom, tr.bottom) + 4;
-		if (xOk && yOk) return true;
-	}
-	return false;
+	// 间隙带保持区：鼠标从表格移向工具条途中会经过这段空隙，
+	// 360 下事件节流导致 mousemove 延迟到达时，定时器兜底判定若只认
+	// elementFromPoint 会把间隙误判为"已离开"而闪隐。
+	return inGapKeepZone();
+}
+
+// 工具条与表格之间的间隙带（含两者矩形外扩 4px）视为保持区。
+function inGapKeepZone() {
+	if (!tableToolbar.visible || !tableToolbarEl || !activeTableEl) return false;
+	const tb = tableToolbarEl.getBoundingClientRect();
+	const tr = activeTableEl.getBoundingClientRect();
+	return (
+		lastMouseX >= Math.min(tb.left, tr.left) - 4 &&
+		lastMouseX <= Math.max(tb.right, tr.right) + 4 &&
+		lastMouseY >= Math.min(tb.top, tr.top) - 4 &&
+		lastMouseY <= Math.max(tb.bottom, tr.bottom) + 4
+	);
 }
 
 function hideTableToolbarLater() {
@@ -377,17 +379,17 @@ function hideTableToolbarLater() {
 	}, 140);
 }
 
-const tableCommands: Array<[string, string]> = [
-	["addRowBefore", "上方插入行"],
-	["addRowAfter", "下方插入行"],
-	["addColumnBefore", "左侧插入列"],
-	["addColumnAfter", "右侧插入列"],
-	["mergeCells", "合并单元格"],
-	["splitCell", "拆分单元格"],
-	["deleteRow", "删除当前行"],
-	["deleteColumn", "删除当前列"],
-	["toggleHeaderRow", "表头行"],
-	["deleteTable", "删除整个表格"],
+const tableCommands: Array<[string, string, string]> = [
+	["addRowBefore", "上方插入行", "上插行"],
+	["addRowAfter", "下方插入行", "下插行"],
+	["addColumnBefore", "左侧插入列", "左插列"],
+	["addColumnAfter", "右侧插入列", "右插列"],
+	["mergeCells", "合并单元格", "合并"],
+	["splitCell", "拆分单元格", "拆分"],
+	["deleteRow", "删除当前行", "删行"],
+	["deleteColumn", "删除当前列", "删列"],
+	["toggleHeaderRow", "表头行", "表头"],
+	["deleteTable", "删除整个表格", "删表"],
 ];
 
 function ensureTableToolbar(): HTMLElement | null {
@@ -396,30 +398,11 @@ function ensureTableToolbar(): HTMLElement | null {
 	bar.className = "table-toolbar";
 	bar.setAttribute("role", "toolbar");
 	bar.setAttribute("aria-label", "表格操作");
-	for (const [cmd, label] of tableCommands) {
+	for (const [cmd, label, text] of tableCommands) {
 		const btn = document.createElement("button");
 		btn.type = "button";
 		btn.title = label;
-		btn.textContent =
-			cmd === "deleteTable"
-				? "删表"
-				: cmd === "mergeCells"
-					? "合并"
-					: cmd === "splitCell"
-						? "拆分"
-						: cmd === "toggleHeaderRow"
-							? "表头"
-							: cmd === "addRowBefore"
-								? "上插行"
-								: cmd === "addRowAfter"
-									? "下插行"
-									: cmd === "addColumnBefore"
-										? "左插列"
-										: cmd === "addColumnAfter"
-											? "右插列"
-											: cmd === "deleteRow"
-												? "删行"
-												: "删列";
+		btn.textContent = text;
 		if (cmd === "deleteTable") btn.classList.add("danger");
 		btn.addEventListener("click", () => runTableCommand(cmd));
 		btn.addEventListener("mousemove", () => schedulePointerRefresh());
@@ -520,10 +503,11 @@ function refreshTableToolbarByPointer() {
 		hoverTableEl = null;
 		return;
 	}
-	// 间隙带保持区：命中"工具条/表格矩形及其间空隙"时不启动隐藏定时器，
-	// 避免 360 事件节流下 mousemove 到达前定时器先触发导致闪隐。
+	// 间隙带保持区：鼠标从表格移向工具条途中会经过这段空隙，
+	// 360 事件节流下 mousemove 延迟到达时定时器先触发，若只认 elementFromPoint
+	// 会把间隙误判为"已离开"而闪隐。这里复用本次 hit-test 的 target 判定保持区。
 	hoverTableEl = null;
-	if (tableToolbar.visible && pointerOverTableOrToolbar()) {
+	if (tableToolbar.visible && inGapKeepZone()) {
 		clearTableHideTimer();
 		return;
 	}

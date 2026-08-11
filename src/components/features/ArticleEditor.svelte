@@ -325,7 +325,12 @@ function syncHistoryState() {
 
 function onTableSelectionChange() {
 	const tableEl = positionTableToolbar();
-	if (!tableEl && !hoverTableEl && !tableToolbarEl?.matches(":hover")) {
+	if (
+		!tableEl &&
+		!hoverTableEl &&
+		!tableToolbarEl?.matches(":hover") &&
+		!pointerOverTableOrToolbar()
+	) {
 		hideTableToolbarNow();
 	}
 }
@@ -340,10 +345,26 @@ function pointerOverTableOrToolbar() {
 		lastMouseX || lastMouseY
 			? document.elementFromPoint(lastMouseX, lastMouseY)
 			: null;
-	return Boolean(
+	if (
 		el?.closest(".article-reading-body-editing .ProseMirror table") ||
-			el?.closest(".table-toolbar"),
-	);
+		el?.closest(".table-toolbar")
+	)
+		return true;
+	// 工具条与表格之间的间隙带视为保持区：鼠标从表格移向工具条途中
+	// 会经过这段空隙，360 下事件节流导致 mousemove 延迟到达时，
+	// 定时器兜底判定若只认 elementFromPoint 会把间隙误判为"已离开"而闪隐。
+	if (tableToolbar.visible && tableToolbarEl && activeTableEl) {
+		const tb = tableToolbarEl.getBoundingClientRect();
+		const tr = activeTableEl.getBoundingClientRect();
+		const xOk =
+			lastMouseX >= Math.min(tb.left, tr.left) - 4 &&
+			lastMouseX <= Math.max(tb.right, tr.right) + 4;
+		const yOk =
+			lastMouseY >= Math.min(tb.top, tr.top) - 4 &&
+			lastMouseY <= Math.max(tb.bottom, tr.bottom) + 4;
+		if (xOk && yOk) return true;
+	}
+	return false;
 }
 
 function hideTableToolbarLater() {
@@ -499,8 +520,14 @@ function refreshTableToolbarByPointer() {
 		hoverTableEl = null;
 		return;
 	}
-	if (tableToolbar.visible || hoverTableEl) hideTableToolbarLater();
+	// 间隙带保持区：命中"工具条/表格矩形及其间空隙"时不启动隐藏定时器，
+	// 避免 360 事件节流下 mousemove 到达前定时器先触发导致闪隐。
 	hoverTableEl = null;
+	if (tableToolbar.visible && pointerOverTableOrToolbar()) {
+		clearTableHideTimer();
+		return;
+	}
+	if (tableToolbar.visible) hideTableToolbarLater();
 }
 
 function schedulePointerRefresh() {

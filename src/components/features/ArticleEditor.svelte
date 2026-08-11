@@ -141,6 +141,8 @@ let tableToolbarEl: HTMLElement | null = null;
 let tableHideTimer: ReturnType<typeof setTimeout> | null = null;
 let lastMouseX = 0;
 let lastMouseY = 0;
+let pointerRefreshPending = false;
+let pointerRefreshRaf = 0;
 
 function scalar(value: string) {
 	const v = value.trim();
@@ -297,9 +299,8 @@ async function createEditor(operation: number) {
 		syncHistoryState();
 		editor.on("selectionUpdate", onTableSelectionChange);
 		editor.on("transaction", onTableSelectionChange);
-		editorMount.addEventListener("mouseover", onTableHover);
-		editorMount.addEventListener("mouseout", onTableHoverLeave);
 		document.addEventListener("mousemove", onTableMouseMove);
+		document.addEventListener("mousedown", onTableDocMouseDown);
 		window.addEventListener("scroll", onWindowScrollOrResize, {
 			passive: true,
 		});
@@ -400,10 +401,9 @@ function ensureTableToolbar(): HTMLElement | null {
 												: "删列";
 		if (cmd === "deleteTable") btn.classList.add("danger");
 		btn.addEventListener("click", () => runTableCommand(cmd));
+		btn.addEventListener("mousemove", () => schedulePointerRefresh());
 		bar.appendChild(btn);
 	}
-	bar.addEventListener("mouseenter", onTableToolbarEnter);
-	bar.addEventListener("mouseleave", onTableToolbarLeave);
 	document.body.appendChild(bar);
 	tableToolbarEl = bar;
 	return bar;
@@ -475,52 +475,64 @@ function positionTableToolbar(): HTMLElement | null {
 	return showTableToolbar(tableEl);
 }
 
-// 鼠标悬停表格时显示工具条（点击进入单元格的原有逻辑仍保留）
-function onTableHover(event: Event) {
-	const target = event.target;
-	const tableEl =
-		target instanceof Element ? target.closest<HTMLElement>("table") : null;
-	if (!tableEl || !editorMount.contains(tableEl)) return;
-	if (hoverTableEl === tableEl) return;
-	hoverTableEl = tableEl;
-	showTableToolbar(tableEl);
-	requestAnimationFrame(() => {
-		if (hoverTableEl === tableEl) showTableToolbar(tableEl);
-	});
-}
-
-// 鼠标移出表格：延迟隐藏，隐藏前用鼠标真实位置兜底判断
-function onTableHoverLeave(event: Event) {
-	const current = event.currentTarget as HTMLElement | null;
-	const related = (event as MouseEvent).relatedTarget;
-	// 表格内部（td/tr 之间）移动也会触发 mouseout，此时不离开表格
-	if (related instanceof Node && current?.contains(related)) return;
-	if (related instanceof Element && related.closest(".table-toolbar")) return;
-	// 移到另一个表格：切换目标，不隐藏
-	const relatedTable =
-		related instanceof Element ? related.closest("table") : null;
-	if (relatedTable && hoverTableEl && relatedTable !== hoverTableEl) {
-		hoverTableEl = relatedTable;
-		showTableToolbar(relatedTable);
+// 指针轮询：mousemove 时用 elementFromPoint 判定鼠标落在哪，稳定显示/隐藏表格工具条。
+// 相比 mouseover/mouseout 方案，360 的 relatedTarget 不可靠会导致工具条闪现即失，
+// 这里完全绕开 event.relatedTarget，鼠标真实坐标判定对真实操作最稳。
+function refreshTableToolbarByPointer() {
+	pointerRefreshPending = false;
+	if (!editor || sourceMode) return;
+	const target = document.elementFromPoint(lastMouseX, lastMouseY);
+	if (!target) {
+		hideTableToolbarLater();
 		return;
 	}
+	const tableEl = target.closest<HTMLElement>(
+		".article-reading-body-editing .ProseMirror table",
+	);
+	if (tableEl) {
+		hoverTableEl = tableEl;
+		showTableToolbar(tableEl);
+		return;
+	}
+	if (target.closest(".table-toolbar")) {
+		clearTableHideTimer();
+		hoverTableEl = null;
+		return;
+	}
+	if (tableToolbar.visible || hoverTableEl) hideTableToolbarLater();
 	hoverTableEl = null;
-	hideTableToolbarLater();
 }
 
-function onTableToolbarEnter() {
-	clearTableHideTimer();
-	hoverTableEl = null;
-}
-
-function onTableToolbarLeave() {
-	hideTableToolbarLater();
+function schedulePointerRefresh() {
+	if (pointerRefreshPending) return;
+	pointerRefreshPending = true;
+	cancelAnimationFrame(pointerRefreshRaf);
+	pointerRefreshRaf = requestAnimationFrame(refreshTableToolbarByPointer);
 }
 
 function onTableMouseMove(event: Event) {
 	const mouse = event as MouseEvent;
 	lastMouseX = mouse.clientX;
 	lastMouseY = mouse.clientY;
+	schedulePointerRefresh();
+}
+
+// 点击页面任意处：若点在表格/工具条外，立刻收起；点在表格内则保持显示
+function onTableDocMouseDown(event: Event) {
+	if (!editor || sourceMode) return;
+	const target = event.target as Element | null;
+	if (!target) return;
+	const tableEl = target.closest<HTMLElement>(
+		".article-reading-body-editing .ProseMirror table",
+	);
+	if (tableEl) {
+		hoverTableEl = tableEl;
+		showTableToolbar(tableEl);
+		return;
+	}
+	if (target.closest(".table-toolbar")) return;
+	hoverTableEl = null;
+	hideTableToolbarNow();
 }
 
 function onWindowScrollOrResize() {
@@ -595,11 +607,10 @@ function destroyEditor() {
 		editor.off("selectionUpdate", onTableSelectionChange);
 		editor.off("transaction", onTableSelectionChange);
 	}
-	if (editorMount) {
-		editorMount.removeEventListener("mouseover", onTableHover);
-		editorMount.removeEventListener("mouseout", onTableHoverLeave);
-	}
+	cancelAnimationFrame(pointerRefreshRaf);
+	pointerRefreshPending = false;
 	document.removeEventListener("mousemove", onTableMouseMove);
+	document.removeEventListener("mousedown", onTableDocMouseDown);
 	if (editor) editor.destroy();
 	editor = null;
 	editorReady = false;

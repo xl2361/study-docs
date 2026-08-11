@@ -26,6 +26,9 @@ type EmergencyDraft = {
 };
 type EditorLike = {
 	chain: () => EditorChain;
+	view: {
+		posAtDOM: (node: Node, offset: number) => number;
+	};
 	commands: {
 		setContent: (content: string, options: Record<string, unknown>) => void;
 		undo: () => void;
@@ -51,6 +54,7 @@ type JsonNode = {
 };
 type EditorChain = {
 	focus: () => EditorChain;
+	setTextSelection: (position: number) => EditorChain;
 	undo: () => EditorChain;
 	redo: () => EditorChain;
 	toggleBold: () => EditorChain;
@@ -131,6 +135,12 @@ let editScrollY = 0;
 let editBodyAnchor = 0;
 let scrollRestored = false;
 let tableToolbar = { visible: false, left: 0, top: 0 };
+let hoverTableEl: HTMLElement | null = null;
+let activeTableEl: HTMLElement | null = null;
+let tableToolbarEl: HTMLElement | null = null;
+let tableHideTimer: ReturnType<typeof setTimeout> | null = null;
+let lastMouseX = 0;
+let lastMouseY = 0;
 
 function scalar(value: string) {
 	const v = value.trim();
@@ -287,6 +297,9 @@ async function createEditor(operation: number) {
 		syncHistoryState();
 		editor.on("selectionUpdate", onTableSelectionChange);
 		editor.on("transaction", onTableSelectionChange);
+		editorMount.addEventListener("mouseover", onTableHover);
+		editorMount.addEventListener("mouseout", onTableHoverLeave);
+		document.addEventListener("mousemove", onTableMouseMove);
 		window.addEventListener("scroll", onWindowScrollOrResize, {
 			passive: true,
 		});
@@ -311,9 +324,122 @@ function syncHistoryState() {
 
 function onTableSelectionChange() {
 	const tableEl = positionTableToolbar();
-	if (!tableEl) {
-		tableToolbar = { visible: false, left: 0, top: 0 };
+	if (!tableEl && !hoverTableEl && !tableToolbarEl?.matches(":hover")) {
+		hideTableToolbarNow();
 	}
+}
+
+function clearTableHideTimer() {
+	if (tableHideTimer) clearTimeout(tableHideTimer);
+	tableHideTimer = null;
+}
+
+function pointerOverTableOrToolbar() {
+	const el =
+		lastMouseX || lastMouseY
+			? document.elementFromPoint(lastMouseX, lastMouseY)
+			: null;
+	return Boolean(
+		el?.closest(".article-reading-body-editing .ProseMirror table") ||
+			el?.closest(".table-toolbar"),
+	);
+}
+
+function hideTableToolbarLater() {
+	clearTableHideTimer();
+	tableHideTimer = setTimeout(() => {
+		// 用鼠标真实位置兜底判断（360 下 mouseout.relatedTarget 不可靠）
+		if (hoverTableEl || tableToolbarEl?.matches(":hover")) return;
+		if (pointerOverTableOrToolbar()) return;
+		hideTableToolbarNow();
+	}, 140);
+}
+
+const tableCommands: Array<[string, string]> = [
+	["addRowBefore", "上方插入行"],
+	["addRowAfter", "下方插入行"],
+	["addColumnBefore", "左侧插入列"],
+	["addColumnAfter", "右侧插入列"],
+	["mergeCells", "合并单元格"],
+	["splitCell", "拆分单元格"],
+	["deleteRow", "删除当前行"],
+	["deleteColumn", "删除当前列"],
+	["toggleHeaderRow", "表头行"],
+	["deleteTable", "删除整个表格"],
+];
+
+function ensureTableToolbar(): HTMLElement | null {
+	if (tableToolbarEl?.isConnected) return tableToolbarEl;
+	const bar = document.createElement("div");
+	bar.className = "table-toolbar";
+	bar.setAttribute("role", "toolbar");
+	bar.setAttribute("aria-label", "表格操作");
+	for (const [cmd, label] of tableCommands) {
+		const btn = document.createElement("button");
+		btn.type = "button";
+		btn.title = label;
+		btn.textContent =
+			cmd === "deleteTable"
+				? "删表"
+				: cmd === "mergeCells"
+					? "合并"
+					: cmd === "splitCell"
+						? "拆分"
+						: cmd === "toggleHeaderRow"
+							? "表头"
+							: cmd === "addRowBefore"
+								? "上插行"
+								: cmd === "addRowAfter"
+									? "下插行"
+									: cmd === "addColumnBefore"
+										? "左插列"
+										: cmd === "addColumnAfter"
+											? "右插列"
+											: cmd === "deleteRow"
+												? "删行"
+												: "删列";
+		if (cmd === "deleteTable") btn.classList.add("danger");
+		btn.addEventListener("click", () => runTableCommand(cmd));
+		bar.appendChild(btn);
+	}
+	bar.addEventListener("mouseenter", onTableToolbarEnter);
+	bar.addEventListener("mouseleave", onTableToolbarLeave);
+	document.body.appendChild(bar);
+	tableToolbarEl = bar;
+	return bar;
+}
+
+function hideTableToolbarNow() {
+	clearTableHideTimer();
+	hoverTableEl = null;
+	activeTableEl = null;
+	tableToolbar = { visible: false, left: 0, top: 0 };
+	if (tableToolbarEl) tableToolbarEl.style.display = "none";
+}
+
+function showTableToolbar(tableEl: HTMLElement): HTMLElement {
+	clearTableHideTimer();
+	activeTableEl = tableEl;
+	const bar = ensureTableToolbar();
+	if (!bar) return tableEl;
+	tableToolbar.visible = true;
+	bar.style.display = "flex";
+	// 文章内容祖先带 transform，内部的 position:fixed 会相对该祖先定位，
+	// 导致工具条实际跑到视口外；挂到 body 后 fixed 真正相对视口。
+	if (bar.parentElement !== document.body) document.body.appendChild(bar);
+	const rect = tableEl.getBoundingClientRect();
+	const toolbarWidth = bar.offsetWidth || 420;
+	const toolbarHeight = bar.offsetHeight || 48;
+	let top = rect.top - toolbarHeight - 8;
+	if (top < 76)
+		top = Math.min(rect.bottom + 8, window.innerHeight - toolbarHeight - 8);
+	const left = Math.max(
+		8,
+		Math.min(rect.left, window.innerWidth - toolbarWidth - 8),
+	);
+	bar.style.left = `${left}px`;
+	bar.style.top = `${Math.max(76, top)}px`;
+	return tableEl;
 }
 
 function positionTableToolbar(): HTMLElement | null {
@@ -325,25 +451,91 @@ function positionTableToolbar(): HTMLElement | null {
 		active = false;
 	}
 	if (!active) return null;
-	const tableEl = document.querySelector<HTMLElement>(
-		".article-reading-body-editing .ProseMirror table",
-	);
+	// 优先定位光标(selection)实际所在的表格，其次是悬停表格，最后是第一个表格
+	let tableEl: HTMLElement | null = null;
+	const sel = window.getSelection();
+	if (sel?.focusNode) {
+		const host =
+			sel.focusNode instanceof Element
+				? sel.focusNode
+				: sel.focusNode.parentElement;
+		if (host) {
+			tableEl = host.closest<HTMLElement>(
+				".article-reading-body-editing .ProseMirror table",
+			);
+		}
+	}
+	if (!tableEl && hoverTableEl) tableEl = hoverTableEl;
+	if (!tableEl) {
+		tableEl = document.querySelector<HTMLElement>(
+			".article-reading-body-editing .ProseMirror table",
+		);
+	}
 	if (!tableEl) return null;
-	// 工具条定位在激活表格上方，fixed 相对视口，滚动时由 onWindowScroll 重新计算
-	const rect = tableEl.getBoundingClientRect();
-	const toolbarHeight = 48;
-	let top = rect.top - toolbarHeight - 8;
-	if (top < 80) top = rect.bottom + 8;
-	tableToolbar = {
-		visible: true,
-		left: Math.max(8, Math.min(rect.left, window.innerWidth - 420)),
-		top: Math.max(8, top),
-	};
-	return tableEl;
+	return showTableToolbar(tableEl);
+}
+
+// 鼠标悬停表格时显示工具条（点击进入单元格的原有逻辑仍保留）
+function onTableHover(event: Event) {
+	const target = event.target;
+	const tableEl =
+		target instanceof Element ? target.closest<HTMLElement>("table") : null;
+	if (!tableEl || !editorMount.contains(tableEl)) return;
+	if (hoverTableEl === tableEl) return;
+	hoverTableEl = tableEl;
+	showTableToolbar(tableEl);
+	requestAnimationFrame(() => {
+		if (hoverTableEl === tableEl) showTableToolbar(tableEl);
+	});
+}
+
+// 鼠标移出表格：延迟隐藏，隐藏前用鼠标真实位置兜底判断
+function onTableHoverLeave(event: Event) {
+	const current = event.currentTarget as HTMLElement | null;
+	const related = (event as MouseEvent).relatedTarget;
+	// 表格内部（td/tr 之间）移动也会触发 mouseout，此时不离开表格
+	if (related instanceof Node && current?.contains(related)) return;
+	if (related instanceof Element && related.closest(".table-toolbar")) return;
+	// 移到另一个表格：切换目标，不隐藏
+	const relatedTable =
+		related instanceof Element ? related.closest("table") : null;
+	if (relatedTable && hoverTableEl && relatedTable !== hoverTableEl) {
+		hoverTableEl = relatedTable;
+		showTableToolbar(relatedTable);
+		return;
+	}
+	hoverTableEl = null;
+	hideTableToolbarLater();
+}
+
+function onTableToolbarEnter() {
+	clearTableHideTimer();
+	hoverTableEl = null;
+}
+
+function onTableToolbarLeave() {
+	hideTableToolbarLater();
+}
+
+function onTableMouseMove(event: Event) {
+	const mouse = event as MouseEvent;
+	lastMouseX = mouse.clientX;
+	lastMouseY = mouse.clientY;
 }
 
 function onWindowScrollOrResize() {
-	if (tableToolbar.visible && editor) positionTableToolbar();
+	if (!tableToolbar.visible || !editor) return;
+	const tableEl = hoverTableEl || positionTableToolbar();
+	if (!tableEl) {
+		hideTableToolbarNow();
+		return;
+	}
+	const rect = tableEl.getBoundingClientRect();
+	if (rect.bottom < 76 || rect.top > window.innerHeight) {
+		hideTableToolbarNow();
+		return;
+	}
+	showTableToolbar(tableEl);
 }
 
 function insertTable() {
@@ -355,8 +547,30 @@ function insertTable() {
 		.run();
 }
 
+function selectTableForCommand(tableEl: HTMLElement | null) {
+	if (!editor || !tableEl) return;
+	// 当前 selection 已在目标表格内则无需切换
+	const sel = window.getSelection();
+	const selInTarget =
+		sel?.focusNode && sel.focusNode.parentElement?.closest("table") === tableEl;
+	if (selInTarget || editor.isActive("table")) return;
+	const cell = tableEl.querySelector<HTMLElement>("td, th");
+	if (!cell) return;
+	try {
+		const position = editor.view.posAtDOM(cell, 0) + 1;
+		editor.chain().focus().setTextSelection(position).run();
+	} catch {
+		try {
+			cell.click();
+		} catch {
+			/* 忽略 */
+		}
+	}
+}
+
 function runTableCommand(name: string) {
 	if (!editor) return;
+	selectTableForCommand(hoverTableEl || activeTableEl);
 	const chain = editor.chain().focus();
 	const actions: Record<string, () => unknown> = {
 		addRowBefore: () => chain.addRowBefore(),
@@ -380,10 +594,21 @@ function destroyEditor() {
 	if (editor) {
 		editor.off("selectionUpdate", onTableSelectionChange);
 		editor.off("transaction", onTableSelectionChange);
-		editor.destroy();
 	}
+	if (editorMount) {
+		editorMount.removeEventListener("mouseover", onTableHover);
+		editorMount.removeEventListener("mouseout", onTableHoverLeave);
+	}
+	document.removeEventListener("mousemove", onTableMouseMove);
+	if (editor) editor.destroy();
 	editor = null;
 	editorReady = false;
+	clearTableHideTimer();
+	hoverTableEl = null;
+	if (tableToolbarEl) {
+		tableToolbarEl.remove();
+		tableToolbarEl = null;
+	}
 	tableToolbar = { visible: false, left: 0, top: 0 };
 	window.removeEventListener("scroll", onWindowScrollOrResize);
 	window.removeEventListener("resize", onWindowScrollOrResize);
@@ -973,20 +1198,6 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
    {/if}
   </div>
   <nav class="toolbar" bind:this={toolbarEl} aria-label="正文格式"><button title="后退一步" onclick={() => format("undo")} disabled={!editorReady || sourceMode || !canUndo}>↶</button><button title="前进一步" onclick={() => format("redo")} disabled={!editorReady || sourceMode || !canRedo}>↷</button><button title="一级标题" onclick={() => format("h1")} disabled={!editorReady || sourceMode}>H1</button><button title="二级标题" onclick={() => format("h2")} disabled={!editorReady || sourceMode}>H2</button><button title="三级标题" onclick={() => format("h3")} disabled={!editorReady || sourceMode}>H3</button><button title="粗体" onclick={() => format("bold")} disabled={!editorReady || sourceMode}><b>B</b></button><button title="斜体" onclick={() => format("italic")} disabled={!editorReady || sourceMode}><i>I</i></button><button title="删除线" onclick={() => format("strike")} disabled={!editorReady || sourceMode}><s>S</s></button><button title="无序列表" onclick={() => format("bullet")} disabled={!editorReady || sourceMode}>•</button><button title="有序列表" onclick={() => format("ordered")} disabled={!editorReady || sourceMode}>1.</button><button title="引用" onclick={() => format("quote")} disabled={!editorReady || sourceMode}>❝</button><button title="代码块" onclick={() => format("code")} disabled={!editorReady || sourceMode}>{"</>"}</button><button title="分隔线" onclick={() => format("hr")} disabled={!editorReady || sourceMode}>—</button><button title="插入表格" onclick={() => insertTable()} disabled={!editorReady || sourceMode}>▦</button></nav>
-  {#if tableToolbar.visible && !sourceMode}
-    <div class="table-toolbar" style={`left:${tableToolbar.left}px;top:${tableToolbar.top}px;`} role="toolbar" aria-label="表格操作">
-      <button type="button" title="上方插入行" onclick={() => runTableCommand("addRowBefore")}>上插行</button>
-      <button type="button" title="下方插入行" onclick={() => runTableCommand("addRowAfter")}>下插行</button>
-      <button type="button" title="左侧插入列" onclick={() => runTableCommand("addColumnBefore")}>左插列</button>
-      <button type="button" title="右侧插入列" onclick={() => runTableCommand("addColumnAfter")}>右插列</button>
-      <button type="button" title="合并单元格" onclick={() => runTableCommand("mergeCells")}>合并</button>
-      <button type="button" title="拆分单元格" onclick={() => runTableCommand("splitCell")}>拆分</button>
-      <button type="button" title="删除当前行" onclick={() => runTableCommand("deleteRow")}>删行</button>
-      <button type="button" title="删除当前列" onclick={() => runTableCommand("deleteColumn")}>删列</button>
-      <button type="button" title="表头行" onclick={() => runTableCommand("toggleHeaderRow")}>表头</button>
-      <button type="button" class="danger" title="删除整个表格" onclick={() => runTableCommand("deleteTable")}>删表</button>
-    </div>
-  {/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if savedMessage}<p class="success">{savedMessage}</p>{/if}
   {#if sourceMode}<p class="source-note">源码模式：当前 Markdown 含有富文本编辑器无法解析的原始内容。</p><textarea class="source-editor" bind:this={sourceEditEl} bind:value={sourceValue} oninput={() => markDirty(true)} aria-label="Markdown 正文源码编辑器" spellcheck="false" disabled={!loaded}></textarea>{:else}<div class="tiptap-host prose dark:prose-invert prose-base max-w-none custom-md" bind:this={editorMount}></div>{/if}
@@ -998,6 +1209,6 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
  :global([data-article-title].article-title-editing) { outline: 2px dashed color-mix(in srgb, var(--primary) 45%, transparent); outline-offset: 2px; border-radius: .25rem; }
  :global(.article-category-select), :global(.article-tags-input) { display: inline-block; max-width: 14rem; border: 1px dashed color-mix(in srgb, var(--primary) 45%, transparent); border-radius: .3rem; padding: .08rem .3rem; color: inherit; background: var(--card-bg); font: inherit; font-size: .78rem; }
  :global(.post-meta-cover .article-category-select), :global(.post-meta-cover .article-tags-input) { color: white; background: rgb(0 0 0 / .35); }
- .table-toolbar { position: fixed; z-index: 24; display: flex; flex-wrap: wrap; gap: .35rem; padding: .45rem .55rem; border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); border-radius: .7rem; background: color-mix(in srgb, var(--card-bg) 94%, transparent); backdrop-filter: blur(10px); box-shadow: 0 10px 28px color-mix(in srgb, var(--btn-content) 10%, transparent); } .table-toolbar button { flex: 0 0 auto; min-width: 3.6rem; border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .3rem .55rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } .table-toolbar button:hover { border-color: color-mix(in srgb, var(--primary) 45%, transparent); transform: translateY(-1px); } .table-toolbar .danger { color: #c74747; }
+ :global(.table-toolbar) { position: fixed; z-index: 24; display: flex; flex-wrap: wrap; gap: .35rem; padding: .45rem .55rem; border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); border-radius: .7rem; background: color-mix(in srgb, var(--card-bg) 94%, transparent); backdrop-filter: blur(10px); box-shadow: 0 10px 28px color-mix(in srgb, var(--btn-content) 10%, transparent); } :global(.table-toolbar button) { flex: 0 0 auto; min-width: 3.6rem; border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .3rem .55rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } :global(.table-toolbar button:hover) { border-color: color-mix(in srgb, var(--primary) 45%, transparent); transform: translateY(-1px); } :global(.table-toolbar .danger) { color: #c74747; }
  @media (max-width: 760px) { .toolbar { top: 3.6rem; } }
 </style>

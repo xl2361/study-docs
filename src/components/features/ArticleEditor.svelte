@@ -801,6 +801,10 @@ function dropTableAt(tableEl: HTMLElement, clientX: number, clientY: number) {
 	const mapped = tr.mapping.map(insertPos);
 	tr.insert(mapped, tableNode);
 	editor.view.dispatch(tr);
+	console.log(
+		"[dropTable]",
+		JSON.stringify({ nodePos, size, insertPos, mapped, ok: true }),
+	);
 }
 
 function runTableCommand(name: string) {

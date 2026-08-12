@@ -765,22 +765,32 @@ function onDragHandleUp(event: MouseEvent) {
 
 // 计算松手位置的块级插入点并移动表格（含目标在原表格范围内的原地保护）
 function dropTableAt(tableEl: HTMLElement, clientX: number, clientY: number) {
-	if (!editor) return;
+	if (!editor) {
+		console.log("[dropTable] no editor");
+		return;
+	}
 	const state = editor.state;
 	let domPos: number;
 	try {
 		domPos = editor.view.posAtDOM(tableEl, 0);
-	} catch {
+	} catch (e) {
+		console.log("[dropTable] posAtDOM error:", e);
 		return;
 	}
 	const doc = state.doc;
 	const $p = doc.resolve(domPos);
 	const nodePos = $p.before($p.depth);
 	const tableNode = $p.node($p.depth);
-	if (tableNode?.type.name !== "table") return;
+	if (tableNode?.type.name !== "table") {
+		console.log("[dropTable] not table:", tableNode?.type.name);
+		return;
+	}
 	const size = tableNode.nodeSize;
 	const coords = editor.view.posAtCoords({ left: clientX, top: clientY });
-	if (!coords) return;
+	if (!coords) {
+		console.log("[dropTable] no coords:", clientX, clientY);
+		return;
+	}
 	// 目标位置：从浅到深找第一个块级边界，光标在块内时按中点分界对齐到块前/块后。
 	// 从 doc 层开始，保证目标点是 table 允许放置的位置（不会落到 cell 内等非法处）。
 	let insertPos = coords.pos;
@@ -795,15 +805,18 @@ function dropTableAt(tableEl: HTMLElement, clientX: number, clientY: number) {
 		break;
 	}
 	// 原地保护：目标落在原表格节点范围内（含其前后紧邻）则视为未移动
-	if (insertPos >= nodePos && insertPos <= nodePos + size) return;
+	if (insertPos >= nodePos && insertPos <= nodePos + size) {
+		console.log("[dropTable] in-place:", { insertPos, nodePos, size });
+		return;
+	}
 	let tr = state.tr;
 	tr.delete(nodePos, nodePos + size);
 	const mapped = tr.mapping.map(insertPos);
 	tr.insert(mapped, tableNode);
 	editor.view.dispatch(tr);
 	console.log(
-		"[dropTable]",
-		JSON.stringify({ nodePos, size, insertPos, mapped, ok: true }),
+		"[dropTable] OK:",
+		JSON.stringify({ nodePos, size, insertPos, mapped }),
 	);
 }
 

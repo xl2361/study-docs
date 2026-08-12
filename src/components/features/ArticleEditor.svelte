@@ -609,6 +609,9 @@ function selectTableForCommand(tableEl: HTMLElement | null) {
 }
 
 // 全选当前表格的全部单元格（CellSelection 覆盖整个表格）
+// 注意：selectedCell 高亮装饰由 tableEditing 插件的 editing 状态渲染，
+// 只 dispatch CellSelection 不会显示高亮；这里模拟拖拽时的 setCellSelection
+// 流程：先 setMeta(tableEditingKey, anchorCell)，再 dispatch CellSelection + setMeta(headCell)。
 async function selectWholeTable() {
 	if (!editor) return;
 	try {
@@ -616,7 +619,13 @@ async function selectWholeTable() {
 			"prosemirror-tables"
 		);
 		const state = editor.state;
-		// 优先用编辑器 selection 定位表格；按钮点击时 selection 可能已失焦，
+		// 定位 tableEditing 插件（其 key 形如 "tableEditing$"）
+		const editingPlugin = state.plugins.find(
+			(p) =>
+				typeof p.key?.key === "string" &&
+				p.key.key.startsWith("tableEditing"),
+		);
+		// 定位表格：优先自定义 selection；按钮点击时 selection 可能已失焦，
 		// 无妨（state.selection 不受失焦影响）；兜底用 hover/active 表格的 DOM 定位。
 		let found = findTable(state.selection);
 		if (!found) {
@@ -631,13 +640,20 @@ async function selectWholeTable() {
 				}
 			}
 		}
-		if (!found) return;
+		if (!found || !editingPlugin) return;
 		const map = TableMap.get(found.node);
 		const start = found.start;
-		const first = start + map.map[0];
-		const last = start + map.map[map.map.length - 1];
-		const cellSel = CellSelection.create(state.doc, first, last);
-		editor.view.dispatch(state.tr.setSelection(cellSel));
+		const anchorCell = start + map.map[0];
+		const headCell = start + map.map[map.map.length - 1];
+		const editingKey = editingPlugin.key;
+		let tr = state.tr;
+		if (editingKey.getState(state) == null) {
+			tr = tr.setMeta(editingKey, anchorCell);
+		}
+		tr = tr
+			.setSelection(CellSelection.create(state.doc, anchorCell, headCell))
+			.setMeta(editingKey, headCell);
+		editor.view.dispatch(tr);
 	} catch (err) {
 		console.error("[selectTable] error:", err);
 	}

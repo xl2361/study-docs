@@ -622,8 +622,7 @@ async function selectWholeTable() {
 		// 定位 tableEditing 插件（其 key 形如 "tableEditing$"）
 		const editingPlugin = state.plugins.find(
 			(p) =>
-				typeof p.key?.key === "string" &&
-				p.key.key.startsWith("tableEditing"),
+				typeof p.key?.key === "string" && p.key.key.startsWith("tableEditing"),
 		);
 		// 定位表格：优先自定义 selection；按钮点击时 selection 可能已失焦，
 		// 无妨（state.selection 不受失焦影响）；兜底用 hover/active 表格的 DOM 定位。

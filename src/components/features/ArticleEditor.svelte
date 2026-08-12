@@ -301,6 +301,7 @@ async function createEditor(operation: number) {
 		editor.on("transaction", onTableSelectionChange);
 		document.addEventListener("mousemove", onTableMouseMove);
 		document.addEventListener("mousedown", onTableDocMouseDown);
+		document.addEventListener("mouseup", onTableDocMouseUp);
 		window.addEventListener("scroll", onWindowScrollOrResize, {
 			passive: true,
 		});
@@ -546,6 +547,21 @@ function onTableDocMouseDown(event: Event) {
 	hideTableToolbarNow();
 }
 
+// 拖拽划选多单元格后，浏览器残留的原生文本选择会在 mouseup 后触发
+// selectionchange，prosemirror 把它读回为终点单元格内的文本选择，
+// 把 CellSelection（多选/全选状态）覆盖掉，导致刚划选完的高亮瞬间消失。
+// 这里在拖拽结束时若编辑器仍处于 CellSelection（有 selectedCell 装饰），
+// 立即清除残留 DOM 选择，selectionFromDOM 读到空选择后不再覆盖编辑器状态。
+function onTableDocMouseUp(event: Event) {
+	const target = event.target as Element | null;
+	if (!target?.closest(".article-reading-body-editing .ProseMirror table"))
+		return;
+	const pm = document.querySelector(".ProseMirror");
+	if (!pm?.querySelector("td.selectedCell, th.selectedCell")) return;
+	const sel = window.getSelection();
+	if (sel && !sel.isCollapsed) sel.removeAllRanges();
+}
+
 function onWindowScrollOrResize() {
 	if (!tableToolbar.visible || !editor) return;
 	const tableEl = hoverTableEl || positionTableToolbar();
@@ -622,6 +638,7 @@ function destroyEditor() {
 	pointerRefreshPending = false;
 	document.removeEventListener("mousemove", onTableMouseMove);
 	document.removeEventListener("mousedown", onTableDocMouseDown);
+	document.removeEventListener("mouseup", onTableDocMouseUp);
 	if (editor) editor.destroy();
 	editor = null;
 	editorReady = false;

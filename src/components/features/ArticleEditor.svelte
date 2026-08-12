@@ -381,6 +381,7 @@ function hideTableToolbarLater() {
 }
 
 const tableCommands: Array<[string, string, string]> = [
+	["selectTable", "选择整个表格", "选表"],
 	["addRowBefore", "上方插入行", "上插行"],
 	["addRowAfter", "下方插入行", "下插行"],
 	["addColumnBefore", "左侧插入列", "左插列"],
@@ -607,9 +608,30 @@ function selectTableForCommand(tableEl: HTMLElement | null) {
 	}
 }
 
+// 全选当前表格的全部单元格（CellSelection 覆盖整个表格）
+async function selectWholeTable() {
+	if (!editor) return;
+	const { CellSelection, TableMap, findTable } = await import(
+		"prosemirror-tables"
+	);
+	const state = editor.state;
+	const found = findTable(state.selection);
+	if (!found) return;
+	const map = TableMap.get(found.node);
+	const start = found.start;
+	const first = start + map.map[0];
+	const last = start + map.map[map.map.length - 1];
+	const cellSel = CellSelection.create(state.doc, first, last);
+	editor.view.dispatch(state.tr.setSelection(cellSel));
+}
+
 function runTableCommand(name: string) {
 	if (!editor) return;
 	selectTableForCommand(hoverTableEl || activeTableEl);
+	if (name === "selectTable") {
+		void selectWholeTable();
+		return;
+	}
 	const chain = editor.chain().focus();
 	const actions: Record<string, () => unknown> = {
 		addRowBefore: () => chain.addRowBefore(),

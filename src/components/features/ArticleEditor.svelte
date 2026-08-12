@@ -138,6 +138,7 @@ let tableToolbar = { visible: false, left: 0, top: 0 };
 let hoverTableEl: HTMLElement | null = null;
 let activeTableEl: HTMLElement | null = null;
 let tableToolbarEl: HTMLElement | null = null;
+let dragHandleEl: HTMLDivElement | null = null;
 let tableHideTimer: ReturnType<typeof setTimeout> | null = null;
 let lastMouseX = 0;
 let lastMouseY = 0;
@@ -415,11 +416,41 @@ function ensureTableToolbar(): HTMLElement | null {
 	return bar;
 }
 
+// 左上角拖拽手柄：6 点图标，鼠标移到表格时显示，长按拖动可移动整个表格。
+// 不采用 PM 原生 node 拖拽（原生拖拽需在 draggable 元素上按下鼠标，手柄在表格
+// 外按下无法启动），改为自定义拖拽：幽灵副本跟随 + mouseup 计算插入位置 + transaction 移动。
+function ensureDragHandle(): HTMLDivElement | null {
+	if (dragHandleEl?.isConnected) return dragHandleEl;
+	const handle = document.createElement("div");
+	handle.className = "table-drag-handle";
+	handle.setAttribute("role", "button");
+	handle.setAttribute("aria-label", "拖拽移动表格");
+	handle.title = "拖拽移动表格";
+	document.body.appendChild(handle);
+	handle.addEventListener("mousedown", onDragHandleMouseDown);
+	dragHandleEl = handle;
+	return handle;
+}
+
+function positionDragHandle(tableEl: HTMLElement) {
+	const handle = ensureDragHandle();
+	if (!handle) return;
+	const rect = tableEl.getBoundingClientRect();
+	handle.style.left = `${Math.max(4, rect.left - 15)}px`;
+	handle.style.top = `${Math.max(4, rect.top - 15)}px`;
+	handle.style.display = "grid";
+}
+
+function hideDragHandle() {
+	if (dragHandleEl) dragHandleEl.style.display = "none";
+}
+
 function hideTableToolbarNow() {
 	clearTableHideTimer();
 	hoverTableEl = null;
 	activeTableEl = null;
 	tableToolbar = { visible: false, left: 0, top: 0 };
+	hideDragHandle();
 	if (tableToolbarEl) tableToolbarEl.style.display = "none";
 }
 
@@ -445,6 +476,7 @@ function showTableToolbar(tableEl: HTMLElement): HTMLElement {
 	);
 	bar.style.left = `${left}px`;
 	bar.style.top = `${Math.max(76, top)}px`;
+	positionDragHandle(tableEl);
 	return tableEl;
 }
 
@@ -544,6 +576,7 @@ function onTableDocMouseDown(event: Event) {
 		return;
 	}
 	if (target.closest(".table-toolbar")) return;
+	if (target.closest(".table-drag-handle")) return;
 	hoverTableEl = null;
 	hideTableToolbarNow();
 }
@@ -658,6 +691,118 @@ async function selectWholeTable() {
 	}
 }
 
+type TableDragState = {
+	tableEl: HTMLElement;
+	startX: number;
+	startY: number;
+	offsetX: number;
+	offsetY: number;
+	ghost: HTMLElement | null;
+	active: boolean;
+};
+
+let tableDrag: TableDragState | null = null;
+
+// 手柄按下：阻止默认行为（不放光标、不选文本），监听移动/松开。
+// 移动超过阈值进入拖拽（幽灵跟随），未超阈值视为点击（只显示工具条，无副作用）。
+// 松开时若处于拖拽：计算目标插入位置并移动表格节点。
+function onDragHandleMouseDown(event: MouseEvent) {
+	if (event.button !== 0 || !editor) return;
+	event.preventDefault();
+	const tableEl = activeTableEl ?? hoverTableEl;
+	if (!tableEl) return;
+	const rect = tableEl.getBoundingClientRect();
+	tableDrag = {
+		tableEl,
+		startX: event.clientX,
+		startY: event.clientY,
+		offsetX: event.clientX - rect.left,
+		offsetY: event.clientY - rect.top,
+		ghost: null,
+		active: false,
+	};
+	document.body.classList.add("table-dragging");
+	document.addEventListener("mousemove", onDragHandleMove);
+	document.addEventListener("mouseup", onDragHandleUp);
+}
+
+function onDragHandleMove(event: MouseEvent) {
+	if (!tableDrag) return;
+	const dx = event.clientX - tableDrag.startX;
+	const dy = event.clientY - tableDrag.startY;
+	if (!tableDrag.active) {
+		if (Math.hypot(dx, dy) < 4) return;
+		tableDrag.active = true;
+		if (!tableDrag.ghost) {
+			const ghost = tableDrag.tableEl.cloneNode(true) as HTMLElement;
+			ghost.className = "table-drag-ghost";
+			ghost.style.left = `${event.clientX - tableDrag.offsetX}px`;
+			ghost.style.top = `${event.clientY - tableDrag.offsetY}px`;
+			document.body.appendChild(ghost);
+			tableDrag.ghost = ghost;
+		}
+		hideDragHandle();
+		return;
+	}
+	if (tableDrag.ghost) {
+		tableDrag.ghost.style.left = `${event.clientX - tableDrag.offsetX}px`;
+		tableDrag.ghost.style.top = `${event.clientY - tableDrag.offsetY}px`;
+	}
+}
+
+function onDragHandleUp(event: MouseEvent) {
+	document.removeEventListener("mousemove", onDragHandleMove);
+	document.removeEventListener("mouseup", onDragHandleUp);
+	document.body.classList.remove("table-dragging");
+	const drag = tableDrag;
+	tableDrag = null;
+	hideDragHandle();
+	if (!drag) return;
+	if (!drag.active || !editor) return;
+	drag.ghost?.remove();
+	dropTableAt(drag.tableEl, event.clientX, event.clientY);
+}
+
+// 计算松手位置的块级插入点并移动表格（含目标在原表格范围内的原地保护）
+function dropTableAt(tableEl: HTMLElement, clientX: number, clientY: number) {
+	if (!editor) return;
+	const state = editor.state;
+	let domPos: number;
+	try {
+		domPos = editor.view.posAtDOM(tableEl, 0);
+	} catch {
+		return;
+	}
+	const doc = state.doc;
+	const $p = doc.resolve(domPos);
+	const nodePos = $p.before($p.depth);
+	const tableNode = $p.node($p.depth);
+	if (tableNode?.type.name !== "table") return;
+	const size = tableNode.nodeSize;
+	const coords = editor.view.posAtCoords({ left: clientX, top: clientY });
+	if (!coords) return;
+	// 目标位置：从浅到深找第一个块级边界，光标在块内时按中点分界对齐到块前/块后。
+	// 从 doc 层开始，保证目标点是 table 允许放置的位置（不会落到 cell 内等非法处）。
+	let insertPos = coords.pos;
+	const $t = doc.resolve(insertPos);
+	for (let d = 1; d <= $t.depth; d++) {
+		if (!$t.node(d).type.isBlock) continue;
+		const start = $t.before(d);
+		const end = $t.after(d);
+		if (insertPos > start && insertPos < end) {
+			insertPos = insertPos - start < (end - start) / 2 ? start : end;
+		}
+		break;
+	}
+	// 原地保护：目标落在原表格节点范围内（含其前后紧邻）则视为未移动
+	if (insertPos >= nodePos && insertPos <= nodePos + size) return;
+	let tr = state.tr;
+	tr.delete(nodePos, nodePos + size);
+	const mapped = tr.mapping.map(insertPos);
+	tr.insert(mapped, tableNode);
+	editor.view.dispatch(tr);
+}
+
 function runTableCommand(name: string) {
 	if (!editor) return;
 	selectTableForCommand(hoverTableEl || activeTableEl);
@@ -703,6 +848,17 @@ function destroyEditor() {
 		tableToolbarEl.remove();
 		tableToolbarEl = null;
 	}
+	if (dragHandleEl) {
+		dragHandleEl.remove();
+		dragHandleEl = null;
+	}
+	if (tableDrag?.ghost) {
+		tableDrag.ghost.remove();
+		tableDrag = null;
+	}
+	document.removeEventListener("mousemove", onDragHandleMove);
+	document.removeEventListener("mouseup", onDragHandleUp);
+	document.body.classList.remove("table-dragging");
 	tableToolbar = { visible: false, left: 0, top: 0 };
 	window.removeEventListener("scroll", onWindowScrollOrResize);
 	window.removeEventListener("resize", onWindowScrollOrResize);
@@ -1303,6 +1459,6 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
  :global([data-article-title].article-title-editing) { outline: 2px dashed color-mix(in srgb, var(--primary) 45%, transparent); outline-offset: 2px; border-radius: .25rem; }
  :global(.article-category-select), :global(.article-tags-input) { display: inline-block; max-width: 14rem; border: 1px dashed color-mix(in srgb, var(--primary) 45%, transparent); border-radius: .3rem; padding: .08rem .3rem; color: inherit; background: var(--card-bg); font: inherit; font-size: .78rem; }
  :global(.post-meta-cover .article-category-select), :global(.post-meta-cover .article-tags-input) { color: white; background: rgb(0 0 0 / .35); }
-   :global(.table-toolbar) { position: fixed; z-index: 40; display: flex; flex-wrap: wrap; gap: .35rem; padding: .45rem .55rem; border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); border-radius: .7rem; background: color-mix(in srgb, var(--card-bg) 94%, transparent); backdrop-filter: blur(10px); box-shadow: 0 10px 28px color-mix(in srgb, var(--btn-content) 10%, transparent); } :global(.table-toolbar button) { flex: 0 0 auto; min-width: 3.6rem; border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .3rem .55rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } :global(.table-toolbar button:hover) { border-color: color-mix(in srgb, var(--primary) 45%, transparent); transform: translateY(-1px); } :global(.table-toolbar .danger) { color: #c74747; }
+   :global(.table-toolbar) { position: fixed; z-index: 40; display: flex; flex-wrap: wrap; gap: .35rem; padding: .45rem .55rem; border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); border-radius: .7rem; background: color-mix(in srgb, var(--card-bg) 94%, transparent); backdrop-filter: blur(10px); box-shadow: 0 10px 28px color-mix(in srgb, var(--btn-content) 10%, transparent); } :global(.table-toolbar button) { flex: 0 0 auto; min-width: 3.6rem; border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .3rem .55rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } :global(.table-toolbar button:hover) { border-color: color-mix(in srgb, var(--primary) 45%, transparent); transform: translateY(-1px); } :global(.table-toolbar .danger) { color: #c74747; } :global(.table-drag-handle) { display: none; position: fixed; z-index: 41; width: 28px; height: 28px; padding: 5px; border-radius: 7px; background: #3f3f46; box-shadow: 0 4px 12px rgb(0 0 0 / 28%); cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none; } :global(.table-drag-handle::before) { content: ""; display: block; width: 100%; height: 100%; background-image: radial-gradient(circle, #fff 1.8px, transparent 1.8px); background-size: 7px 7px; background-position: center; } :global(.table-drag-handle:hover) { background: #52525b; } :global(.table-drag-handle:active) { cursor: grabbing; } :global(body.table-dragging) { cursor: grabbing !important; } :global(.table-drag-ghost) { position: fixed; z-index: 10000; width: max-content; max-width: 92vw; overflow: hidden; border-radius: 6px; opacity: 0.86; pointer-events: none; box-shadow: 0 14px 34px rgb(0 0 0 / 32%); transform: rotate(0.5deg); } :global(.table-drag-ghost *), :global(.table-drag-ghost) { -webkit-user-select: none; user-select: none; } :global(.table-drag-ghost table) { width: 100%; }
  @media (max-width: 760px) { .toolbar { top: 3.6rem; } }
 </style>

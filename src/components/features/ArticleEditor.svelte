@@ -611,18 +611,36 @@ function selectTableForCommand(tableEl: HTMLElement | null) {
 // 全选当前表格的全部单元格（CellSelection 覆盖整个表格）
 async function selectWholeTable() {
 	if (!editor) return;
-	const { CellSelection, TableMap, findTable } = await import(
-		"prosemirror-tables"
-	);
-	const state = editor.state;
-	const found = findTable(state.selection);
-	if (!found) return;
-	const map = TableMap.get(found.node);
-	const start = found.start;
-	const first = start + map.map[0];
-	const last = start + map.map[map.map.length - 1];
-	const cellSel = CellSelection.create(state.doc, first, last);
-	editor.view.dispatch(state.tr.setSelection(cellSel));
+	try {
+		const { CellSelection, TableMap, findTable } = await import(
+			"prosemirror-tables"
+		);
+		const state = editor.state;
+		// 优先用编辑器 selection 定位表格；按钮点击时 selection 可能已失焦，
+		// 无妨（state.selection 不受失焦影响）；兜底用 hover/active 表格的 DOM 定位。
+		let found = findTable(state.selection);
+		if (!found) {
+			const tableEl = hoverTableEl || activeTableEl;
+			const cell = tableEl?.querySelector<HTMLElement>("td, th");
+			if (cell) {
+				try {
+					const pos = editor.view.posAtDOM(cell, 0) + 1;
+					found = findTable(state.doc.resolve(pos));
+				} catch {
+					found = null;
+				}
+			}
+		}
+		if (!found) return;
+		const map = TableMap.get(found.node);
+		const start = found.start;
+		const first = start + map.map[0];
+		const last = start + map.map[map.map.length - 1];
+		const cellSel = CellSelection.create(state.doc, first, last);
+		editor.view.dispatch(state.tr.setSelection(cellSel));
+	} catch (err) {
+		console.error("[selectTable] error:", err);
+	}
 }
 
 function runTableCommand(name: string) {

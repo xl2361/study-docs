@@ -434,12 +434,12 @@ function ensureDragHandle(): HTMLDivElement | null {
 	return handle;
 }
 
-function positionDragHandle(tableEl: HTMLElement) {
+// 表格级手柄：鼠标移到表格左上角对角区域时显示，位置跟随鼠标
+function positionDragHandle(mx: number, my: number) {
 	const handle = ensureDragHandle();
 	if (!handle) return;
-	const rect = tableEl.getBoundingClientRect();
-	handle.style.left = `${Math.max(2, rect.left - 8)}px`;
-	handle.style.top = `${Math.max(2, rect.top - 8)}px`;
+	handle.style.left = `${Math.max(2, mx - 7)}px`;
+	handle.style.top = `${Math.max(2, my - 7)}px`;
 	handle.style.display = "grid";
 }
 
@@ -447,7 +447,7 @@ function hideDragHandle() {
 	if (dragHandleEl) dragHandleEl.style.display = "none";
 }
 
-// 行手柄：鼠标悬停某行时，出现在该行左侧的小圆点，按住可拖动整行。
+// 行手柄：鼠标移到某行最左边缘时显示在该行左侧，位置跟随鼠标，按住可拖动整行。
 function ensureRowHandle(): HTMLDivElement | null {
 	if (rowHandleEl?.isConnected) return rowHandleEl;
 	const handle = document.createElement("div");
@@ -461,15 +461,18 @@ function ensureRowHandle(): HTMLDivElement | null {
 	return handle;
 }
 
-function positionRowHandle(tableEl: HTMLElement, rowIndex: number) {
+function positionRowHandle(
+	tableEl: HTMLElement,
+	rowIndex: number,
+	mx: number,
+	my: number,
+) {
 	const handle = ensureRowHandle();
 	if (!handle || rowIndex < 0) return;
 	const row = tableEl.rows[rowIndex];
 	if (!row) return;
-	const rowRect = row.getBoundingClientRect();
-	const tableRect = tableEl.getBoundingClientRect();
-	handle.style.left = `${Math.max(2, tableRect.left - 14)}px`;
-	handle.style.top = `${Math.max(2, rowRect.top + rowRect.height / 2 - 5)}px`;
+	handle.style.left = `${Math.max(2, mx - 5)}px`;
+	handle.style.top = `${Math.max(2, my - 5)}px`;
 	handle.style.display = "block";
 }
 
@@ -477,7 +480,7 @@ function hideRowHandle() {
 	if (rowHandleEl) rowHandleEl.style.display = "none";
 }
 
-// 列手柄：鼠标悬停某列时，出现在该列上方的小圆点，按住可拖动整列。
+// 列手柄：鼠标移到某列上边缘时显示在该列上方，位置跟随鼠标，按住可拖动整列。
 function ensureColHandle(): HTMLDivElement | null {
 	if (colHandleEl?.isConnected) return colHandleEl;
 	const handle = document.createElement("div");
@@ -491,20 +494,83 @@ function ensureColHandle(): HTMLDivElement | null {
 	return handle;
 }
 
-function positionColHandle(tableEl: HTMLElement, colIndex: number) {
+function positionColHandle(
+	tableEl: HTMLElement,
+	colIndex: number,
+	mx: number,
+	my: number,
+) {
 	const handle = ensureColHandle();
 	if (!handle || colIndex < 0) return;
 	const cell = tableEl.rows[0]?.cells[colIndex];
 	if (!cell) return;
-	const cellRect = cell.getBoundingClientRect();
-	const tableRect = tableEl.getBoundingClientRect();
-	handle.style.left = `${Math.max(2, cellRect.left + cellRect.width / 2 - 5)}px`;
-	handle.style.top = `${Math.max(2, tableRect.top - 14)}px`;
+	handle.style.left = `${Math.max(2, mx - 5)}px`;
+	handle.style.top = `${Math.max(2, my - 5)}px`;
 	handle.style.display = "block";
 }
 
 function hideColHandle() {
 	if (colHandleEl) colHandleEl.style.display = "none";
+}
+
+// 鼠标 y 落在哪一行（表格内），不在任何行内返回 -1
+function rowFromY(tableEl: HTMLElement, y: number): number {
+	const rows = [...tableEl.rows];
+	for (let i = 0; i < rows.length; i++) {
+		const r = rows[i].getBoundingClientRect();
+		if (y >= r.top && y < r.bottom) return i;
+	}
+	return -1;
+}
+
+// 鼠标 x 落在哪一列（表格内），不在任何列内返回 -1
+function colFromX(tableEl: HTMLElement, x: number): number {
+	const cells = [...tableEl.rows[0].cells];
+	for (let i = 0; i < cells.length; i++) {
+		const r = cells[i].getBoundingClientRect();
+		if (x >= r.left && x < r.right) return i;
+	}
+	return -1;
+}
+
+// 手柄触发判定：手柄随鼠标位置浮动
+// - 左上角对角区域（表格内第一行第一列交汇处）→ 表格级手柄
+// - 某行最左边缘（表格左边缘带内）→ 行手柄
+// - 某列上边缘（表格上边缘带内）→ 列手柄
+// - 表格中间 → 不显示任何手柄
+const HANDLE_EDGE = 12;
+
+function updateHandlesForPointer(tableEl: HTMLElement, mx: number, my: number) {
+	const rect = tableEl.getBoundingClientRect();
+	if (mx <= rect.left + HANDLE_EDGE && my <= rect.top + HANDLE_EDGE) {
+		hoverRowIndex = -1;
+		hoverColIndex = -1;
+		hideRowHandle();
+		hideColHandle();
+		positionDragHandle(mx, my);
+	} else if (mx <= rect.left + HANDLE_EDGE) {
+		const ri = rowFromY(tableEl, my);
+		hoverRowIndex = ri;
+		hoverColIndex = -1;
+		hideColHandle();
+		hideDragHandle();
+		if (ri >= 0) positionRowHandle(tableEl, ri, mx, my);
+		else hideRowHandle();
+	} else if (my <= rect.top + HANDLE_EDGE) {
+		const ci = colFromX(tableEl, mx);
+		hoverColIndex = ci;
+		hoverRowIndex = -1;
+		hideRowHandle();
+		hideDragHandle();
+		if (ci >= 0) positionColHandle(tableEl, ci, mx, my);
+		else hideColHandle();
+	} else {
+		hoverRowIndex = -1;
+		hoverColIndex = -1;
+		hideDragHandle();
+		hideRowHandle();
+		hideColHandle();
+	}
 }
 
 function hideTableToolbarNow() {
@@ -542,7 +608,6 @@ function showTableToolbar(tableEl: HTMLElement): HTMLElement {
 	);
 	bar.style.left = `${left}px`;
 	bar.style.top = `${Math.max(76, top)}px`;
-	positionDragHandle(tableEl);
 	return tableEl;
 }
 
@@ -598,16 +663,24 @@ function refreshTableToolbarByPointer() {
 	if (tableEl) {
 		hoverTableEl = tableEl;
 		showTableToolbar(tableEl);
-		// 根据鼠标所在单元格定位行/列手柄
-		const cell = target.closest<HTMLElement>("td, th");
-		const trEl = cell?.parentElement as HTMLTableRowElement | null;
-		if (cell && trEl) {
-			hoverRowIndex = trEl.rowIndex;
-			hoverColIndex = Array.prototype.indexOf.call(trEl.cells, cell);
-			positionRowHandle(tableEl, hoverRowIndex);
-			positionColHandle(tableEl, hoverColIndex);
-		}
+		updateHandlesForPointer(tableEl, lastMouseX, lastMouseY);
 		return;
+	}
+	// 鼠标不在表格元素上：若仍处于 hover 表格的边缘带（表格外 ±HANDLE_EDGE），
+	// 保持显示并按边缘位置更新手柄（行左边缘/列上边缘/左上角对角都在表格外触发）
+	if (hoverTableEl?.isConnected) {
+		const rect = hoverTableEl.getBoundingClientRect();
+		const inBand =
+			lastMouseX >= rect.left - HANDLE_EDGE &&
+			lastMouseX <= rect.right + HANDLE_EDGE &&
+			lastMouseY >= rect.top - HANDLE_EDGE &&
+			lastMouseY <= rect.bottom + HANDLE_EDGE;
+		if (inBand) {
+			clearTableHideTimer();
+			showTableToolbar(hoverTableEl);
+			updateHandlesForPointer(hoverTableEl, lastMouseX, lastMouseY);
+			return;
+		}
 	}
 	// 鼠标落在任意手柄上：保持手柄显示，等待按下拖拽
 	if (
@@ -619,6 +692,7 @@ function refreshTableToolbarByPointer() {
 		hoverTableEl = null;
 		return;
 	}
+	hideDragHandle();
 	hideRowHandle();
 	hideColHandle();
 	if (target.closest(".table-toolbar")) {
@@ -662,15 +736,11 @@ function onTableDocMouseDown(event: Event) {
 	if (tableEl) {
 		hoverTableEl = tableEl;
 		showTableToolbar(tableEl);
-		// 根据鼠标所在单元格定位行/列手柄
-		const cell = target.closest<HTMLElement>("td, th");
-		const trEl = cell?.parentElement as HTMLTableRowElement | null;
-		if (cell && trEl) {
-			hoverRowIndex = trEl.rowIndex;
-			hoverColIndex = Array.prototype.indexOf.call(trEl.cells, cell);
-			positionRowHandle(tableEl, hoverRowIndex);
-			positionColHandle(tableEl, hoverColIndex);
-		}
+		updateHandlesForPointer(
+			tableEl,
+			(event as MouseEvent).clientX,
+			(event as MouseEvent).clientY,
+		);
 		return;
 	}
 	if (target.closest(".table-toolbar")) return;

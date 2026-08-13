@@ -1,5 +1,6 @@
 <script lang="ts">
 import { CellSelection, tableEditingKey } from "prosemirror-tables";
+import { TextSelection } from "prosemirror-state";
 import { onMount, tick } from "svelte";
 
 export let slug: string;
@@ -145,6 +146,8 @@ let cellDragStartPos: number | null = null;
 let cellDragging = false;
 let cellDragClientX = 0;
 let cellDragClientY = 0;
+// 单击（未拖动）时用于手动 dispatch 光标定位的点击 pos
+let cellDragClickPos: number | null = null;
 let tableToolbarEl: HTMLElement | null = null;
 let dragHandleEl: HTMLDivElement | null = null;
 let rowHandleEl: HTMLDivElement | null = null;
@@ -750,13 +753,23 @@ function onTableDocMouseDown(event: Event) {
 		) {
 			const cell = target.closest<HTMLElement>("td, th");
 			if (cell) {
-				// 不能在这里 preventDefault：PM 的无移动单击定位（LeftMouseDown.up()
-				// 的 else 分支）不 dispatch，而是依赖浏览器默认光标行为 + selectionchange
-				// 同步 state；这里 preventDefault 会把单击定位杀死（光标保持原位置）。
-				// 改为：拖动位移越过阈值后在 mousemove 里 preventDefault 阻止原生文本选择。
+				// 阻止浏览器原生文本选择：拖动划选完全由我们自己 dispatch
+				// CellSelection 管理，mouseup 后 PM 读回空选择就不会覆盖多选高亮。
+				// 单击定位不能依赖 PM/浏览器默认（preventDefault 会杀死原生光标
+				// 行为），改为在 mouseup 时手动 dispatch TextSelection 定位。
+				event.preventDefault();
 				const pm = document.querySelector(".ProseMirror");
 				if (pm && document.activeElement !== pm) {
 					(pm as HTMLElement).focus({ preventScroll: true });
+				}
+				try {
+					const p = editor.view.posAtCoords({
+						left: (event as MouseEvent).clientX,
+						top: (event as MouseEvent).clientY,
+					});
+					cellDragClickPos = p ? p.pos : null;
+				} catch {
+					cellDragClickPos = null;
 				}
 				let pos: number | null = null;
 				try {
@@ -799,6 +812,7 @@ function onTableDocMouseDown(event: Event) {
 	if (target.closest(".table-col-handle")) return;
 	cellDragStartPos = null;
 	cellDragging = false;
+	cellDragClickPos = null;
 	hoverTableEl = null;
 	hideTableToolbarNow();
 }
@@ -849,12 +863,26 @@ function onCellDragUp() {
 	document.removeEventListener("mousemove", onCellDragMove);
 	document.removeEventListener("mouseup", onCellDragUp);
 	const wasDragging = cellDragging;
+	const clickPos = cellDragClickPos;
 	cellDragStartPos = null;
 	cellDragging = false;
-	// 仅真正拖动过才清理残留 DOM 选择；单击场景保留浏览器原生光标定位
+	cellDragClickPos = null;
 	if (wasDragging) {
+		// 拖动过：清除残留 DOM 选择（正常路径 preventDefault 后不会有原生选择）
 		const sel = window.getSelection();
 		if (sel && !sel.isCollapsed) sel.removeAllRanges();
+	} else if (clickPos != null && editor && !sourceMode) {
+		// 单击：mousedown 被 preventDefault 后浏览器/PM 都不会定位光标，
+		// 这里手动 dispatch 光标定位（等价 PM 单击定位行为）。
+		try {
+			editor.view.dispatch(
+				editor.state.tr.setSelection(
+					TextSelection.near(editor.state.doc.resolve(clickPos)),
+				),
+			);
+		} catch {
+			/* 忽略 */
+		}
 	}
 }
 

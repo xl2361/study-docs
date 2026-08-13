@@ -2,6 +2,9 @@
 import { TextSelection } from "prosemirror-state";
 import { CellSelection, tableEditingKey } from "prosemirror-tables";
 import { onMount, tick } from "svelte";
+import { FontSize } from "@/extensions/FontSize";
+import { Indent } from "@/extensions/Indent";
+import EditorToolbar from "./EditorToolbar.svelte";
 
 export let slug: string;
 export let title: string;
@@ -39,7 +42,18 @@ type EditorLike = {
 	getMarkdown: () => string;
 	getHTML: () => string;
 	getJSON: () => JsonNode;
-	isActive: (name: string) => boolean;
+	isActive: (name: string, attributes?: Record<string, unknown>) => boolean;
+	getAttributes: (name: string) => Record<string, unknown>;
+	state: {
+		selection: {
+			$from: {
+				marks: () => Array<{
+					type: { name: string };
+					attrs: Record<string, unknown>;
+				}>;
+			};
+		};
+	};
 	can: () => {
 		undo: () => boolean;
 		redo: () => boolean;
@@ -62,12 +76,30 @@ type EditorChain = {
 	toggleBold: () => EditorChain;
 	toggleItalic: () => EditorChain;
 	toggleStrike: () => EditorChain;
+	toggleUnderline: () => EditorChain;
+	toggleSubscript: () => EditorChain;
+	toggleSuperscript: () => EditorChain;
 	toggleHeading: (options: { level: number }) => EditorChain;
+	setParagraph: () => EditorChain;
 	toggleBulletList: () => EditorChain;
 	toggleOrderedList: () => EditorChain;
+	toggleTaskList: () => EditorChain;
 	toggleBlockquote: () => EditorChain;
 	toggleCodeBlock: () => EditorChain;
 	setHorizontalRule: () => EditorChain;
+	setColor: (color: string) => EditorChain;
+	unsetColor: () => EditorChain;
+	toggleHighlight: (options: { color: string }) => EditorChain;
+	unsetHighlight: () => EditorChain;
+	setTextAlign: (alignment: string) => EditorChain;
+	setFontSize: (size: string) => EditorChain;
+	unsetFontSize: () => EditorChain;
+	indent: () => EditorChain;
+	outdent: () => EditorChain;
+	setLink: (options: { href: string }) => EditorChain;
+	unsetLink: () => EditorChain;
+	unsetAllMarks: () => EditorChain;
+	setMark: (name: string, attributes: Record<string, unknown>) => EditorChain;
 	addRowBefore: () => EditorChain;
 	addRowAfter: () => EditorChain;
 	addColumnBefore: () => EditorChain;
@@ -110,6 +142,30 @@ let dirty = false;
 let bodyDirty = false;
 let canUndo = false;
 let canRedo = false;
+let painterActive = false;
+let painterMarks: Array<{
+	name: string;
+	attrs: Record<string, unknown>;
+}> = [];
+let activeState = {
+	bold: false,
+	italic: false,
+	strike: false,
+	underline: false,
+	subscript: false,
+	superscript: false,
+	paragraph: true,
+	headingLevel: 0,
+	textAlign: null as string | null,
+	bulletList: false,
+	orderedList: false,
+	taskList: false,
+	blockquote: false,
+	link: false,
+	color: null as string | null,
+	highlight: null as string | null,
+	fontSize: null as string | null,
+};
 let readingBodyEl: HTMLElement | null = null;
 let savedReadingHTML = "";
 let reverting = false;
@@ -273,12 +329,34 @@ async function createEditor(operation: number) {
 	editorCreating = true;
 	editorReady = false;
 	try {
-		const [core, starter, markdown, table, image] = await Promise.all([
+		const [
+			core,
+			starter,
+			markdown,
+			table,
+			image,
+			sub,
+			sup,
+			textStyle,
+			color,
+			highlight,
+			textAlign,
+			taskList,
+			taskItem,
+		] = await Promise.all([
 			import("@tiptap/core"),
 			import("@tiptap/starter-kit"),
 			import("@tiptap/markdown"),
 			import("@tiptap/extension-table"),
 			import("@tiptap/extension-image"),
+			import("@tiptap/extension-subscript"),
+			import("@tiptap/extension-superscript"),
+			import("@tiptap/extension-text-style"),
+			import("@tiptap/extension-color"),
+			import("@tiptap/extension-highlight"),
+			import("@tiptap/extension-text-align"),
+			import("@tiptap/extension-task-list"),
+			import("@tiptap/extension-task-item"),
 		]);
 		if (
 			!mounted ||
@@ -292,10 +370,23 @@ async function createEditor(operation: number) {
 		editor = new core.Editor({
 			element: editorMount,
 			extensions: [
-				starter.default,
+				starter.default.configure({
+					link: { openOnClick: false, autolink: false },
+					underline: {},
+				}),
 				markdown.Markdown,
 				table.TableKit,
 				image.default,
+				sub.default,
+				sup.default,
+				textStyle.TextStyle,
+				color.default,
+				highlight.default.configure({ multicolor: true }),
+				textAlign.default.configure({ types: ["heading", "paragraph"] }),
+				taskList.default.configure({ itemTypeName: "taskItem" }),
+				taskItem.default,
+				FontSize,
+				Indent,
 			],
 			content: "",
 			onUpdate: () => {
@@ -336,6 +427,44 @@ async function createEditor(operation: number) {
 function syncHistoryState() {
 	canUndo = Boolean(editor?.can().undo());
 	canRedo = Boolean(editor?.can().redo());
+	if (!editor) return;
+	const is = (name: string, attrs?: Record<string, unknown>) =>
+		Boolean(editor?.isActive(name, attrs));
+	const paragraphAttrs = editor.getAttributes("paragraph") as Record<
+		string,
+		unknown
+	>;
+	const headingAttrs = editor.getAttributes("heading") as Record<
+		string,
+		unknown
+	>;
+	const textStyleAttrs = editor.getAttributes("textStyle") as Record<
+		string,
+		unknown
+	>;
+	activeState = {
+		bold: is("bold"),
+		italic: is("italic"),
+		strike: is("strike"),
+		underline: is("underline"),
+		subscript: is("subscript"),
+		superscript: is("superscript"),
+		paragraph: is("paragraph"),
+		headingLevel: is("heading") ? Number(headingAttrs.level ?? 0) : 0,
+		textAlign: (String(paragraphAttrs.textAlign ?? "") ||
+			String(headingAttrs.textAlign ?? "") ||
+			null) as string | null,
+		bulletList: is("bulletList"),
+		orderedList: is("orderedList"),
+		taskList: is("taskList"),
+		blockquote: is("blockquote"),
+		link: is("link"),
+		color: (String(textStyleAttrs.color ?? "") || null) as string | null,
+		highlight: is("highlight")
+			? String(editor.getAttributes("highlight").color ?? "#ffe08a")
+			: null,
+		fontSize: (String(textStyleAttrs.fontSize ?? "") || null) as string | null,
+	};
 }
 
 function onTableSelectionChange() {
@@ -1982,8 +2111,27 @@ function syncArticleMeta() {
 	}
 }
 
-function format(action: string) {
+function onToolbarAction(
+	event: CustomEvent<{ action: string; payload?: unknown }>,
+) {
+	const { action, payload } = event.detail;
+	if (action === "table") {
+		insertTable();
+		return;
+	}
+	format(action, payload);
+}
+
+function format(action: string, payload?: unknown) {
 	if (!editor) return;
+	if (action === "painter") {
+		togglePainter();
+		return;
+	}
+	if (action === "link") {
+		handleLink();
+		return;
+	}
 	const chain = editor.chain().focus();
 	const actions: Record<string, () => EditorChain> = {
 		undo: () => chain.undo(),
@@ -1991,16 +2139,74 @@ function format(action: string) {
 		bold: () => chain.toggleBold(),
 		italic: () => chain.toggleItalic(),
 		strike: () => chain.toggleStrike(),
+		underline: () => chain.toggleUnderline(),
+		sub: () => chain.toggleSubscript(),
+		sup: () => chain.toggleSuperscript(),
 		h1: () => chain.toggleHeading({ level: 1 }),
 		h2: () => chain.toggleHeading({ level: 2 }),
 		h3: () => chain.toggleHeading({ level: 3 }),
+		h4: () => chain.toggleHeading({ level: 4 }),
+		h5: () => chain.toggleHeading({ level: 5 }),
+		h6: () => chain.toggleHeading({ level: 6 }),
+		paragraph: () => chain.setParagraph(),
 		bullet: () => chain.toggleBulletList(),
 		ordered: () => chain.toggleOrderedList(),
+		task: () => chain.toggleTaskList(),
 		quote: () => chain.toggleBlockquote(),
 		code: () => chain.toggleCodeBlock(),
 		hr: () => chain.setHorizontalRule(),
+		indent: () => chain.indent(),
+		outdent: () => chain.outdent(),
+		align: () => chain.setTextAlign(String(payload ?? "left")),
+		color: () => chain.setColor(String(payload ?? "#1f2329")),
+		unsetColor: () => chain.unsetColor(),
+		highlight: () =>
+			chain.toggleHighlight({ color: String(payload ?? "#ffe08a") }),
+		unsetHighlight: () => chain.unsetHighlight(),
+		fontSize: () => chain.setFontSize(String(payload ?? "16px")),
+		unsetFontSize: () => chain.unsetFontSize(),
+		clearFormat: () => {
+			const c = chain.unsetAllMarks();
+			if (editor.isActive("heading")) c.setParagraph();
+			return c;
+		},
 	};
-	actions[action]?.().run();
+	const fn = actions[action];
+	if (fn) fn().run();
+}
+
+function togglePainter() {
+	if (!editor) return;
+	if (painterActive) {
+		const chain = editor.chain().focus();
+		for (const mark of painterMarks) {
+			if (mark.name === "textStyle") chain.setMark("textStyle", mark.attrs);
+			else chain.setMark(mark.name, mark.attrs);
+		}
+		chain.run();
+		painterMarks = [];
+		painterActive = false;
+	} else {
+		painterMarks = editor.state.selection.$from
+			.marks()
+			.filter((mark) => mark.type.name !== "link")
+			.map((mark) => ({
+				name: mark.type.name,
+				attrs: mark.attrs,
+			}));
+		if (painterMarks.length) painterActive = true;
+	}
+}
+
+function handleLink() {
+	if (!editor) return;
+	if (editor.isActive("link")) {
+		editor.chain().focus().unsetLink().run();
+		return;
+	}
+	const url = window.prompt("链接地址", "https://");
+	if (url === null) return;
+	if (url.trim()) editor.chain().focus().setLink({ href: url.trim() }).run();
 }
 
 onMount(() => {
@@ -2082,7 +2288,7 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
      <button class="recover" type="button" onclick={restoreEmergencyDraft} title={emergency.error}>恢复备份</button>
    {/if}
   </div>
-  <nav class="toolbar" bind:this={toolbarEl} aria-label="正文格式"><button title="后退一步" onclick={() => format("undo")} disabled={!editorReady || sourceMode || !canUndo}>↶</button><button title="前进一步" onclick={() => format("redo")} disabled={!editorReady || sourceMode || !canRedo}>↷</button><button title="一级标题" onclick={() => format("h1")} disabled={!editorReady || sourceMode}>H1</button><button title="二级标题" onclick={() => format("h2")} disabled={!editorReady || sourceMode}>H2</button><button title="三级标题" onclick={() => format("h3")} disabled={!editorReady || sourceMode}>H3</button><button title="粗体" onclick={() => format("bold")} disabled={!editorReady || sourceMode}><b>B</b></button><button title="斜体" onclick={() => format("italic")} disabled={!editorReady || sourceMode}><i>I</i></button><button title="删除线" onclick={() => format("strike")} disabled={!editorReady || sourceMode}><s>S</s></button><button title="无序列表" onclick={() => format("bullet")} disabled={!editorReady || sourceMode}>•</button><button title="有序列表" onclick={() => format("ordered")} disabled={!editorReady || sourceMode}>1.</button><button title="引用" onclick={() => format("quote")} disabled={!editorReady || sourceMode}>❝</button><button title="代码块" onclick={() => format("code")} disabled={!editorReady || sourceMode}>{"</>"}</button><button title="分隔线" onclick={() => format("hr")} disabled={!editorReady || sourceMode}>—</button><button title="插入表格" onclick={() => insertTable()} disabled={!editorReady || sourceMode}>▦</button></nav>
+  <nav class="toolbar" bind:this={toolbarEl} aria-label="正文格式"><EditorToolbar {canUndo} {canRedo} {painterActive} active={activeState} disabled={!editorReady || sourceMode} on:action={onToolbarAction} /></nav>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if savedMessage}<p class="success">{savedMessage}</p>{/if}
   {#if sourceMode}<p class="source-note">源码模式：当前 Markdown 含有富文本编辑器无法解析的原始内容。</p><textarea class="source-editor" bind:this={sourceEditEl} bind:value={sourceValue} oninput={() => markDirty(true)} aria-label="Markdown 正文源码编辑器" spellcheck="false" disabled={!loaded}></textarea>{:else}<div class="tiptap-host prose dark:prose-invert prose-base max-w-none custom-md" bind:this={editorMount}></div>{/if}
@@ -2090,7 +2296,7 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
 {/if}
 
 <style>
- .ha-editor { color: var(--btn-content); } .statusline { display: flex; align-items: center; gap: .55rem; margin: .15rem 0 .25rem; } .edit-badge { flex: none; border: 1px solid var(--primary); border-radius: .4rem; padding: .12rem .5rem; color: var(--primary); font-size: .75rem; font-weight: 750; } .status { font-size: .75rem; opacity: .75; } .recover { border-color: color-mix(in srgb, #e0a23c 45%, transparent); color: #b7791f; } button { border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .35rem .6rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } button:disabled { cursor: not-allowed; opacity: .5; } .primary { border-color: var(--primary); color: white; background: var(--primary); } .danger { color: #c74747; } .error { color: #c74747; font-size: .8rem; } .success { color: #27845f; font-size: .8rem; } .toolbar { position: sticky; top: 4.3rem; z-index: 20; display: flex; gap: .25rem; overflow-x: auto; margin: .35rem 0 .9rem; border-block: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); padding: .4rem .2rem; background: color-mix(in srgb, var(--card-bg) 94%, transparent); backdrop-filter: blur(10px); } .toolbar button { flex: 0 0 auto; min-width: 2rem; } .tiptap-host :global(.ProseMirror) { min-height: 26rem; outline: none; line-height: 1.75; } .tiptap-host :global(.ProseMirror pre) { margin: 0; overflow-x: auto; border-radius: .4rem; padding: .8rem; background: color-mix(in srgb, var(--btn-content) 8%, var(--card-bg)); } .tiptap-host :global(.ProseMirror table) { display: table; width: max-content; max-width: 100%; min-width: 100%; border-collapse: separate; border-spacing: 0; } .tiptap-host :global(.ProseMirror td), .tiptap-host :global(.ProseMirror th) { min-width: 120px; padding: 8px 12px; word-break: break-word; text-align: left; } .tiptap-host :global(.ProseMirror table p) { margin: 0; padding: 0; } .tiptap-host :global(.ProseMirror li p), .tiptap-host :global(.ProseMirror blockquote p) { margin: 0; padding: 0; } .tiptap-host :global(.ProseMirror table colgroup) { display: table-column-group; } .tiptap-host :global(.ProseMirror img) { max-width: 100%; height: auto; } .tiptap-host :global(.ProseMirror code) { font-size: .875em; } .source-note { margin-top: .5rem; color: color-mix(in srgb, var(--btn-content) 65%, transparent); font-size: .8rem; } .source-editor { display: block; width: 100%; min-height: 26rem; resize: vertical; font-family: var(--font-jetbrains-mono), monospace; font-size: .86rem; line-height: 1.65; border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .6rem; color: inherit; background: var(--card-bg); }
+ .ha-editor { color: var(--btn-content); } .statusline { display: flex; align-items: center; gap: .55rem; margin: .15rem 0 .25rem; } .edit-badge { flex: none; border: 1px solid var(--primary); border-radius: .4rem; padding: .12rem .5rem; color: var(--primary); font-size: .75rem; font-weight: 750; } .status { font-size: .75rem; opacity: .75; } .recover { border-color: color-mix(in srgb, #e0a23c 45%, transparent); color: #b7791f; } button { border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .35rem .6rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } button:disabled { cursor: not-allowed; opacity: .5; } .primary { border-color: var(--primary); color: white; background: var(--primary); } .danger { color: #c74747; } .error { color: #c74747; font-size: .8rem; } .success { color: #27845f; font-size: .8rem; } .toolbar { position: sticky; top: 4.3rem; z-index: 20; margin: .35rem 0 .9rem; border-radius: .6rem; box-shadow: 0 1px 8px color-mix(in srgb, var(--btn-content) 10%, transparent); } .tiptap-host :global(.ProseMirror) { min-height: 26rem; outline: none; line-height: 1.75; } .tiptap-host :global(.ProseMirror pre) { margin: 0; overflow-x: auto; border-radius: .4rem; padding: .8rem; background: color-mix(in srgb, var(--btn-content) 8%, var(--card-bg)); } .tiptap-host :global(.ProseMirror table) { display: table; width: max-content; max-width: 100%; min-width: 100%; border-collapse: separate; border-spacing: 0; } .tiptap-host :global(.ProseMirror td), .tiptap-host :global(.ProseMirror th) { min-width: 120px; padding: 8px 12px; word-break: break-word; text-align: left; } .tiptap-host :global(.ProseMirror table p) { margin: 0; padding: 0; } .tiptap-host :global(.ProseMirror li p), .tiptap-host :global(.ProseMirror blockquote p) { margin: 0; padding: 0; } .tiptap-host :global(.ProseMirror table colgroup) { display: table-column-group; } .tiptap-host :global(.ProseMirror img) { max-width: 100%; height: auto; } .tiptap-host :global(.ProseMirror code) { font-size: .875em; } .source-note { margin-top: .5rem; color: color-mix(in srgb, var(--btn-content) 65%, transparent); font-size: .8rem; } .source-editor { display: block; width: 100%; min-height: 26rem; resize: vertical; font-family: var(--font-jetbrains-mono), monospace; font-size: .86rem; line-height: 1.65; border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .6rem; color: inherit; background: var(--card-bg); }
  :global([data-article-title].article-title-editing) { outline: 2px dashed color-mix(in srgb, var(--primary) 45%, transparent); outline-offset: 2px; border-radius: .25rem; }
  :global(.article-category-select), :global(.article-tags-input) { display: inline-block; max-width: 14rem; border: 1px dashed color-mix(in srgb, var(--primary) 45%, transparent); border-radius: .3rem; padding: .08rem .3rem; color: inherit; background: var(--card-bg); font: inherit; font-size: .78rem; }
  :global(.post-meta-cover .article-category-select), :global(.post-meta-cover .article-tags-input) { color: white; background: rgb(0 0 0 / .35); }

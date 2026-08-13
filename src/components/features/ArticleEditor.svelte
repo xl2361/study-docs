@@ -384,7 +384,6 @@ function hideTableToolbarLater() {
 }
 
 const tableCommands: Array<[string, string, string]> = [
-	["selectTable", "选择整个表格", "选表"],
 	["addRowBefore", "上方插入行", "上插行"],
 	["addRowAfter", "下方插入行", "下插行"],
 	["addColumnBefore", "左侧插入列", "左插列"],
@@ -808,56 +807,6 @@ function selectTableForCommand(tableEl: HTMLElement | null) {
 		} catch {
 			/* 忽略 */
 		}
-	}
-}
-
-// 全选当前表格的全部单元格（CellSelection 覆盖整个表格）
-// 注意：selectedCell 高亮装饰由 tableEditing 插件的 editing 状态渲染，
-// 只 dispatch CellSelection 不会显示高亮；这里模拟拖拽时的 setCellSelection
-// 流程：先 setMeta(tableEditingKey, anchorCell)，再 dispatch CellSelection + setMeta(headCell)。
-async function selectWholeTable() {
-	if (!editor) return;
-	try {
-		const { CellSelection, TableMap, findTable } = await import(
-			"prosemirror-tables"
-		);
-		const state = editor.state;
-		// 定位 tableEditing 插件（其 key 形如 "tableEditing$"）
-		const editingPlugin = state.plugins.find(
-			(p) =>
-				typeof p.key?.key === "string" && p.key.key.startsWith("tableEditing"),
-		);
-		// 定位表格：优先自定义 selection；按钮点击时 selection 可能已失焦，
-		// 无妨（state.selection 不受失焦影响）；兜底用 hover/active 表格的 DOM 定位。
-		let found = findTable(state.selection);
-		if (!found) {
-			const tableEl = hoverTableEl || activeTableEl;
-			const cell = tableEl?.querySelector<HTMLElement>("td, th");
-			if (cell) {
-				try {
-					const pos = editor.view.posAtDOM(cell, 0) + 1;
-					found = findTable(state.doc.resolve(pos));
-				} catch {
-					found = null;
-				}
-			}
-		}
-		if (!found || !editingPlugin) return;
-		const map = TableMap.get(found.node);
-		const start = found.start;
-		const anchorCell = start + map.map[0];
-		const headCell = start + map.map[map.map.length - 1];
-		const editingKey = editingPlugin.key;
-		let tr = state.tr;
-		if (editingKey.getState(state) == null) {
-			tr = tr.setMeta(editingKey, anchorCell);
-		}
-		tr = tr
-			.setSelection(CellSelection.create(state.doc, anchorCell, headCell))
-			.setMeta(editingKey, headCell);
-		editor.view.dispatch(tr);
-	} catch (err) {
-		console.error("[selectTable] error:", err);
 	}
 }
 
@@ -1298,10 +1247,6 @@ function moveTableColumn(
 function runTableCommand(name: string) {
 	if (!editor) return;
 	selectTableForCommand(hoverTableEl || activeTableEl);
-	if (name === "selectTable") {
-		void selectWholeTable();
-		return;
-	}
 	const chain = editor.chain().focus();
 	const actions: Record<string, () => unknown> = {
 		addRowBefore: () => chain.addRowBefore(),

@@ -609,6 +609,16 @@ function refreshTableToolbarByPointer() {
 		}
 		return;
 	}
+	// 鼠标落在任意手柄上：保持手柄显示，等待按下拖拽
+	if (
+		target.closest(".table-drag-handle") ||
+		target.closest(".table-row-handle") ||
+		target.closest(".table-col-handle")
+	) {
+		clearTableHideTimer();
+		hoverTableEl = null;
+		return;
+	}
 	hideRowHandle();
 	hideColHandle();
 	if (target.closest(".table-toolbar")) {

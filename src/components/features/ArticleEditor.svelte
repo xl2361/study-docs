@@ -433,12 +433,13 @@ function ensureDragHandle(): HTMLDivElement | null {
 	return handle;
 }
 
-// 表格级手柄：鼠标移到表格左上角对角区域时显示，位置跟随鼠标
-function positionDragHandle(mx: number, my: number) {
+// 表格级手柄：鼠标移到表格左上角对角区域时显示，固定在表格左上角外侧（不遮挡鼠标）
+function positionDragHandle(tableEl: HTMLElement) {
 	const handle = ensureDragHandle();
 	if (!handle) return;
-	handle.style.left = `${Math.max(2, mx - 7)}px`;
-	handle.style.top = `${Math.max(2, my - 7)}px`;
+	const rect = tableEl.getBoundingClientRect();
+	handle.style.left = `${Math.max(2, rect.left - 8)}px`;
+	handle.style.top = `${Math.max(2, rect.top - 8)}px`;
 	handle.style.display = "grid";
 }
 
@@ -446,7 +447,7 @@ function hideDragHandle() {
 	if (dragHandleEl) dragHandleEl.style.display = "none";
 }
 
-// 行手柄：鼠标移到某行最左边缘时显示在该行左侧，位置跟随鼠标，按住可拖动整行。
+// 行手柄：鼠标移到某行最左边缘时显示在表格左外侧（垂直位置跟随鼠标），按住可拖动整行。
 function ensureRowHandle(): HTMLDivElement | null {
 	if (rowHandleEl?.isConnected) return rowHandleEl;
 	const handle = document.createElement("div");
@@ -460,17 +461,13 @@ function ensureRowHandle(): HTMLDivElement | null {
 	return handle;
 }
 
-function positionRowHandle(
-	tableEl: HTMLElement,
-	rowIndex: number,
-	mx: number,
-	my: number,
-) {
+function positionRowHandle(tableEl: HTMLElement, rowIndex: number, my: number) {
 	const handle = ensureRowHandle();
 	if (!handle || rowIndex < 0) return;
 	const row = tableEl.rows[rowIndex];
 	if (!row) return;
-	handle.style.left = `${Math.max(2, mx - 6)}px`;
+	const tableRect = tableEl.getBoundingClientRect();
+	handle.style.left = `${Math.max(2, tableRect.left - 15)}px`;
 	handle.style.top = `${Math.max(2, my - 6)}px`;
 	handle.style.display = "block";
 }
@@ -479,7 +476,7 @@ function hideRowHandle() {
 	if (rowHandleEl) rowHandleEl.style.display = "none";
 }
 
-// 列手柄：鼠标移到某列上边缘时显示在该列上方，位置跟随鼠标，按住可拖动整列。
+// 列手柄：鼠标移到某列上边缘时显示在表格上外侧（水平位置跟随鼠标），按住可拖动整列。
 function ensureColHandle(): HTMLDivElement | null {
 	if (colHandleEl?.isConnected) return colHandleEl;
 	const handle = document.createElement("div");
@@ -493,18 +490,14 @@ function ensureColHandle(): HTMLDivElement | null {
 	return handle;
 }
 
-function positionColHandle(
-	tableEl: HTMLElement,
-	colIndex: number,
-	mx: number,
-	my: number,
-) {
+function positionColHandle(tableEl: HTMLElement, colIndex: number, mx: number) {
 	const handle = ensureColHandle();
 	if (!handle || colIndex < 0) return;
 	const cell = tableEl.rows[0]?.cells[colIndex];
 	if (!cell) return;
+	const tableRect = tableEl.getBoundingClientRect();
 	handle.style.left = `${Math.max(2, mx - 7)}px`;
-	handle.style.top = `${Math.max(2, my - 7)}px`;
+	handle.style.top = `${Math.max(2, tableRect.top - 15)}px`;
 	handle.style.display = "block";
 }
 
@@ -546,14 +539,14 @@ function updateHandlesForPointer(tableEl: HTMLElement, mx: number, my: number) {
 		hoverColIndex = -1;
 		hideRowHandle();
 		hideColHandle();
-		positionDragHandle(mx, my);
+		positionDragHandle(tableEl);
 	} else if (mx <= rect.left + HANDLE_EDGE) {
 		const ri = rowFromY(tableEl, my);
 		hoverRowIndex = ri;
 		hoverColIndex = -1;
 		hideColHandle();
 		hideDragHandle();
-		if (ri >= 0) positionRowHandle(tableEl, ri, mx, my);
+		if (ri >= 0) positionRowHandle(tableEl, ri, my);
 		else hideRowHandle();
 	} else if (my <= rect.top + HANDLE_EDGE) {
 		const ci = colFromX(tableEl, mx);
@@ -561,7 +554,7 @@ function updateHandlesForPointer(tableEl: HTMLElement, mx: number, my: number) {
 		hoverRowIndex = -1;
 		hideRowHandle();
 		hideDragHandle();
-		if (ci >= 0) positionColHandle(tableEl, ci, mx, my);
+		if (ci >= 0) positionColHandle(tableEl, ci, mx);
 		else hideColHandle();
 	} else {
 		hoverRowIndex = -1;

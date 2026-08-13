@@ -1,6 +1,6 @@
 <script lang="ts">
-import { CellSelection, tableEditingKey } from "prosemirror-tables";
 import { TextSelection } from "prosemirror-state";
+import { CellSelection, tableEditingKey } from "prosemirror-tables";
 import { onMount, tick } from "svelte";
 
 export let slug: string;
@@ -741,7 +741,12 @@ function onTableDocMouseDown(event: Event) {
 	// - 起点在 cell 内：立即记录起点并 preventDefault（阻止原生文本选择）；
 	// - 起点在 cell 外：不 preventDefault（保留正常文本选择/定位），
 	//   鼠标拖入 cell 时由 onCellDragMove 接管划选。
-	if (mouse.button === 0 && !mouse.shiftKey && !mouse.ctrlKey && !mouse.metaKey) {
+	if (
+		mouse.button === 0 &&
+		!mouse.shiftKey &&
+		!mouse.ctrlKey &&
+		!mouse.metaKey
+	) {
 		if (tableEl) {
 			const cell = target.closest<HTMLElement>("td, th");
 			if (cell) {

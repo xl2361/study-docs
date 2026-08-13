@@ -754,7 +754,7 @@ function onTableDocMouseDown(event: Event) {
 				}
 				let pos: number | null = null;
 				try {
-					pos = editor.view.posAtDOM(cell, 0) + 1;
+					pos = editor.view.posAtDOM(cell, 0);
 				} catch {
 					pos = null;
 				}
@@ -799,7 +799,7 @@ function onCellDragMove(event: MouseEvent) {
 	for (let d = $p.depth; d > 0; d--) {
 		const role = $p.node(d).type.spec.tableRole;
 		if (role === "cell" || role === "header_cell") {
-			cellPos = $p.before(d) + 1;
+			cellPos = $p.before(d);
 			break;
 		}
 	}

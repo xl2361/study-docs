@@ -754,7 +754,15 @@ function onTableDocMouseDown(event: Event) {
 				}
 				let pos: number | null = null;
 				try {
-					pos = editor.view.posAtDOM(cell, 0);
+					const startPos = editor.view.posAtDOM(cell, 0);
+					const $s = editor.state.doc.resolve(startPos);
+					for (let d = $s.depth; d > 0; d--) {
+						const role = $s.node(d).type.spec.tableRole;
+						if (role === "cell" || role === "header_cell") {
+							pos = $s.before(d);
+							break;
+						}
+					}
 				} catch {
 					pos = null;
 				}

@@ -1,5 +1,5 @@
 <script lang="ts">
-import { CellSelection, findTable } from "prosemirror-tables";
+import { CellSelection, tableEditingKey } from "prosemirror-tables";
 import { onMount, tick } from "svelte";
 
 export let slug: string;
@@ -138,10 +138,8 @@ let scrollRestored = false;
 let tableToolbar = { visible: false, left: 0, top: 0 };
 let hoverTableEl: HTMLElement | null = null;
 let activeTableEl: HTMLElement | null = null;
-// 划选拖拽追踪：起点 cell / 当前终点 cell / 是否发生过移动（用于 mouseup 后恢复 CellSelection）
-let cellDragAnchor: number | null = null;
-let cellDragHead: number | null = null;
-let cellDragMoved = false;
+// 自研划选拖拽：起点 cell pos（mousedown 记录，mouseup 清理）
+let cellDragStartPos: number | null = null;
 let tableToolbarEl: HTMLElement | null = null;
 let dragHandleEl: HTMLDivElement | null = null;
 let rowHandleEl: HTMLDivElement | null = null;
@@ -720,27 +718,6 @@ function onTableMouseMove(event: Event) {
 	lastMouseX = mouse.clientX;
 	lastMouseY = mouse.clientY;
 	schedulePointerRefresh();
-	// 划选拖拽追踪：记录当前鼠标所在的 cell，供 mouseup 后恢复 CellSelection 用
-	if (cellDragAnchor != null && editor && !sourceMode) {
-		const pos = editor.view.posAtCoords({
-			left: mouse.clientX,
-			top: mouse.clientY,
-		});
-		if (pos) {
-			const $p = editor.state.doc.resolve(pos.pos);
-			for (let d = $p.depth; d > 0; d--) {
-				const role = $p.node(d).type.spec.tableRole;
-				if (role === "cell" || role === "header_cell") {
-					const cellPos = $p.before(d) + 1;
-					if (cellPos !== cellDragHead) {
-						cellDragHead = cellPos;
-						cellDragMoved = true;
-					}
-					break;
-				}
-			}
-		}
-	}
 }
 
 // 点击页面任意处：若点在表格/工具条外，立刻收起；点在表格内则保持显示
@@ -759,7 +736,6 @@ function onTableDocMouseDown(event: Event) {
 			(event as MouseEvent).clientX,
 			(event as MouseEvent).clientY,
 		);
-		// 记录划选起点 cell（用于 mouseup 后 CellSelection 被覆盖时恢复）
 		const mouse = event as MouseEvent;
 		if (
 			mouse.button === 0 &&
@@ -769,13 +745,33 @@ function onTableDocMouseDown(event: Event) {
 		) {
 			const cell = target.closest<HTMLElement>("td, th");
 			if (cell) {
-				try {
-					cellDragAnchor = editor.view.posAtDOM(cell, 0) + 1;
-				} catch {
-					cellDragAnchor = null;
+				// 阻止浏览器原生文本选择：拖动划选完全由我们自己 dispatch
+				// CellSelection 管理，mouseup 后 PM 读回空选择就不会覆盖多选高亮。
+				event.preventDefault();
+				const pm = document.querySelector(".ProseMirror");
+				if (pm && document.activeElement !== pm) {
+					(pm as HTMLElement).focus();
 				}
-				cellDragHead = cellDragAnchor;
-				cellDragMoved = false;
+				let pos: number | null = null;
+				try {
+					pos = editor.view.posAtDOM(cell, 0) + 1;
+				} catch {
+					pos = null;
+				}
+				cellDragStartPos = pos;
+				if (pos != null) {
+					// 重置 tableEditing 的拖选 anchor：prosemirror-tables 的 stop()
+					// 会在 mouseup 时写入 -1，下一次拖动时其 move() 对 -1 执行
+					// doc.resolve(-1) 会抛 RangeError 导致拖动失效；这里把 anchor
+					// 重置为本次拖动起点，既避免崩溃又让库自身逻辑从正确起点走。
+					try {
+						editor.view.dispatch(editor.state.tr.setMeta(tableEditingKey, pos));
+					} catch {
+						/* 忽略 */
+					}
+				}
+				document.addEventListener("mousemove", onCellDragMove);
+				document.addEventListener("mouseup", onCellDragUp);
 			}
 		}
 		return;
@@ -784,69 +780,66 @@ function onTableDocMouseDown(event: Event) {
 	if (target.closest(".table-drag-handle")) return;
 	if (target.closest(".table-row-handle")) return;
 	if (target.closest(".table-col-handle")) return;
-	cellDragAnchor = null;
-	cellDragHead = null;
-	cellDragMoved = false;
+	cellDragStartPos = null;
 	hoverTableEl = null;
 	hideTableToolbarNow();
 }
 
-// 拖拽划选多单元格后，浏览器残留的原生文本选择会在 mouseup 后触发
-// selectionchange，prosemirror 把它读回为终点单元格内的文本选择，
-// 把 CellSelection（多选/全选状态）覆盖掉，导致刚划选完的高亮瞬间消失。
-// 这里在拖拽结束时若编辑器仍处于 CellSelection（有 selectedCell 装饰），
-// 立即清除残留 DOM 选择，selectionFromDOM 读到空选择后不再覆盖编辑器状态。
-// 注意：必须用 capture 阶段（true）注册，抢在 prosemirror 的 bubble 阶段
-// mouseup 处理读回 DOM 选择之前清除，否则 PM 已把文本选择写回 state。
-// 由于浏览器/PM 的覆盖存在竞态，拖拽后若发现 state 已被覆盖为文本选择，
-// 再基于记录的起点/终点 cell 强制恢复 CellSelection（restoreCellSelection）。
-function onTableDocMouseUp(event: Event) {
-	const target = event.target as Element | null;
-	const inTable = Boolean(
-		target?.closest(".article-reading-body-editing .ProseMirror table"),
-	);
-	const anchor = cellDragAnchor;
-	const head = cellDragHead;
-	const moved = cellDragMoved;
-	cellDragAnchor = null;
-	cellDragHead = null;
-	cellDragMoved = false;
-	if (moved && anchor != null && head != null) {
-		// 用 setTimeout 而非 rAF：后台/最小化窗口 rAF 可能不触发
-		setTimeout(() => restoreCellSelection(anchor, head), 0);
+// 拖动中：把鼠标所在 cell 与起点 cell 组成 CellSelection 直接 dispatch，
+// 高亮由 drawCellSelection 装饰渲染，不依赖原生文本选择。
+function onCellDragMove(event: MouseEvent) {
+	if (cellDragStartPos == null || !editor || sourceMode) return;
+	const pos = editor.view.posAtCoords({
+		left: event.clientX,
+		top: event.clientY,
+	});
+	if (!pos) return;
+	const $p = editor.state.doc.resolve(pos.pos);
+	let cellPos: number | null = null;
+	for (let d = $p.depth; d > 0; d--) {
+		const role = $p.node(d).type.spec.tableRole;
+		if (role === "cell" || role === "header_cell") {
+			cellPos = $p.before(d) + 1;
+			break;
+		}
 	}
-	if (!inTable) return;
-	const pm = document.querySelector(".ProseMirror");
-	if (!pm?.querySelector("td.selectedCell, th.selectedCell")) return;
+	if (cellPos == null) return;
+	try {
+		const cellSel = CellSelection.create(
+			editor.state.doc,
+			cellDragStartPos,
+			cellPos,
+		);
+		if (!editor.state.selection.eq(cellSel)) {
+			editor.view.dispatch(editor.state.tr.setSelection(cellSel));
+		}
+	} catch {
+		/* 跨表/异常情况忽略 */
+	}
+}
+
+function onCellDragUp() {
+	document.removeEventListener("mousemove", onCellDragMove);
+	document.removeEventListener("mouseup", onCellDragUp);
+	cellDragStartPos = null;
+	// 兜底清除残留 DOM 选择（正常路径 preventDefault 后不会有原生选择）
 	const sel = window.getSelection();
 	if (sel && !sel.isCollapsed) sel.removeAllRanges();
 }
 
-// 划选松开后 state.selection 若已被 prosemirror 覆盖为文本选择，
-// 用记录的起点/终点 cell 重新 dispatch CellSelection 恢复多选高亮。
-// 不提前 return：PM 的 stop() dispatch 会重写 DOM 选择，其节流的 selectionchange
-// flush 可能稍后读回文本选择再次覆盖，因此这里总是以记录的起终点强制重建，
-// 并在 dispatch 后清除 DOM 选择，让后续 flush 读到空选择从而保留 CellSelection。
-function restoreCellSelection(anchorPos: number, headPos: number) {
-	if (!editor || sourceMode) return;
-	try {
-		const doc = editor.state.doc;
-		if (!findTable(doc.resolve(headPos))) return;
-		const sel = editor.state.selection;
-		if (
-			sel instanceof CellSelection &&
-			sel.$anchorCell.pos === anchorPos &&
-			sel.$headCell.pos === headPos
-		) {
-			return;
-		}
-		const cellSel = CellSelection.create(doc, anchorPos, headPos);
-		editor.view.dispatch(editor.state.tr.setSelection(cellSel));
-		const domSel = window.getSelection();
-		if (domSel && !domSel.isCollapsed) domSel.removeAllRanges();
-	} catch {
-		/* 跨表/异常情况忽略 */
+// 拖拽划选结束后，浏览器若仍有残留原生文本选择，prosemirror 会在
+// selectionchange 时把它读回为文本选择，覆盖掉 CellSelection（多选/全选状态）。
+// 必须在 capture 阶段（true）抢在 prosemirror 的 bubble 阶段处理之前清除残留
+// DOM 选择，否则 PM 已把文本选择写回 state。
+function onTableDocMouseUp(event: Event) {
+	const target = event.target as Element | null;
+	if (!target?.closest(".article-reading-body-editing .ProseMirror table")) {
+		return;
 	}
+	const pm = document.querySelector(".ProseMirror");
+	if (!pm?.querySelector("td.selectedCell, th.selectedCell")) return;
+	const sel = window.getSelection();
+	if (sel && !sel.isCollapsed) sel.removeAllRanges();
 }
 
 function onWindowScrollOrResize() {
@@ -1402,6 +1395,8 @@ function destroyEditor() {
 	document.removeEventListener("mousemove", onLineHandleMove);
 	document.removeEventListener("mouseup", onLineHandleUp);
 	document.body.classList.remove("table-dragging");
+	document.removeEventListener("mousemove", onCellDragMove);
+	document.removeEventListener("mouseup", onCellDragUp);
 	tableToolbar = { visible: false, left: 0, top: 0 };
 	window.removeEventListener("scroll", onWindowScrollOrResize);
 	window.removeEventListener("resize", onWindowScrollOrResize);

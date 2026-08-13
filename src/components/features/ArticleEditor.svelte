@@ -750,7 +750,7 @@ function onTableDocMouseDown(event: Event) {
 				event.preventDefault();
 				const pm = document.querySelector(".ProseMirror");
 				if (pm && document.activeElement !== pm) {
-					(pm as HTMLElement).focus();
+					(pm as HTMLElement).focus({ preventScroll: true });
 				}
 				let pos: number | null = null;
 				try {

@@ -471,8 +471,8 @@ function positionRowHandle(
 	if (!handle || rowIndex < 0) return;
 	const row = tableEl.rows[rowIndex];
 	if (!row) return;
-	handle.style.left = `${Math.max(2, mx - 5)}px`;
-	handle.style.top = `${Math.max(2, my - 5)}px`;
+	handle.style.left = `${Math.max(2, mx - 6)}px`;
+	handle.style.top = `${Math.max(2, my - 6)}px`;
 	handle.style.display = "block";
 }
 
@@ -504,8 +504,8 @@ function positionColHandle(
 	if (!handle || colIndex < 0) return;
 	const cell = tableEl.rows[0]?.cells[colIndex];
 	if (!cell) return;
-	handle.style.left = `${Math.max(2, mx - 5)}px`;
-	handle.style.top = `${Math.max(2, my - 5)}px`;
+	handle.style.left = `${Math.max(2, mx - 7)}px`;
+	handle.style.top = `${Math.max(2, my - 7)}px`;
 	handle.style.display = "block";
 }
 
@@ -997,13 +997,15 @@ type LineDragState = {
 	index: number;
 	startX: number;
 	startY: number;
-	ghost: HTMLElement | null;
+	highlightCells: HTMLElement[];
 	active: boolean;
 };
 
 let lineDrag: LineDragState | null = null;
 let hoverRowIndex = -1;
 let hoverColIndex = -1;
+let dropLineEl: HTMLDivElement | null = null;
+let dragBadgeEl: HTMLDivElement | null = null;
 
 function onRowHandleMouseDown(event: MouseEvent) {
 	onLineHandleMouseDown("row", event);
@@ -1013,7 +1015,8 @@ function onColHandleMouseDown(event: MouseEvent) {
 	onLineHandleMouseDown("col", event);
 }
 
-// 行/列手柄按下：记录拖拽起点，超过阈值进入拖拽（幽灵跟随），松手移动整行/整列。
+// 行/列手柄按下：记录拖拽起点，超过阈值进入拖拽（高亮被拖行/列 + 插入指示线 + 气泡），
+// 松手移动整行/整列。
 function onLineHandleMouseDown(kind: "row" | "col", event: MouseEvent) {
 	if (event.button !== 0 || !editor) return;
 	event.preventDefault();
@@ -1021,14 +1024,13 @@ function onLineHandleMouseDown(kind: "row" | "col", event: MouseEvent) {
 	if (!tableEl) return;
 	const self = kind === "row" ? rowHandleEl : colHandleEl;
 	if (!self) return;
-	const rect = self.getBoundingClientRect();
 	lineDrag = {
 		kind,
 		tableEl,
 		index: kind === "row" ? hoverRowIndex : hoverColIndex,
 		startX: event.clientX,
 		startY: event.clientY,
-		ghost: null,
+		highlightCells: [],
 		active: false,
 	};
 	document.body.classList.add("table-dragging");
@@ -1043,18 +1045,13 @@ function onLineHandleMove(event: MouseEvent) {
 	if (!lineDrag.active) {
 		if (Math.hypot(dx, dy) < 4) return;
 		lineDrag.active = true;
-		lineDrag.ghost = buildLineGhost(lineDrag);
-		if (lineDrag.ghost) document.body.appendChild(lineDrag.ghost);
+		applyLineHighlight(lineDrag);
 		hideDragHandle();
 		hideRowHandle();
 		hideColHandle();
 		return;
 	}
-	if (lineDrag.ghost) {
-		const rect = lineDrag.ghost.getBoundingClientRect();
-		lineDrag.ghost.style.left = `${event.clientX - rect.width / 2}px`;
-		lineDrag.ghost.style.top = `${event.clientY - rect.height / 2}px`;
-	}
+	updateLineDragFeedback(lineDrag, event);
 }
 
 function onLineHandleUp(event: MouseEvent) {
@@ -1066,9 +1063,11 @@ function onLineHandleUp(event: MouseEvent) {
 	hideDragHandle();
 	hideRowHandle();
 	hideColHandle();
+	clearLineHighlight(drag);
+	hideDropLine();
+	hideDragBadge();
 	if (!drag) return;
 	if (!drag.active || !editor) return;
-	drag.ghost?.remove();
 	if (drag.kind === "row") {
 		const toIndex = hitRowIndex(drag.tableEl, event.clientY);
 		moveTableRow(drag.tableEl, drag.index, toIndex);
@@ -1078,31 +1077,95 @@ function onLineHandleUp(event: MouseEvent) {
 	}
 }
 
-// 拖拽幽灵：克隆原表格并只保留被拖的行/列，样式与原表一致
-function buildLineGhost(drag: LineDragState): HTMLElement | null {
-	const clone = drag.tableEl.cloneNode(true) as HTMLTableElement;
-	const keep = drag.index;
-	const rows = [...clone.rows];
-	rows.forEach((row, i) => {
-		if (drag.kind === "row") {
-			if (i !== keep) row.remove();
-		} else {
-			const cells = [...row.cells];
-			cells.forEach((cell, ci) => {
-				if (ci !== keep) cell.remove();
-			});
-		}
-	});
-	// 列幽灵只保留一列，去掉 colgroup 宽度约束让幽灵贴合列宽
-	if (drag.kind === "col") {
-		clone.querySelectorAll("colgroup").forEach((g) => {
-			g.remove();
+// 拖拽激活：被拖行/列的所有单元格加浅蓝高亮（复刻语雀式拖拽反馈）
+function applyLineHighlight(drag: LineDragState) {
+	const cells: HTMLElement[] = [];
+	if (drag.kind === "row") {
+		const row = drag.tableEl.rows[drag.index];
+		if (row) cells.push(...([...row.cells] as HTMLElement[]));
+	} else {
+		[...drag.tableEl.rows].forEach((r) => {
+			const cell = r.cells[drag.index];
+			if (cell) cells.push(cell);
 		});
 	}
-	const wrap = document.createElement("div");
-	wrap.className = "table-line-ghost";
-	wrap.appendChild(clone);
-	return wrap;
+	cells.forEach((cell) => {
+		cell.classList.add("table-drag-source");
+	});
+	drag.highlightCells = cells;
+}
+
+function clearLineHighlight(drag: LineDragState | null) {
+	drag?.highlightCells.forEach((cell) => {
+		cell.classList.remove("table-drag-source");
+	});
+}
+
+function ensureDropLine(): HTMLDivElement | null {
+	if (dropLineEl?.isConnected) return dropLineEl;
+	const el = document.createElement("div");
+	el.className = "table-drop-line";
+	document.body.appendChild(el);
+	dropLineEl = el;
+	return el;
+}
+
+function ensureDragBadge(): HTMLDivElement | null {
+	if (dragBadgeEl?.isConnected) return dragBadgeEl;
+	const el = document.createElement("div");
+	el.className = "table-drag-badge";
+	document.body.appendChild(el);
+	dragBadgeEl = el;
+	return el;
+}
+
+function hideDropLine() {
+	if (dropLineEl) dropLineEl.style.display = "none";
+}
+
+function hideDragBadge() {
+	if (dragBadgeEl) dragBadgeEl.style.display = "none";
+}
+
+// 拖拽移动中：更新插入位置指示线（蓝色线条）与气泡（正在移动1行/1列）
+function updateLineDragFeedback(drag: LineDragState, event: MouseEvent) {
+	const line = ensureDropLine();
+	const badge = ensureDragBadge();
+	if (!line || !badge) return;
+	const rect = drag.tableEl.getBoundingClientRect();
+	if (drag.kind === "row") {
+		const ti = hitRowIndex(drag.tableEl, event.clientY);
+		const rows = [...drag.tableEl.rows];
+		const y =
+			ti <= 0
+				? rect.top
+				: ti >= rows.length
+					? rect.bottom
+					: rows[ti].getBoundingClientRect().top;
+		line.style.left = `${rect.left}px`;
+		line.style.top = `${y - 1.5}px`;
+		line.style.width = `${rect.width}px`;
+		line.style.height = "3px";
+		badge.textContent = "正在移动1行";
+	} else {
+		const ti = hitColIndex(drag.tableEl, event.clientX);
+		const cells = [...drag.tableEl.rows[0].cells];
+		const x =
+			ti <= 0
+				? rect.left
+				: ti >= cells.length
+					? rect.right
+					: cells[ti].getBoundingClientRect().left;
+		line.style.left = `${x - 1.5}px`;
+		line.style.top = `${rect.top}px`;
+		line.style.width = "3px";
+		line.style.height = `${rect.height}px`;
+		badge.textContent = "正在移动1列";
+	}
+	line.style.display = "block";
+	badge.style.display = "block";
+	badge.style.left = `${event.clientX + 14}px`;
+	badge.style.top = `${event.clientY + 14}px`;
 }
 
 // 鼠标 y 落在哪一行：行内上半 → 插到该行前，下半 → 插到该行后；表格外按上/下界处理
@@ -1293,9 +1356,17 @@ function destroyEditor() {
 		tableDrag.ghost.remove();
 		tableDrag = null;
 	}
-	if (lineDrag?.ghost) {
-		lineDrag.ghost.remove();
+	if (lineDrag) {
+		clearLineHighlight(lineDrag);
 		lineDrag = null;
+	}
+	if (dropLineEl) {
+		dropLineEl.remove();
+		dropLineEl = null;
+	}
+	if (dragBadgeEl) {
+		dragBadgeEl.remove();
+		dragBadgeEl = null;
 	}
 	document.removeEventListener("mousemove", onDragHandleMove);
 	document.removeEventListener("mouseup", onDragHandleUp);
@@ -1902,6 +1973,6 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
  :global([data-article-title].article-title-editing) { outline: 2px dashed color-mix(in srgb, var(--primary) 45%, transparent); outline-offset: 2px; border-radius: .25rem; }
  :global(.article-category-select), :global(.article-tags-input) { display: inline-block; max-width: 14rem; border: 1px dashed color-mix(in srgb, var(--primary) 45%, transparent); border-radius: .3rem; padding: .08rem .3rem; color: inherit; background: var(--card-bg); font: inherit; font-size: .78rem; }
  :global(.post-meta-cover .article-category-select), :global(.post-meta-cover .article-tags-input) { color: white; background: rgb(0 0 0 / .35); }
-   :global(.table-toolbar) { position: fixed; z-index: 40; display: flex; flex-wrap: wrap; gap: .35rem; padding: .45rem .55rem; border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); border-radius: .7rem; background: color-mix(in srgb, var(--card-bg) 94%, transparent); backdrop-filter: blur(10px); box-shadow: 0 10px 28px color-mix(in srgb, var(--btn-content) 10%, transparent); } :global(.table-toolbar button) { flex: 0 0 auto; min-width: 3.6rem; border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .3rem .55rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } :global(.table-toolbar button:hover) { border-color: color-mix(in srgb, var(--primary) 45%, transparent); transform: translateY(-1px); } :global(.table-toolbar .danger) { color: #c74747; } :global(.table-drag-handle) { display: none; position: fixed; z-index: 41; width: 14px; height: 14px; padding: 3px; border-radius: 4px; background: #3f3f46; box-shadow: 0 2px 6px rgb(0 0 0 / 28%); cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none; } :global(.table-drag-handle::before) { content: ""; display: block; width: 100%; height: 100%; background-image: radial-gradient(circle, #fff 1px, transparent 1px); background-size: 4px 4px; background-position: center; } :global(.table-drag-handle:hover) { background: #52525b; } :global(.table-drag-handle:active) { cursor: grabbing; } :global(.table-row-handle), :global(.table-col-handle) { display: none; position: fixed; z-index: 42; width: 10px; height: 10px; border-radius: 50%; background: #3f3f46; box-shadow: 0 1px 4px rgb(0 0 0 / 25%); cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none; } :global(.table-row-handle:hover), :global(.table-col-handle:hover) { background: #4f6ef7; } :global(.table-row-handle:active), :global(.table-col-handle:active) { cursor: grabbing; } :global(body.table-dragging) { cursor: grabbing !important; } :global(.table-drag-ghost) { position: fixed; z-index: 10000; width: max-content; max-width: 92vw; overflow: hidden; border-radius: 6px; opacity: 0.86; pointer-events: none; box-shadow: 0 14px 34px rgb(0 0 0 / 32%); transform: rotate(0.5deg); } :global(.table-drag-ghost *), :global(.table-drag-ghost) { -webkit-user-select: none; user-select: none; } :global(.table-drag-ghost table) { width: 100%; } :global(.table-line-ghost) { position: fixed; z-index: 10000; width: max-content; max-width: 92vw; overflow: hidden; border-radius: 6px; opacity: 0.9; pointer-events: none; box-shadow: 0 12px 30px rgb(0 0 0 / 30%); } :global(.table-line-ghost *), :global(.table-line-ghost) { -webkit-user-select: none; user-select: none; } :global(.table-line-ghost table) { width: 100%; }
+   :global(.table-toolbar) { position: fixed; z-index: 40; display: flex; flex-wrap: wrap; gap: .35rem; padding: .45rem .55rem; border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); border-radius: .7rem; background: color-mix(in srgb, var(--card-bg) 94%, transparent); backdrop-filter: blur(10px); box-shadow: 0 10px 28px color-mix(in srgb, var(--btn-content) 10%, transparent); } :global(.table-toolbar button) { flex: 0 0 auto; min-width: 3.6rem; border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .3rem .55rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } :global(.table-toolbar button:hover) { border-color: color-mix(in srgb, var(--primary) 45%, transparent); transform: translateY(-1px); } :global(.table-toolbar .danger) { color: #c74747; } :global(.table-drag-handle) { display: none; position: fixed; z-index: 41; width: 14px; height: 14px; padding: 3px; border-radius: 4px; background: #3f3f46; box-shadow: 0 2px 6px rgb(0 0 0 / 28%); cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none; } :global(.table-drag-handle::before) { content: ""; display: block; width: 100%; height: 100%; background-image: radial-gradient(circle, #fff 1px, transparent 1px); background-size: 4px 4px; background-position: center; } :global(.table-drag-handle:hover) { background: #52525b; } :global(.table-drag-handle:active) { cursor: grabbing; } :global(.table-row-handle), :global(.table-col-handle) { display: none; position: fixed; z-index: 42; border-radius: 3px; background-color: #3f3f46; background-image: radial-gradient(circle, #fff 0.85px, transparent 0.85px); background-size: 3.5px 3.5px; background-position: center; background-repeat: no-repeat; box-shadow: 0 1px 4px rgb(0 0 0 / 25%); cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none; } :global(.table-row-handle) { width: 12px; height: 12px; } :global(.table-col-handle) { width: 14px; height: 14px; } :global(.table-row-handle:hover), :global(.table-col-handle:hover) { background-color: #4f6ef7; } :global(.table-row-handle:active), :global(.table-col-handle:active) { cursor: grabbing; } :global(body.table-dragging) { cursor: grabbing !important; } :global(.table-drop-line) { display: none; position: fixed; z-index: 9999; background: #4a90e2; border-radius: 1px; pointer-events: none; } :global(.table-drag-badge) { display: none; position: fixed; z-index: 10001; padding: 4px 9px; border-radius: 6px; background: #4a90e2; color: #fff; font-size: 12px; line-height: 1; white-space: nowrap; pointer-events: none; box-shadow: 0 2px 8px rgb(0 0 0 / 25%); } :global(.ProseMirror td.table-drag-source), :global(.ProseMirror th.table-drag-source) { background: #d6eefc !important; } :global(.table-drag-ghost) { position: fixed; z-index: 10000; width: max-content; max-width: 92vw; overflow: hidden; border-radius: 6px; opacity: 0.86; pointer-events: none; box-shadow: 0 14px 34px rgb(0 0 0 / 32%); transform: rotate(0.5deg); } :global(.table-drag-ghost *), :global(.table-drag-ghost) { -webkit-user-select: none; user-select: none; } :global(.table-drag-ghost table) { width: 100%; }
  @media (max-width: 760px) { .toolbar { top: 3.6rem; } }
 </style>

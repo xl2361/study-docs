@@ -1,4 +1,5 @@
 <script lang="ts">
+import { CellSelection, findTable } from "prosemirror-tables";
 import { onMount, tick } from "svelte";
 
 export let slug: string;
@@ -137,6 +138,10 @@ let scrollRestored = false;
 let tableToolbar = { visible: false, left: 0, top: 0 };
 let hoverTableEl: HTMLElement | null = null;
 let activeTableEl: HTMLElement | null = null;
+// 划选拖拽追踪：起点 cell / 当前终点 cell / 是否发生过移动（用于 mouseup 后恢复 CellSelection）
+let cellDragAnchor: number | null = null;
+let cellDragHead: number | null = null;
+let cellDragMoved = false;
 let tableToolbarEl: HTMLElement | null = null;
 let dragHandleEl: HTMLDivElement | null = null;
 let rowHandleEl: HTMLDivElement | null = null;
@@ -715,6 +720,27 @@ function onTableMouseMove(event: Event) {
 	lastMouseX = mouse.clientX;
 	lastMouseY = mouse.clientY;
 	schedulePointerRefresh();
+	// 划选拖拽追踪：记录当前鼠标所在的 cell，供 mouseup 后恢复 CellSelection 用
+	if (cellDragAnchor != null && editor && !sourceMode) {
+		const pos = editor.view.posAtCoords({
+			left: mouse.clientX,
+			top: mouse.clientY,
+		});
+		if (pos) {
+			const $p = editor.state.doc.resolve(pos.pos);
+			for (let d = $p.depth; d > 0; d--) {
+				const role = $p.node(d).type.spec.tableRole;
+				if (role === "cell" || role === "header_cell") {
+					const cellPos = $p.before(d) + 1;
+					if (cellPos !== cellDragHead) {
+						cellDragHead = cellPos;
+						cellDragMoved = true;
+					}
+					break;
+				}
+			}
+		}
+	}
 }
 
 // 点击页面任意处：若点在表格/工具条外，立刻收起；点在表格内则保持显示
@@ -733,12 +759,34 @@ function onTableDocMouseDown(event: Event) {
 			(event as MouseEvent).clientX,
 			(event as MouseEvent).clientY,
 		);
+		// 记录划选起点 cell（用于 mouseup 后 CellSelection 被覆盖时恢复）
+		const mouse = event as MouseEvent;
+		if (
+			mouse.button === 0 &&
+			!mouse.shiftKey &&
+			!mouse.ctrlKey &&
+			!mouse.metaKey
+		) {
+			const cell = target.closest<HTMLElement>("td, th");
+			if (cell) {
+				try {
+					cellDragAnchor = editor.view.posAtDOM(cell, 0) + 1;
+				} catch {
+					cellDragAnchor = null;
+				}
+				cellDragHead = cellDragAnchor;
+				cellDragMoved = false;
+			}
+		}
 		return;
 	}
 	if (target.closest(".table-toolbar")) return;
 	if (target.closest(".table-drag-handle")) return;
 	if (target.closest(".table-row-handle")) return;
 	if (target.closest(".table-col-handle")) return;
+	cellDragAnchor = null;
+	cellDragHead = null;
+	cellDragMoved = false;
 	hoverTableEl = null;
 	hideTableToolbarNow();
 }
@@ -750,14 +798,42 @@ function onTableDocMouseDown(event: Event) {
 // 立即清除残留 DOM 选择，selectionFromDOM 读到空选择后不再覆盖编辑器状态。
 // 注意：必须用 capture 阶段（true）注册，抢在 prosemirror 的 bubble 阶段
 // mouseup 处理读回 DOM 选择之前清除，否则 PM 已把文本选择写回 state。
+// 由于浏览器/PM 的覆盖存在竞态，拖拽后若发现 state 已被覆盖为文本选择，
+// 再基于记录的起点/终点 cell 强制恢复 CellSelection（restoreCellSelection）。
 function onTableDocMouseUp(event: Event) {
 	const target = event.target as Element | null;
-	if (!target?.closest(".article-reading-body-editing .ProseMirror table"))
-		return;
+	const inTable = Boolean(
+		target?.closest(".article-reading-body-editing .ProseMirror table"),
+	);
+	const anchor = cellDragAnchor;
+	const head = cellDragHead;
+	const moved = cellDragMoved;
+	cellDragAnchor = null;
+	cellDragHead = null;
+	cellDragMoved = false;
+	if (moved && anchor != null && head != null) {
+		requestAnimationFrame(() => restoreCellSelection(anchor, head));
+	}
+	if (!inTable) return;
 	const pm = document.querySelector(".ProseMirror");
 	if (!pm?.querySelector("td.selectedCell, th.selectedCell")) return;
 	const sel = window.getSelection();
 	if (sel && !sel.isCollapsed) sel.removeAllRanges();
+}
+
+// 划选松开后 state.selection 若已被 prosemirror 覆盖为文本选择，
+// 用记录的起点/终点 cell 重新 dispatch CellSelection 恢复多选高亮。
+function restoreCellSelection(anchorPos: number, headPos: number) {
+	if (!editor || sourceMode) return;
+	if (editor.state.selection instanceof CellSelection) return;
+	try {
+		const doc = editor.state.doc;
+		if (!findTable(doc.resolve(headPos))) return;
+		const cellSel = CellSelection.create(doc, anchorPos, headPos);
+		editor.view.dispatch(editor.state.tr.setSelection(cellSel));
+	} catch {
+		/* 跨表/异常情况忽略 */
+	}
 }
 
 function onWindowScrollOrResize() {

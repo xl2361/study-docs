@@ -304,7 +304,7 @@ async function createEditor(operation: number) {
 		editor.on("transaction", onTableSelectionChange);
 		document.addEventListener("mousemove", onTableMouseMove);
 		document.addEventListener("mousedown", onTableDocMouseDown);
-		document.addEventListener("mouseup", onTableDocMouseUp);
+		document.addEventListener("mouseup", onTableDocMouseUp, true);
 		window.addEventListener("scroll", onWindowScrollOrResize, {
 			passive: true,
 		});
@@ -748,6 +748,8 @@ function onTableDocMouseDown(event: Event) {
 // 把 CellSelection（多选/全选状态）覆盖掉，导致刚划选完的高亮瞬间消失。
 // 这里在拖拽结束时若编辑器仍处于 CellSelection（有 selectedCell 装饰），
 // 立即清除残留 DOM 选择，selectionFromDOM 读到空选择后不再覆盖编辑器状态。
+// 注意：必须用 capture 阶段（true）注册，抢在 prosemirror 的 bubble 阶段
+// mouseup 处理读回 DOM 选择之前清除，否则 PM 已把文本选择写回 state。
 function onTableDocMouseUp(event: Event) {
 	const target = event.target as Element | null;
 	if (!target?.closest(".article-reading-body-editing .ProseMirror table"))
@@ -1268,7 +1270,7 @@ function destroyEditor() {
 	pointerRefreshPending = false;
 	document.removeEventListener("mousemove", onTableMouseMove);
 	document.removeEventListener("mousedown", onTableDocMouseDown);
-	document.removeEventListener("mouseup", onTableDocMouseUp);
+	document.removeEventListener("mouseup", onTableDocMouseUp, true);
 	if (editor) editor.destroy();
 	editor = null;
 	editorReady = false;

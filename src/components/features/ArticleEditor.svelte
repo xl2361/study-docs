@@ -733,24 +733,16 @@ function onTableDocMouseDown(event: Event) {
 	if (!editor || sourceMode) return;
 	const target = event.target as Element | null;
 	if (!target) return;
+	const mouse = event as MouseEvent;
 	const tableEl = target.closest<HTMLElement>(
 		".article-reading-body-editing .ProseMirror table",
 	);
-	if (tableEl) {
-		hoverTableEl = tableEl;
-		showTableToolbar(tableEl);
-		updateHandlesForPointer(
-			tableEl,
-			(event as MouseEvent).clientX,
-			(event as MouseEvent).clientY,
-		);
-		const mouse = event as MouseEvent;
-		if (
-			mouse.button === 0 &&
-			!mouse.shiftKey &&
-			!mouse.ctrlKey &&
-			!mouse.metaKey
-		) {
+	// 左键无修饰键的按下：统一注册拖动监听。
+	// - 起点在 cell 内：立即记录起点并 preventDefault（阻止原生文本选择）；
+	// - 起点在 cell 外：不 preventDefault（保留正常文本选择/定位），
+	//   鼠标拖入 cell 时由 onCellDragMove 接管划选。
+	if (mouse.button === 0 && !mouse.shiftKey && !mouse.ctrlKey && !mouse.metaKey) {
+		if (tableEl) {
 			const cell = target.closest<HTMLElement>("td, th");
 			if (cell) {
 				// 阻止浏览器原生文本选择：拖动划选完全由我们自己 dispatch
@@ -764,8 +756,8 @@ function onTableDocMouseDown(event: Event) {
 				}
 				try {
 					const p = editor.view.posAtCoords({
-						left: (event as MouseEvent).clientX,
-						top: (event as MouseEvent).clientY,
+						left: mouse.clientX,
+						top: mouse.clientY,
 					});
 					cellDragClickPos = p ? p.pos : null;
 				} catch {
@@ -787,8 +779,8 @@ function onTableDocMouseDown(event: Event) {
 				}
 				cellDragStartPos = pos;
 				cellDragging = false;
-				cellDragClientX = (event as MouseEvent).clientX;
-				cellDragClientY = (event as MouseEvent).clientY;
+				cellDragClientX = mouse.clientX;
+				cellDragClientY = mouse.clientY;
 				if (pos != null) {
 					// 重置 tableEditing 的拖选 anchor：prosemirror-tables 的 stop()
 					// 会在 mouseup 时写入 -1，下一次拖动时其 move() 对 -1 执行
@@ -800,19 +792,32 @@ function onTableDocMouseDown(event: Event) {
 						/* 忽略 */
 					}
 				}
-				document.addEventListener("mousemove", onCellDragMove);
-				document.addEventListener("mouseup", onCellDragUp);
+			} else {
+				cellDragStartPos = null;
+				cellDragging = false;
+				cellDragClickPos = null;
 			}
+			document.addEventListener("mousemove", onCellDragMove);
+			document.addEventListener("mouseup", onCellDragUp);
+		} else if (mouse.button === 0) {
+			// 表格外按下：注册监听，若拖入表格则接管划选；否则不影响原生文本选择
+			cellDragStartPos = null;
+			cellDragging = false;
+			cellDragClickPos = null;
+			document.addEventListener("mousemove", onCellDragMove);
+			document.addEventListener("mouseup", onCellDragUp);
 		}
+	}
+	if (tableEl) {
+		hoverTableEl = tableEl;
+		showTableToolbar(tableEl);
+		updateHandlesForPointer(tableEl, mouse.clientX, mouse.clientY);
 		return;
 	}
 	if (target.closest(".table-toolbar")) return;
 	if (target.closest(".table-drag-handle")) return;
 	if (target.closest(".table-row-handle")) return;
 	if (target.closest(".table-col-handle")) return;
-	cellDragStartPos = null;
-	cellDragging = false;
-	cellDragClickPos = null;
 	hoverTableEl = null;
 	hideTableToolbarNow();
 }
@@ -820,9 +825,37 @@ function onTableDocMouseDown(event: Event) {
 // 拖动中：把鼠标所在 cell 与起点 cell 组成 CellSelection 直接 dispatch，
 // 高亮由 drawCellSelection 装饰渲染，不依赖原生文本选择。
 function onCellDragMove(event: MouseEvent) {
-	if (cellDragStartPos == null || !editor || sourceMode) return;
-	// 位移未越过阈值视为单击（允许 PM/浏览器正常定位光标），不 preventDefault
-	if (!cellDragging) {
+	if (!editor || sourceMode) return;
+	// 起点未记录（mousedown 在 cell 外）：拖入 cell 时接管划选
+	if (cellDragStartPos == null) {
+		if (event.buttons !== 1) return;
+		const p = editor.view.posAtCoords({
+			left: event.clientX,
+			top: event.clientY,
+		});
+		if (!p) return;
+		const $p = editor.state.doc.resolve(p.pos);
+		let cellPos: number | null = null;
+		for (let d = $p.depth; d > 0; d--) {
+			const role = $p.node(d).type.spec.tableRole;
+			if (role === "cell" || role === "header_cell") {
+				cellPos = $p.before(d);
+				break;
+			}
+		}
+		if (cellPos == null) return;
+		// 进入表格：接管拖动，清除 mousedown 后可能已开始的原生文本选择
+		cellDragStartPos = cellPos;
+		cellDragging = true;
+		const sel = window.getSelection();
+		if (sel && !sel.isCollapsed) sel.removeAllRanges();
+		try {
+			editor.view.dispatch(editor.state.tr.setMeta(tableEditingKey, cellPos));
+		} catch {
+			/* 忽略 */
+		}
+	} else if (!cellDragging) {
+		// 位移未越过阈值视为单击（允许 PM/浏览器正常定位光标），不 preventDefault
 		const dx = event.clientX - cellDragClientX;
 		const dy = event.clientY - cellDragClientY;
 		if (Math.abs(dx) <= 4 && Math.abs(dy) <= 4) return;

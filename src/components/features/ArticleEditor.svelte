@@ -824,14 +824,26 @@ function onTableDocMouseUp(event: Event) {
 
 // 划选松开后 state.selection 若已被 prosemirror 覆盖为文本选择，
 // 用记录的起点/终点 cell 重新 dispatch CellSelection 恢复多选高亮。
+// 不提前 return：PM 的 stop() dispatch 会重写 DOM 选择，其节流的 selectionchange
+// flush 可能稍后读回文本选择再次覆盖，因此这里总是以记录的起终点强制重建，
+// 并在 dispatch 后清除 DOM 选择，让后续 flush 读到空选择从而保留 CellSelection。
 function restoreCellSelection(anchorPos: number, headPos: number) {
 	if (!editor || sourceMode) return;
-	if (editor.state.selection instanceof CellSelection) return;
 	try {
 		const doc = editor.state.doc;
 		if (!findTable(doc.resolve(headPos))) return;
+		const sel = editor.state.selection;
+		if (
+			sel instanceof CellSelection &&
+			sel.$anchorCell.pos === anchorPos &&
+			sel.$headCell.pos === headPos
+		) {
+			return;
+		}
 		const cellSel = CellSelection.create(doc, anchorPos, headPos);
 		editor.view.dispatch(editor.state.tr.setSelection(cellSel));
+		const domSel = window.getSelection();
+		if (domSel && !domSel.isCollapsed) domSel.removeAllRanges();
 	} catch {
 		/* 跨表/异常情况忽略 */
 	}

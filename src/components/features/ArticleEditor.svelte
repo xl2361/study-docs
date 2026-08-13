@@ -140,6 +140,11 @@ let hoverTableEl: HTMLElement | null = null;
 let activeTableEl: HTMLElement | null = null;
 // 自研划选拖拽：起点 cell pos（mousedown 记录，mouseup 清理）
 let cellDragStartPos: number | null = null;
+// 自研划选拖拽：是否已越过位移阈值进入拖动（拖动中才 preventDefault，
+// 避免杀死 PM 单击定位依赖的浏览器默认光标行为）
+let cellDragging = false;
+let cellDragClientX = 0;
+let cellDragClientY = 0;
 let tableToolbarEl: HTMLElement | null = null;
 let dragHandleEl: HTMLDivElement | null = null;
 let rowHandleEl: HTMLDivElement | null = null;
@@ -745,9 +750,10 @@ function onTableDocMouseDown(event: Event) {
 		) {
 			const cell = target.closest<HTMLElement>("td, th");
 			if (cell) {
-				// 阻止浏览器原生文本选择：拖动划选完全由我们自己 dispatch
-				// CellSelection 管理，mouseup 后 PM 读回空选择就不会覆盖多选高亮。
-				event.preventDefault();
+				// 不能在这里 preventDefault：PM 的无移动单击定位（LeftMouseDown.up()
+				// 的 else 分支）不 dispatch，而是依赖浏览器默认光标行为 + selectionchange
+				// 同步 state；这里 preventDefault 会把单击定位杀死（光标保持原位置）。
+				// 改为：拖动位移越过阈值后在 mousemove 里 preventDefault 阻止原生文本选择。
 				const pm = document.querySelector(".ProseMirror");
 				if (pm && document.activeElement !== pm) {
 					(pm as HTMLElement).focus({ preventScroll: true });
@@ -767,6 +773,9 @@ function onTableDocMouseDown(event: Event) {
 					pos = null;
 				}
 				cellDragStartPos = pos;
+				cellDragging = false;
+				cellDragClientX = (event as MouseEvent).clientX;
+				cellDragClientY = (event as MouseEvent).clientY;
 				if (pos != null) {
 					// 重置 tableEditing 的拖选 anchor：prosemirror-tables 的 stop()
 					// 会在 mouseup 时写入 -1，下一次拖动时其 move() 对 -1 执行
@@ -789,6 +798,7 @@ function onTableDocMouseDown(event: Event) {
 	if (target.closest(".table-row-handle")) return;
 	if (target.closest(".table-col-handle")) return;
 	cellDragStartPos = null;
+	cellDragging = false;
 	hoverTableEl = null;
 	hideTableToolbarNow();
 }
@@ -797,6 +807,15 @@ function onTableDocMouseDown(event: Event) {
 // 高亮由 drawCellSelection 装饰渲染，不依赖原生文本选择。
 function onCellDragMove(event: MouseEvent) {
 	if (cellDragStartPos == null || !editor || sourceMode) return;
+	// 位移未越过阈值视为单击（允许 PM/浏览器正常定位光标），不 preventDefault
+	if (!cellDragging) {
+		const dx = event.clientX - cellDragClientX;
+		const dy = event.clientY - cellDragClientY;
+		if (Math.abs(dx) <= 4 && Math.abs(dy) <= 4) return;
+		cellDragging = true;
+	}
+	// 拖动已开始：阻止浏览器原生文本选择，避免覆盖 CellSelection 高亮
+	event.preventDefault();
 	const pos = editor.view.posAtCoords({
 		left: event.clientX,
 		top: event.clientY,
@@ -829,10 +848,14 @@ function onCellDragMove(event: MouseEvent) {
 function onCellDragUp() {
 	document.removeEventListener("mousemove", onCellDragMove);
 	document.removeEventListener("mouseup", onCellDragUp);
+	const wasDragging = cellDragging;
 	cellDragStartPos = null;
-	// 兜底清除残留 DOM 选择（正常路径 preventDefault 后不会有原生选择）
-	const sel = window.getSelection();
-	if (sel && !sel.isCollapsed) sel.removeAllRanges();
+	cellDragging = false;
+	// 仅真正拖动过才清理残留 DOM 选择；单击场景保留浏览器原生光标定位
+	if (wasDragging) {
+		const sel = window.getSelection();
+		if (sel && !sel.isCollapsed) sel.removeAllRanges();
+	}
 }
 
 // 拖拽划选结束后，浏览器若仍有残留原生文本选择，prosemirror 会在

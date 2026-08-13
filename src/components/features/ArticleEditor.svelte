@@ -2132,6 +2132,10 @@ function format(action: string, payload?: unknown) {
 		handleLink();
 		return;
 	}
+	if (action === "cut") {
+		handleCut();
+		return;
+	}
 	const chain = editor.chain().focus();
 	const actions: Record<string, () => EditorChain> = {
 		undo: () => chain.undo(),
@@ -2195,6 +2199,20 @@ function togglePainter() {
 				attrs: mark.attrs,
 			}));
 		if (painterMarks.length) painterActive = true;
+	}
+}
+
+function handleCut() {
+	if (!editor) return;
+	editor.chain().focus().run();
+	const ok = document.execCommand("cut");
+	if (!ok) {
+		const sel = window.getSelection();
+		if (sel && !sel.isCollapsed && sel.rangeCount) {
+			const text = sel.toString();
+			void navigator.clipboard?.writeText(text);
+			sel.getRangeAt(0).deleteContents();
+		}
 	}
 }
 

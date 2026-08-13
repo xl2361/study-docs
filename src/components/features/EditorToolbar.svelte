@@ -48,30 +48,31 @@ const dispatch = createEventDispatcher<{
 }>();
 
 const ICONS: Record<string, string> = {
-	undo: `<path fill="currentColor" d="M7 19v-2h7.1q1.575 0 2.738-1T18 13.5T16.838 11T14.1 10H7.8l2.6 2.6L9 14L4 9l5-5l1.4 1.4L7.8 8h6.3q2.425 0 4.163 1.575T20 13.5t-1.737 3.925T14.1 19z"/>`,
-	redo: `<path fill="currentColor" d="M9.9 19q-2.425 0-4.163-1.575T4 13.5t1.738-3.925T9.9 8h6.3l-2.6-2.6L15 4l5 5l-5 5l-1.4-1.4l2.6-2.6H9.9q-1.575 0-2.738 1T6 13.5T7.163 16T9.9 17H17v2z"/>`,
-	clearFormat: `<path fill="currentColor" d="m13.2 10.35l-2.325-2.325L7.85 5H20v3h-5.8zm6.6 12.25l-8.3-8.3l-2 4.7H6.225L9.2 12L1.4 4.2l1.4-1.4l18.4 18.4z"/>`,
-	painter: `<path fill="currentColor" d="M11 22q-.825 0-1.412-.587T9 20v-4H6q-.825 0-1.412-.587T4 14V7q0-1.65 1.175-2.825T8 3h12v11q0 .825-.587 1.413T18 16h-3v4q0 .825-.587 1.413T13 22zM6 10h12V5h-1v4h-2V5h-1v2h-2V5H8q-.825 0-1.412.588T6 7z"/>`,
-	superscript: `<path fill="currentColor" d="M19 9V7q0-.425.288-.712T20 6h2V5h-3V4h3q.425 0 .713.288T23 5v1q0 .425-.288.713T22 7h-2v1h3v1zM5.875 20l4.625-7.275L6.2 6h2.65l3.1 5h.1l3.075-5H17.8l-4.325 6.725L18.125 20H15.45l-3.4-5.425h-.1L8.55 20z"/>`,
-	subscript: `<path fill="currentColor" d="M19 20v-2q0-.425.288-.712T20 17h2v-1h-3v-1h3q.425 0 .713.288T23 16v1q0 .425-.288.713T22 18h-2v1h3v1zM5.875 18l4.625-7.275L6.2 4h2.65l3.1 5h.1l3.075-5H17.8l-4.325 6.725L18.125 18H15.45l-3.4-5.425h-.1L8.55 18z"/>`,
-	colorText: `<path fill="currentColor" d="M2 24v-4h20v4zm3.5-7l5.25-14h2.5l5.25 14h-2.4l-1.25-3.6H9.2L7.9 17zm4.4-5.6h4.2l-2.05-5.8h-.1z"/>`,
-	highlighter: `<path fill="currentColor" d="m6.7 18.7l-1.4-1.4Q5 17 5 16.588t.3-.713L15.875 5.3q.3-.3.713-.3t.712.3l1.4 1.4q.3.3.3.713t-.3.712L8.1 18.7q-.275.275-.7.275t-.7-.275"/>`,
-	alignLeft: `<path fill="currentColor" d="M3 21v-2h18v2zm0-4v-2h12v2zm0-4v-2h18v2zm0-4V7h12v2zm0-4V3h18v2z"/>`,
-	alignCenter: `<path fill="currentColor" d="M3 21v-2h18v2zm4-4v-2h10v2zm-4-4v-2h18v2zm4-4V7h10v2zM3 5V3h18v2z"/>`,
-	alignRight: `<path fill="currentColor" d="M3 5V3h18v2zm6 4V7h12v2zm-6 4v-2h18v2zm6 4v-2h12v2zm-6 4v-2h18v2z"/>`,
-	alignJustify: `<path fill="currentColor" d="M3 21v-2h18v2zm0-4v-2h18v2zm0-4v-2h18v2zm0-4V7h18v2zm0-4V3h18v2z"/>`,
-	listBulleted: `<path fill="currentColor" d="M9 19v-2h12v2zm0-6v-2h12v2zm0-6V5h12v2zM5 20q-.825 0-1.412-.587T3 18t.588-1.412T5 16t1.413.588T7 18t-.587 1.413T5 20m0-6q-.825 0-1.412-.587T3 12t.588-1.412T5 10t1.413.588T7 12t-.587 1.413T5 14M3.588 7.413Q3 6.825 3 6t.588-1.412T5 4t1.413.588T7 6t-.587 1.413T5 8t-1.412-.587"/>`,
-	listNumbered: `<path fill="currentColor" d="M3 22v-1.5h2.5v-.75H4v-1.5h1.5v-.75H3V16h3q.425 0 .713.288T7 17v1q0 .425-.288.713T6 19q.425 0 .713.288T7 20v1q0 .425-.288.713T6 22zm0-7v-2.75q0-.425.288-.712T4 11.25h1.5v-.75H3V9h3q.425 0 .713.288T7 10v1.75q0 .425-.288.713T6 12.75H4.5v.75H7V15zm1.5-7V3.5H3V2h3v6zM9 19v-2h12v2zm0-6v-2h12v2zm0-6V5h12v2z"/>`,
-	indentDecrease: `<path fill="currentColor" d="M3 21v-2h18v2zm8-4v-2h10v2zm0-4v-2h10v2zm0-4V7h10v2zM3 5V3h18v2zm4 11l-4-4l4-4z"/>`,
-	indentIncrease: `<path fill="currentColor" d="M3 21v-2h18v2zm8-4v-2h10v2zm0-4v-2h10v2zm0-4V7h10v2zM3 5V3h18v2zm0 11V8l4 4z"/>`,
-	checklist: `<path fill="currentColor" d="M5.55 19L2 15.45l1.4-1.4l2.125 2.125l4.25-4.25l1.4 1.425zm0-8L2 7.45l1.4-1.4l2.125 2.125l4.25-4.25l1.4 1.425zM13 17v-2h9v2zm0-8V7h9v2z"/>`,
-	link: `<path fill="currentColor" d="M11 17H7q-2.075 0-3.537-1.463T2 12t1.463-3.537T7 7h4v2H7q-1.25 0-2.125.875T4 12t.875 2.125T7 15h4zm-3-4v-2h8v2zm5 4v-2h4q1.25 0 2.125-.875T20 12t-.875-2.125T17 9h-4V7h4q2.075 0 3.538 1.463T22 12t-1.463 3.538T17 17z"/>`,
-	quote: `<path fill="currentColor" d="M5.7 18L8 14q-1.65 0-2.825-1.175T4 10t1.175-2.825T8 6t2.825 1.175T12 10q0 .575-.137 1.063T11.45 12L8 18zm9 0l2.3-4q-1.65 0-2.825-1.175T13 10t1.175-2.825T17 6t2.825 1.175T21 10q0 .575-.137 1.063T20.45 12L17 18z"/>`,
-	hr: `<path fill="currentColor" d="M4 13v-2h16v2z"/>`,
-	table: `<path fill="currentColor" d="M11 16H3v3q0 .825.588 1.413T5 21h6zm2 0v5h6q.825 0 1.413-.587T21 19v-3zm-2-2V9H3v5zm2 0h8V9h-8zM3 7h18V5q0-.825-.587-1.412T19 3H5q-.825 0-1.412.588T3 5z"/>`,
-	code: `<path fill="currentColor" d="m8 18l-6-6l6-6l1.425 1.425l-4.6 4.6L9.4 16.6zm8 0l-1.425-1.425l4.6-4.6L14.6 7.4L16 6l6 6z"/>`,
-	more: `<path fill="currentColor" d="M6 14q-.825 0-1.412-.587T4 12t.588-1.412T6 10t1.413.588T8 12t-.587 1.413T6 14m6 0q-.825 0-1.412-.587T10 12t.588-1.412T12 10t1.413.588T14 12t-.587 1.413T12 14m6 0q-.825 0-1.412-.587T16 12t.588-1.412T18 10t1.413.588T20 12t-.587 1.413T18 14"/>`,
-	chevronDown: `<path fill="currentColor" d="M7 10l5 5l5-5z"/>`,
+	undo: `<path fill="currentColor" d="M7.404 18v-1h7.254q1.556 0 2.65-1.067q1.096-1.067 1.096-2.606t-1.095-2.596q-1.096-1.058-2.651-1.058H6.916l2.965 2.965l-.708.708L5 9.173L9.173 5l.708.708l-2.965 2.965h7.742q1.963 0 3.355 1.354q1.39 1.354 1.39 3.3t-1.39 3.31T14.657 18z"/>`,
+	redo: `<path fill="currentColor" d="M9.342 18q-1.963 0-3.355-1.364t-1.39-3.309t1.39-3.3Q7.38 8.673 9.343 8.673h7.743L14.12 5.708L14.828 5L19 9.173l-4.173 4.173l-.708-.707l2.966-2.966H9.342q-1.556 0-2.65 1.058q-1.096 1.058-1.096 2.596t1.095 2.606Q7.787 17 9.342 17h7.254v1z"/>`,
+	cut: `<path fill="currentColor" d="m19.385 20.539l-7.308-7.308l-3.12 3.119q.22.375.324.79t.104.86q0 1.362-.973 2.335q-.974.973-2.335.973t-2.335-.973Q2.77 19.362 2.77 18t.973-2.334t2.335-.974q.444 0 .86.104q.415.104.79.323L10.847 12l-3.12-3.12q-.375.22-.79.324t-.86.104q-1.362 0-2.335-.973Q2.77 7.36 2.77 6t.973-2.334t2.335-.974t2.335.973q.972.974.972 2.335q0 .444-.103.86q-.104.415-.323.79L21.23 19.923v.616zm-4.77-9.847l-1.23-1.23l6-6h1.846v.615zM7.712 7.634Q8.385 6.96 8.385 6T7.71 4.366t-1.634-.674t-1.634.674Q3.77 5.041 3.77 6t.674 1.634t1.634.674t1.634-.674m4.37 4.37q-.004.004-.004-.004t.004-.004t-.004.004t-.004-.004t.004.004t-.004.004t.004-.004t.004.004m-4.37 7.63q.673-.675.673-1.634t-.674-1.634q-.674-.674-1.633-.674q-.96 0-1.634.674q-.674.675-.674 1.634t.674 1.634q.674.674 1.634.674t1.633-.674"/>`,
+	eraser: `<path fill="currentColor" d="M16.712 18h4.673v1H15.71zM4.558 19l-1.414-1.413q-.478-.48-.491-1.137t.466-1.161L13.273 4.733q.479-.503 1.134-.494t1.134.489l4.09 4.09q.479.479.488 1.146q.01.668-.469 1.146L11.962 19z"/>`,
+	painter: `<path fill="currentColor" d="M6.385 19.616q-.587 0-1.168-.204q-.58-.204-1.025-.566q.496-.327.844-.878t.349-1.352q0-.847.577-1.424q.577-.576 1.423-.576t1.423.576t.577 1.424q0 1.246-.877 2.123t-2.123.877M11.25 14.5l-1.711-1.711l8.18-8.181q.275-.275.688-.288t.712.288l.312.311q.3.3.3.7t-.3.7z"/>`,
+	superscript: `<path fill="currentColor" d="M18.385 9V7.423q0-.348.23-.578t.577-.23H21V5.77h-2.616V5h2.577q.349 0 .579.23t.23.578v.769q0 .348-.23.578t-.578.23h-1.808v.846h2.615V9zM7.009 19l4.183-6.467l-3.838-5.917h1.284l3.331 5.192h.023l3.383-5.192h1.29l-3.901 5.917L16.99 19H15.7l-3.708-5.713h-.023L8.3 19z"/>`,
+	subscript: `<path fill="currentColor" d="M18.385 19v-1.577q0-.348.23-.578t.577-.23H21v-.846h-2.616V15h2.577q.349 0 .579.23t.23.578v.769q0 .348-.23.578t-.578.23h-1.808v.846h2.615V19zM7.009 17.384l4.183-6.467L7.354 5h1.284l3.331 5.192h.023L15.375 5h1.29l-3.901 5.917l4.227 6.468H15.7l-3.708-5.714h-.023L8.3 17.385z"/>`,
+	colorText: `<path fill="currentColor" d="M3 24v-3.462h18V24zm3.23-7l5.29-13h.96l5.29 13h-1.21l-1.442-3.638H8.816L7.36 17zm2.94-4.6h5.584L12.05 5.6h-.138z"/>`,
+	highlighter: `<path fill="currentColor" d="M2 24v-2h20v2zm8.696-15.02l4.016 4.022l-3.885 3.885q-.485.484-1.134.484t-1.133-.484l-.193-.193l-1.155 1.133h-2.77l2.535-2.529l-.154-.154q-.484-.485-.49-1.14t.479-1.139zm.708-.713l4.558-4.551q.484-.485 1.133-.485t1.134.485l1.754 1.748q.484.484.484 1.133q0 .65-.484 1.134l-4.558 4.558z"/>`,
+	alignLeft: `<path fill="currentColor" d="M4 20v-1h16v1zm0-3.75v-1h10v1zm0-3.75v-1h16v1zm0-3.75v-1h10v1zM4 5V4h16v1z"/>`,
+	alignCenter: `<path fill="currentColor" d="M4 20v-1h16v1zm4-3.75v-1h8v1zM4 12.5v-1h16v1zm4-3.75v-1h8v1zM4 5V4h16v1z"/>`,
+	alignRight: `<path fill="currentColor" d="M4 5V4h16v1zm6 3.75v-1h10v1zM4 12.5v-1h16v1zm6 3.75v-1h10v1zM4 20v-1h16v1z"/>`,
+	alignJustify: `<path fill="currentColor" d="M4 20v-1h16v1zm0-3.75v-1h16v1zm0-3.75v-1h16v1zm0-3.75v-1h16v1zM4 5V4h16v1z"/>`,
+	listBulleted: `<path fill="currentColor" d="M9.616 18.5v-1H20v1zm0-6v-1H20v1zm0-6v-1H20v1zM5.327 19.327q-.547 0-.937-.39T4 18t.39-.937t.937-.39t.937.39t.39.937t-.39.937t-.937.39m0-6q-.547 0-.937-.386Q4 12.556 4 12t.39-.941t.937-.386t.937.386q.39.385.39.941t-.39.941t-.937.386m-.941-6.386Q4 6.556 4 6t.386-.941t.941-.386t.941.386q.386.385.386.941t-.386.941q-.385.386-.941.386t-.941-.386"/>`,
+	listNumbered: `<path fill="currentColor" d="M4 21v-.885h2.5V18.75H5v-.885h1.5V16.5H4v-.885h2.692q.294 0 .493.2t.2.493v1.384q0 .295-.2.494t-.493.199q.294 0 .493.199q.2.199.2.493v1.23q0 .295-.2.494T6.692 21zm0-6.308V12.25q0-.294.199-.493t.493-.2H6.5v-1.365H4v-.884h2.692q.294 0 .493.199t.2.493v1.75q0 .294-.2.493t-.493.2H4.884v1.365h2.5v.884zm1.5-6.308v-4.5H4V3h2.385v5.385zM9.616 18.5v-1H20v1zm0-6v-1H20v1zm0-6v-1H20v1z"/>`,
+	indentDecrease: `<path fill="currentColor" d="M4 20v-1h16v1zm8-3.75v-1h8v1zm0-3.75v-1h8v1zm0-3.75v-1h8v1zM4 5V4h16v1zm2.808 9.808L4 12l2.808-2.808z"/>`,
+	indentIncrease: `<path fill="currentColor" d="M4 20v-1h16v1zm8-3.75v-1h8v1zm0-3.75v-1h8v1zm0-3.75v-1h8v1zM4 5V4h16v1zm0 9.808V9.192L6.808 12z"/>`,
+	table: `<path fill="currentColor" d="M11.5 14.885H4v3.5q0 .666.475 1.14t1.14.475H11.5zm1 0V20h5.885q.666 0 1.14-.475t.475-1.14v-3.5zm-1-1V8.769H4v5.116zm1 0H20V8.769h-7.5zM4 7.769h16V5.615q0-.666-.475-1.14T18.386 4H5.615q-.666 0-1.14.475T4 5.615z"/>`,
+	link: `<path fill="currentColor" d="M10.616 16.077H7.077q-1.692 0-2.884-1.192T3 12t1.193-2.885t2.884-1.193h3.539v1H7.077q-1.27 0-2.173.904Q4 10.731 4 12t.904 2.173t2.173.904h3.539zM8.5 12.5v-1h7v1zm4.885 3.577v-1h3.538q1.27 0 2.173-.904Q20 13.269 20 12t-.904-2.173t-2.173-.904h-3.538v-1h3.538q1.692 0 2.885 1.192T21 12t-1.193 2.885t-2.884 1.193z"/>`,
+	quote: `<path fill="currentColor" d="m6.585 17.308l2.396-4.174q-.173.097-.404.135t-.461.039q-1.4 0-2.354-.973q-.954-.974-.954-2.335q0-1.4.954-2.354t2.354-.954q1.361 0 2.334.954T11.423 10q0 .479-.118.899t-.336.793l-3.238 5.616zm8.769 0l2.396-4.173q-.173.096-.404.134t-.461.039q-1.4 0-2.354-.973T13.577 10q0-1.42.954-2.363t2.354-.945q1.361 0 2.334.954T20.192 10q0 .479-.118.899t-.335.793L16.5 17.308z"/>`,
+	hr: `<path fill="currentColor" d="M5 12.5v-1h14v1z"/>`,
+	code: `<path fill="currentColor" d="M8.005 18l-1.413-1.412L11.18 12L6.592 7.412L8.005 6l6 6zm7.99 0l-6-6l6-6l1.413 1.412L13.18 12l4.588 4.588z"/>`,
+	more: `<path fill="currentColor" d="M6.462 13q-.413 0-.707-.294T5.462 12t.293-.706t.707-.294t.706.294t.293.706t-.293.706T6.46 13M12 13q-.413 0-.706-.294T11 12t.294-.706T12 11t.706.294T13 12t-.294.706T12 13m5.539 0q-.413 0-.707-.294T16.538 12t.294-.706t.706-.294t.707.294t.293.706t-.293.706t-.707.294"/>`,
+	check: `<path fill="currentColor" d="m9.55 17.308l-4.97-4.97l.714-.713l4.256 4.256l9.156-9.156l.713.714z"/>`,
+	chevronDown: `<path fill="currentColor" d="M12 14.702L6.692 9.394l.708-.707l4.6 4.6l4.6-4.6l.708.707z"/>`,
 };
 
 const SVG = (name: string, size = 18) =>
@@ -100,7 +101,7 @@ onDestroy(() =>
 	window.removeEventListener("pointerdown", onGlobalPointerDown, true),
 );
 
-const FONT_SIZES = [12, 14, 16, 18, 20, 24, 28, 32, 36, 48];
+const FONT_SIZES = [12, 13, 14, 15, 16, 19, 22, 24, 29, 32, 40, 48];
 const TEXT_COLORS = [
 	{ name: "默认", value: "" },
 	{ name: "黑", value: "#1f2329" },
@@ -142,15 +143,6 @@ const currentAlign = () =>
 	role="toolbar"
 	aria-label="正文格式"
 >
-	<button
-		class="tb-btn tb-new"
-		type="button" disabled={disabled}
-		title="新建文章"
-		onclick={() => act("new")}
-	>
-		<span class="tb-new-circle">{@html SVG("add", 20)}</span>
-	</button>
-
 	<span class="tb-group">
 		<button class="tb-btn" type="button" title="撤销 (Ctrl+Z)" disabled={disabled || !canUndo} onclick={() => act("undo")}>
 			{@html SVG("undo")}
@@ -158,11 +150,11 @@ const currentAlign = () =>
 		<button class="tb-btn" type="button" title="重做 (Ctrl+Y)" disabled={disabled || !canRedo} onclick={() => act("redo")}>
 			{@html SVG("redo")}
 		</button>
-	</span>
-
-	<span class="tb-group">
+		<button class="tb-btn" disabled={disabled} type="button" title="剪切 (Ctrl+X)" onclick={() => act("cut")}>
+			{@html SVG("cut")}
+		</button>
 		<button class="tb-btn" disabled={disabled} type="button" title="清除格式 (Ctrl+\)" onclick={() => act("clearFormat")}>
-			{@html SVG("clearFormat")}
+			{@html SVG("eraser")}
 		</button>
 		<button
 			class="tb-btn tb-painter"
@@ -194,6 +186,7 @@ const currentAlign = () =>
 						type="button"
 						onclick={() => act("paragraph")}
 					>
+						{#if active.paragraph}{@html SVG("check", 14)}{/if}
 						<span>正文</span>
 						<span class="tb-kbd">Ctrl+0</span>
 					</button>
@@ -204,6 +197,9 @@ const currentAlign = () =>
 							type="button"
 							onclick={() => act(`h${level}`)}
 						>
+							{#if active.headingLevel === level}
+								{@html SVG("check", 14)}
+							{/if}
 							<span>标题 {level}</span>
 							<span class="tb-kbd">Ctrl+{level}</span>
 						</button>
@@ -223,15 +219,7 @@ const currentAlign = () =>
 				{@html SVG("chevronDown", 14)}
 			</button>
 			{#if openMenu === "size"}
-				<div class="tb-panel tb-panel-scroll" role="menu">
-					<button
-						class="tb-panel-item"
-						class:tb-checked={active.fontSize === null}
-						type="button"
-						onclick={() => act("unsetFontSize")}
-					>
-						<span>默认</span>
-					</button>
+				<div class="tb-panel tb-panel-scroll tb-panel-zebra" role="menu">
 					{#each FONT_SIZES as size}
 						<button
 							class="tb-panel-item"
@@ -239,6 +227,9 @@ const currentAlign = () =>
 							type="button"
 							onclick={() => act("fontSize", `${size}px`)}
 						>
+							{#if active.fontSize === `${size}px`}
+								{@html SVG("check", 14)}
+							{/if}
 							<span style="font-size:{size}px">{size}px</span>
 						</button>
 					{/each}
@@ -430,15 +421,38 @@ const currentAlign = () =>
 			{/if}
 		</div>
 
-		<button class="tb-btn" disabled={disabled} type="button" title="减少缩进" onclick={() => act("outdent")}>
-			{@html SVG("indentDecrease")}
-		</button>
-		<button class="tb-btn" disabled={disabled} type="button" title="增加缩进" onclick={() => act("indent")}>
-			{@html SVG("indentIncrease")}
-		</button>
+		<div class="tb-drop">
+			<button
+				class="tb-btn"
+				type="button" disabled={disabled}
+				title="缩进"
+				onclick={() => toggleMenu("indent")}
+			>
+				{@html SVG("indentDecrease")}
+				{@html SVG("chevronDown", 12)}
+			</button>
+			{#if openMenu === "indent"}
+				<div class="tb-panel" role="menu">
+					<button
+						class="tb-panel-item"
+						type="button"
+						onclick={() => act("indent")}
+					>
+						{@html SVG("indentIncrease", 16)}<span>增加缩进</span>
+					</button>
+					<button
+						class="tb-panel-item"
+						type="button"
+						onclick={() => act("outdent")}
+					>
+						{@html SVG("indentDecrease", 16)}<span>减少缩进</span>
+					</button>
+				</div>
+			{/if}
+		</div>
 
-		<button class="tb-btn" disabled={disabled} class:tb-on={active.taskList} type="button" title="任务列表" onclick={() => act("task")}>
-			{@html SVG("checklist")}
+		<button class="tb-btn" disabled={disabled} type="button" title="插入表格" onclick={() => act("table")}>
+			{@html SVG("table")}
 		</button>
 	</span>
 
@@ -462,9 +476,6 @@ const currentAlign = () =>
 			<div class="tb-panel" role="menu">
 				<button class="tb-panel-item" type="button" onclick={() => act("code")}>
 					{@html SVG("code", 16)}<span>代码块</span>
-				</button>
-				<button class="tb-panel-item" type="button" onclick={() => act("table")}>
-					{@html SVG("table", 16)}<span>表格</span>
 				</button>
 			</div>
 		{/if}
@@ -530,26 +541,8 @@ const currentAlign = () =>
 		cursor: not-allowed;
 	}
 	.tb-btn.tb-on {
-		background: #e8f3ff;
-		color: #3370ff;
-	}
-
-	.tb-new {
-		margin-right: 2px;
-		background: transparent;
-	}
-	.tb-new-circle {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 22px;
-		height: 22px;
-		border-radius: 50%;
-		background: #3370ff;
-		color: #fff;
-	}
-	.tb-new:hover .tb-new-circle {
-		background: #2560e0;
+		background: #f2f3f5;
+		color: #1d2129;
 	}
 
 	.tb-select {
@@ -600,6 +593,12 @@ const currentAlign = () =>
 	.tb-panel-scroll {
 		max-height: 280px;
 		overflow-y: auto;
+	}
+	.tb-panel-zebra .tb-panel-item:nth-child(even) {
+		background: #f7f8fa;
+	}
+	.tb-panel-zebra .tb-panel-item:nth-child(even):hover {
+		background: #f2f3f5;
 	}
 	.tb-panel-item {
 		display: flex;

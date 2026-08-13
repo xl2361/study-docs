@@ -812,7 +812,8 @@ function onTableDocMouseUp(event: Event) {
 	cellDragHead = null;
 	cellDragMoved = false;
 	if (moved && anchor != null && head != null) {
-		requestAnimationFrame(() => restoreCellSelection(anchor, head));
+		// 用 setTimeout 而非 rAF：后台/最小化窗口 rAF 可能不触发
+		setTimeout(() => restoreCellSelection(anchor, head), 0);
 	}
 	if (!inTable) return;
 	const pm = document.querySelector(".ProseMirror");

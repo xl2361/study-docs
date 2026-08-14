@@ -21,9 +21,17 @@
     text-transform: none !important;
     font-weight: 500 !important;
     font-size: 0.7rem !important;
-    top: -0.85rem !important;
+    top: -0.9rem !important;
     right: 0.5rem !important;
+    bottom: auto !important;
+    left: auto !important;
     z-index: 3 !important;
+    opacity: 1 !important;
+    transition: opacity 0.3s !important;
+  }
+  /* 确保 pre 是定位上下文 */
+  .expressive-code pre[data-language] {
+    position: relative;
   }
 
   /* 折叠渐变遮罩跟随站点亮暗色，而不是系统配色 */

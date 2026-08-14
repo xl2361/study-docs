@@ -11,7 +11,7 @@
 
   /* Language Badge 样式适配主题色和亮暗色 */
   /* 覆盖 expressive-code-language-badge 插件的默认样式 */
-  /* 右上角，Typora 风格：带边框 */
+  /* 代码块右上角上方（外部），与复制按钮不重叠 */
   [data-language]::before {
     color: var(--btn-content) !important;
     background: var(--btn-regular-bg) !important;
@@ -21,6 +21,9 @@
     text-transform: none !important;
     font-weight: 500 !important;
     font-size: 0.7rem !important;
+    top: -0.85rem !important;
+    right: 0.5rem !important;
+    z-index: 3 !important;
   }
 
   /* 折叠渐变遮罩跟随站点亮暗色，而不是系统配色 */
@@ -67,6 +70,11 @@
 .expressive-code .gutter .ln {
   min-width: 1ch;
   padding-inline: 0.25ch 0.5ch;
+}
+
+/* 代码块上方留出空间给语言徽章 */
+.expressive-code .frame {
+  margin-top: 0.85rem;
 }
 
 /* 代码块字号缩小一档 */

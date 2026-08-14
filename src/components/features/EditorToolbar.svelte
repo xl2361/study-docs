@@ -76,7 +76,7 @@ const ICONS: Record<string, string> = {
 	chevronDown: `<path d="m6 9 6 6 6-6"/>`,
 };
 
-const SVG = (name: string, size = 18) =>
+const SVG = (name: string, size = 16) =>
 	`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICONS[name]}</svg>`;
 
 let openMenu: string | null = null;
@@ -85,8 +85,8 @@ function toggleMenu(name: string) {
 	openMenu = openMenu === name ? null : name;
 }
 
-function act(action: string, payload?: unknown) {
-	openMenu = null;
+function act(action: string, payload?: unknown, closeMenu = true) {
+	if (closeMenu) openMenu = null;
 	dispatch("action", { action, payload });
 }
 
@@ -193,7 +193,7 @@ const currentAlign = () =>
 				onclick={() => toggleMenu("block")}
 			>
 				<span class="tb-select-label">{currentBlock()}</span>
-				{@html SVG("chevronDown", 14)}
+				{@html SVG("chevronDown", 12)}
 			</button>
 			{#if openMenu === "block"}
 				<div class="tb-panel tb-panel-block" role="listbox" aria-label="段落样式">
@@ -239,7 +239,7 @@ const currentAlign = () =>
 				onclick={() => toggleMenu("size")}
 			>
 				<span class="tb-select-label">{currentSize()}</span>
-				{@html SVG("chevronDown", 14)}
+				{@html SVG("chevronDown", 12)}
 			</button>
 			{#if openMenu === "size"}
 				<div class="tb-panel tb-panel-scroll" role="listbox" aria-label="字号">
@@ -510,26 +510,24 @@ const currentAlign = () =>
 		</button>
 	</span>
 
-	<span class="tb-group">
-		<button class="tb-btn" disabled={disabled} class:tb-on={active.link} type="button" title="插入链接 (Ctrl+K)" aria-label="插入链接" aria-pressed={active.link} onclick={() => act("link")}>
-			{@html SVG("link")}
-		</button>
-		<button class="tb-btn" disabled={disabled} class:tb-on={active.blockquote} type="button" title="引用" aria-label="引用" aria-pressed={active.blockquote} onclick={() => act("quote")}>
-			{@html SVG("quote")}
-		</button>
-		<button class="tb-btn" disabled={disabled} type="button" title="分隔线" aria-label="分隔线" onclick={() => act("hr")}>
-			{@html SVG("hr")}
-		</button>
-	</span>
-
-	<div class="tb-drop">
+	<div class="tb-drop tb-drop-more">
 		<button class="tb-btn" class:tb-open={openMenu === "more"} disabled={disabled} type="button" title="更多" aria-label="更多" aria-haspopup="menu" aria-expanded={openMenu === "more"} onclick={() => toggleMenu("more")}>
 			{@html SVG("more")}
 		</button>
 		{#if openMenu === "more"}
-			<div class="tb-panel" role="menu">
-				<button class="tb-panel-item" type="button" onclick={() => act("code")}>
-					{@html SVG("code", 16)}<span>代码块</span>
+			<div class="tb-panel tb-panel-more" role="menu" aria-label="更多格式">
+				<button class="tb-btn tb-more-btn" class:tb-on={active.link} disabled={disabled} type="button" title="插入链接" aria-label="插入链接" aria-pressed={active.link} onclick={() => act("link", undefined, false)}>
+					{@html SVG("link")}
+				</button>
+				<button class="tb-btn tb-more-btn" class:tb-on={active.blockquote} disabled={disabled} type="button" title="引用" aria-label="引用" aria-pressed={active.blockquote} onclick={() => act("quote", undefined, false)}>
+					{@html SVG("quote")}
+				</button>
+				<button class="tb-btn tb-more-btn" disabled={disabled} type="button" title="分隔线" aria-label="分隔线" onclick={() => act("hr", undefined, false)}>
+					{@html SVG("hr")}
+				</button>
+				<span class="tb-more-divider" aria-hidden="true"></span>
+				<button class="tb-btn tb-more-btn" disabled={disabled} type="button" title="代码块" aria-label="代码块" onclick={() => act("code", undefined, false)}>
+					{@html SVG("code")}
 				</button>
 			</div>
 		{/if}
@@ -550,9 +548,9 @@ const currentAlign = () =>
 		position: relative;
 		display: flex;
 		align-items: center;
-		flex-wrap: wrap;
-		gap: 2px;
-		padding: 7px 10px;
+		flex-wrap: nowrap;
+		gap: 1px;
+		padding: 5px 8px;
 		border: 1px solid var(--tb-border);
 		border-radius: inherit;
 		background: var(--tb-bg);
@@ -569,8 +567,10 @@ const currentAlign = () =>
 	.tb-group {
 		display: inline-flex;
 		align-items: center;
-		gap: 2px;
+		gap: 1px;
 		margin-right: 6px;
+		padding-right: 6px;
+		border-right: 1px solid var(--tb-border);
 	}
 
 	.tb-drop {
@@ -582,9 +582,9 @@ const currentAlign = () =>
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		min-width: 30px;
-		height: 32px;
-		padding: 0 6px;
+		min-width: 28px;
+		height: 28px;
+		padding: 0 5px;
 		border: none;
 		border-radius: 7px;
 		background: transparent;
@@ -626,16 +626,16 @@ const currentAlign = () =>
 	.tb-select {
 		min-width: unset;
 		justify-content: space-between;
-		padding: 0 8px 0 10px;
-		font-size: 14px;
+		padding: 0 7px 0 9px;
+		font-size: 13px;
 		font-weight: 500;
 		letter-spacing: 0;
 	}
 	.tb-select-block {
-		width: 84px;
+		width: 76px;
 	}
 	.tb-select-size {
-		width: 72px;
+		width: 66px;
 	}
 	.tb-select-label {
 		overflow: hidden;
@@ -650,7 +650,7 @@ const currentAlign = () =>
 	}
 
 	.tb-char {
-		font-size: 14px;
+		font-size: 13px;
 		font-weight: 600;
 		font-style: normal;
 	}
@@ -664,6 +664,29 @@ const currentAlign = () =>
 		flex-direction: column;
 		gap: 1px;
 		padding: 2px 5px 0;
+	}
+	.tb-drop-more {
+		margin-left: auto;
+	}
+	.tb-panel-more {
+		top: calc(100% + 4px);
+		right: 0;
+		left: auto;
+		display: flex;
+		align-items: center;
+		width: max-content;
+		min-width: 0;
+		gap: 6px;
+		padding: 6px 8px;
+	}
+	.tb-more-btn {
+		flex: 0 0 28px;
+	}
+	.tb-more-divider {
+		width: 1px;
+		height: 18px;
+		margin: 0 2px;
+		background: var(--tb-border);
 	}
 	.tb-color-btn .tb-color-bar {
 		display: block;
@@ -808,5 +831,11 @@ const currentAlign = () =>
 	.tb-swatch.tb-checked {
 		outline: 2px solid var(--tb-primary);
 		outline-offset: 1px;
+	}
+
+	@media (max-width: 900px) {
+		.editor-toolbar {
+			flex-wrap: wrap;
+		}
 	}
 </style>

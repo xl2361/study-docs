@@ -99,6 +99,8 @@ type EditorChain = {
 	setLink: (options: { href: string }) => EditorChain;
 	unsetLink: () => EditorChain;
 	unsetAllMarks: () => EditorChain;
+	clearNodes: () => EditorChain;
+	deleteSelection: () => EditorChain;
 	setMark: (name: string, attributes: Record<string, unknown>) => EditorChain;
 	addRowBefore: () => EditorChain;
 	addRowAfter: () => EditorChain;
@@ -2169,11 +2171,7 @@ function format(action: string, payload?: unknown) {
 		unsetHighlight: () => chain.unsetHighlight(),
 		fontSize: () => chain.setFontSize(String(payload ?? "16px")),
 		unsetFontSize: () => chain.unsetFontSize(),
-		clearFormat: () => {
-			const c = chain.unsetAllMarks();
-			if (editor.isActive("heading")) c.setParagraph();
-			return c;
-		},
+		clearFormat: () => chain.unsetAllMarks().clearNodes(),
 	};
 	const fn = actions[action];
 	if (fn) fn().run();
@@ -2206,14 +2204,13 @@ function handleCut() {
 	if (!editor) return;
 	editor.chain().focus().run();
 	const ok = document.execCommand("cut");
-	if (!ok) {
-		const sel = window.getSelection();
-		if (sel && !sel.isCollapsed && sel.rangeCount) {
-			const text = sel.toString();
-			void navigator.clipboard?.writeText(text);
-			sel.getRangeAt(0).deleteContents();
-		}
-	}
+	if (ok) return;
+	const text = window.getSelection()?.toString() ?? "";
+	if (!text || !navigator.clipboard) return;
+	void navigator.clipboard
+		.writeText(text)
+		.then(() => editor?.chain().focus().deleteSelection().run())
+		.catch(() => undefined);
 }
 
 function handleLink() {

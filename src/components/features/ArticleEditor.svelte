@@ -2,6 +2,7 @@
 import { TextSelection } from "prosemirror-state";
 import { CellSelection, tableEditingKey } from "prosemirror-tables";
 import { onMount, tick } from "svelte";
+import { CodeBlockLang } from "@/extensions/CodeBlockLang";
 import { FontSize } from "@/extensions/FontSize";
 import { Indent } from "@/extensions/Indent";
 import { LineHeight } from "@/extensions/LineHeight";
@@ -99,6 +100,7 @@ type EditorChain = {
 	setLineHeight: (lineHeight: string) => EditorChain;
 	unsetLineHeight: () => EditorChain;
 	setOrderedListStyle: (style: string) => EditorChain;
+	setCodeBlockLanguage: (language: string) => EditorChain;
 	indent: () => EditorChain;
 	outdent: () => EditorChain;
 	setLink: (options: { href: string }) => EditorChain;
@@ -382,6 +384,7 @@ async function createEditor(operation: number) {
 				starter.default.configure({
 					link: { openOnClick: false, autolink: false },
 					underline: {},
+					codeBlock: false,
 				}),
 				markdown.Markdown,
 				table.TableKit,
@@ -398,6 +401,7 @@ async function createEditor(operation: number) {
 				Indent,
 				LineHeight,
 				OrderedListStyle,
+				CodeBlockLang,
 			],
 			content: "",
 			onUpdate: () => {
@@ -422,6 +426,7 @@ async function createEditor(operation: number) {
 			passive: true,
 		});
 		window.addEventListener("resize", onWindowScrollOrResize);
+		setupCodeBlockLangLabels();
 	} catch (reason) {
 		if (!mounted || operation !== openOperation || !editing) return;
 		editor?.destroy();
@@ -432,6 +437,84 @@ async function createEditor(operation: number) {
 		error = "本文包含富文本模式无法解析的原始 HTML/XML，已切换为源码模式";
 	} finally {
 		editorCreating = false;
+	}
+}
+
+const CODE_LANGUAGES = [
+	"bash",
+	"c",
+	"cpp",
+	"css",
+	"dart",
+	"go",
+	"html",
+	"java",
+	"javascript",
+	"json",
+	"kotlin",
+	"markdown",
+	"php",
+	"python",
+	"ruby",
+	"rust",
+	"scala",
+	"shell",
+	"sql",
+	"swift",
+	"typescript",
+	"xml",
+	"yaml",
+].sort();
+
+let codeBlockLangObserver: MutationObserver | null = null;
+
+function setupCodeBlockLangLabels() {
+	codeBlockLangObserver?.disconnect();
+	if (!editorMount) return;
+	const update = () => injectCodeBlockLangLabels();
+	update();
+	codeBlockLangObserver = new MutationObserver(update);
+	codeBlockLangObserver.observe(editorMount, {
+		childList: true,
+		subtree: true,
+	});
+}
+
+function injectCodeBlockLangLabels() {
+	if (!editor || !editorMount) return;
+	const pres =
+		editorMount.querySelectorAll<HTMLPreElement>("pre[data-language]");
+	for (const pre of pres) {
+		if (pre.querySelector(".ec-code-lang-select")) continue;
+		const lang = pre.getAttribute("data-language") || "";
+		const wrapper = document.createElement("div");
+		wrapper.className = "ec-code-lang-bar";
+		const select = document.createElement("select");
+		select.className = "ec-code-lang-select";
+		select.contentEditable = "false";
+		const placeholder = document.createElement("option");
+		placeholder.value = "";
+		placeholder.textContent = "语言";
+		select.appendChild(placeholder);
+		for (const langCode of CODE_LANGUAGES) {
+			const opt = document.createElement("option");
+			opt.value = langCode;
+			opt.textContent = langCode;
+			if (langCode === lang) opt.selected = true;
+			select.appendChild(opt);
+		}
+		select.addEventListener("change", () => {
+			if (!editor || !editorMount) return;
+			const pos = editor.view.posAtDOM(pre, 0);
+			editor
+				.chain()
+				.focus()
+				.setTextSelection(pos)
+				.setCodeBlockLanguage(select.value)
+				.run();
+		});
+		wrapper.appendChild(select);
+		pre.insertBefore(wrapper, pre.firstChild);
 	}
 }
 
@@ -1593,6 +1676,8 @@ function destroyEditor() {
 		editor.off("selectionUpdate", onTableSelectionChange);
 		editor.off("transaction", onTableSelectionChange);
 	}
+	codeBlockLangObserver?.disconnect();
+	codeBlockLangObserver = null;
 	cancelAnimationFrame(pointerRefreshRaf);
 	pointerRefreshPending = false;
 	document.removeEventListener("mousemove", onTableMouseMove);
@@ -2194,6 +2279,7 @@ function format(action: string, payload?: unknown) {
 				: chain.setLineHeight(String(payload ?? "1.75")),
 		orderedStyle: () => chain.setOrderedListStyle(String(payload ?? "mixed")),
 		clearFormat: () => chain.unsetAllMarks().clearNodes(),
+		codeLang: () => chain.setCodeBlockLanguage(String(payload ?? "java")),
 	};
 	const fn = actions[action];
 	if (fn) fn().run();
@@ -2348,5 +2434,9 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   .tiptap-host :global(ol[data-list-style="hierarchical"]), .tiptap-host :global(ol[data-list-style="hierarchical"] ol) { list-style: none; counter-reset: ordered-item; }
   .tiptap-host :global(ol[data-list-style="hierarchical"] li) { counter-increment: ordered-item; }
   .tiptap-host :global(ol[data-list-style="hierarchical"] li::before) { content: counters(ordered-item, ".") ". "; font-variant-numeric: tabular-nums; }
+  .tiptap-host :global(.ProseMirror pre) { position: relative; padding-top: 2rem; }
+  .tiptap-host :global(.ec-code-lang-bar) { position: absolute; top: .35rem; left: .5rem; z-index: 5; }
+  .tiptap-host :global(.ec-code-lang-select) { font-size: .72rem; padding: .1rem .35rem; border: 1px solid var(--line-divider); border-radius: 4px; background: var(--btn-regular-bg); color: var(--btn-content); font-family: var(--font-jetbrains-mono), monospace; cursor: pointer; outline: none; }
+  .tiptap-host :global(.ec-code-lang-select:focus) { border-color: var(--primary); }
   @media (max-width: 760px) { .toolbar { top: 3.6rem; } }
 </style>

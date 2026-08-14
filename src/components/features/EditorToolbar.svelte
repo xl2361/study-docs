@@ -665,9 +665,6 @@ const currentAlign = () =>
 		gap: 1px;
 		padding: 2px 5px 0;
 	}
-	.tb-drop-more {
-		margin-left: auto;
-	}
 	.tb-panel-more {
 		top: calc(100% + 4px);
 		right: 0;

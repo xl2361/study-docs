@@ -466,28 +466,34 @@ const CODE_LANGUAGES = [
 ].sort();
 
 let codeBlockLangObserver: MutationObserver | null = null;
+let codeBlockLangRaf: number | null = null;
 
 function setupCodeBlockLangLabels() {
 	codeBlockLangObserver?.disconnect();
 	if (!editorMount) return;
-	const update = () => injectCodeBlockLangLabels();
-	update();
-	codeBlockLangObserver = new MutationObserver(update);
+	const schedule = () => {
+		if (codeBlockLangRaf != null) return;
+		codeBlockLangRaf = requestAnimationFrame(() => {
+			codeBlockLangRaf = null;
+			injectCodeBlockLangLabels();
+		});
+	};
+	schedule();
+	codeBlockLangObserver = new MutationObserver(schedule);
 	codeBlockLangObserver.observe(editorMount, {
 		childList: true,
-		subtree: true,
 	});
 }
 
 function injectCodeBlockLangLabels() {
 	if (!editor || !editorMount) return;
-	const pres =
-		editorMount.querySelectorAll<HTMLPreElement>("pre[data-language]");
+	const pres = editorMount.querySelectorAll<HTMLPreElement>("pre");
 	for (const pre of pres) {
 		if (pre.querySelector(".ec-code-lang-select")) continue;
 		const lang = pre.getAttribute("data-language") || "";
 		const wrapper = document.createElement("div");
 		wrapper.className = "ec-code-lang-bar";
+		wrapper.contentEditable = "false";
 		const select = document.createElement("select");
 		select.className = "ec-code-lang-select";
 		select.contentEditable = "false";
@@ -1677,6 +1683,10 @@ function destroyEditor() {
 	}
 	codeBlockLangObserver?.disconnect();
 	codeBlockLangObserver = null;
+	if (codeBlockLangRaf != null) {
+		cancelAnimationFrame(codeBlockLangRaf);
+		codeBlockLangRaf = null;
+	}
 	cancelAnimationFrame(pointerRefreshRaf);
 	pointerRefreshPending = false;
 	document.removeEventListener("mousemove", onTableMouseMove);

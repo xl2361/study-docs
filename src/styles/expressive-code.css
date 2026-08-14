@@ -56,6 +56,19 @@
   }
 }
 
+/* 行号块：缩小宽度、缩小与代码的间隙 */
+.expressive-code .gutter .ln {
+  min-width: 1.5ch;
+  padding-inline: 0.5ch 1ch;
+}
+
+/* 代码块字号缩小一档 */
+.expressive-code pre,
+.expressive-code code,
+.expressive-code .ec-code__inner {
+  font-size: 0.85em;
+}
+
 /* ec-lang-logo 亮暗色适配 - 覆盖插件默认的 data-theme=light/dark 选择器 */
 /* 项目使用 data-theme='one-dark-pro' / data-theme='one-light' 作为主题标识 */
 html[data-theme='one-light'] {

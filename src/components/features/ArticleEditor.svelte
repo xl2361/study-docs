@@ -489,11 +489,14 @@ function injectCodeBlockLangLabels() {
 	if (!editor || !editorMount) return;
 	const pres = editorMount.querySelectorAll<HTMLPreElement>("pre");
 	for (const pre of pres) {
-		if (pre.querySelector(".ec-code-lang-select")) continue;
+		if (pre.querySelector(".ec-code-lang-bar")) {
+			updateCodeBlockLangBar(pre);
+			continue;
+		}
 		const lang = pre.getAttribute("data-language") || "";
-		const wrapper = document.createElement("div");
-		wrapper.className = "ec-code-lang-bar";
-		wrapper.contentEditable = "false";
+		const bar = document.createElement("div");
+		bar.className = "ec-code-lang-bar";
+		bar.contentEditable = "false";
 		const select = document.createElement("select");
 		select.className = "ec-code-lang-select";
 		select.contentEditable = "false";
@@ -518,9 +521,16 @@ function injectCodeBlockLangLabels() {
 				.setCodeBlockLanguage(select.value)
 				.run();
 		});
-		wrapper.appendChild(select);
-		pre.insertBefore(wrapper, pre.firstChild);
+		bar.appendChild(select);
+		pre.insertBefore(bar, pre.firstChild);
 	}
+}
+
+function updateCodeBlockLangBar(pre: HTMLPreElement) {
+	const select = pre.querySelector<HTMLSelectElement>(".ec-code-lang-select");
+	if (!select) return;
+	const lang = pre.getAttribute("data-language") || "";
+	if (select.value !== lang) select.value = lang;
 }
 
 function syncHistoryState() {
@@ -2444,8 +2454,8 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   .tiptap-host :global(ol[data-list-style="hierarchical"] li) { counter-increment: ordered-item; }
   .tiptap-host :global(ol[data-list-style="hierarchical"] li::before) { content: counters(ordered-item, ".") ". "; font-variant-numeric: tabular-nums; }
   .tiptap-host :global(.ProseMirror pre) { position: relative; }
-  .tiptap-host :global(.ec-code-lang-bar) { position: absolute; top: .35rem; right: .5rem; z-index: 5; }
-  .tiptap-host :global(.ec-code-lang-select) { font-size: .72rem; padding: .1rem .35rem; border: 1px solid var(--line-divider); border-radius: 4px; background: var(--btn-regular-bg); color: var(--btn-content); font-family: var(--font-jetbrains-mono), monospace; cursor: pointer; outline: none; }
+  .tiptap-host :global(.ec-code-lang-bar) { display: flex; align-items: center; justify-content: flex-end; margin-bottom: .35rem; }
+  .tiptap-host :global(.ec-code-lang-select) { font-size: .7rem; padding: .1rem .3rem; width: auto; min-width: 0; border: 1px solid var(--line-divider); border-radius: 4px; background: var(--btn-regular-bg); color: var(--btn-content); font-family: var(--font-jetbrains-mono), monospace; cursor: pointer; outline: none; }
   .tiptap-host :global(.ec-code-lang-select:focus) { border-color: var(--primary); }
   @media (max-width: 760px) { .toolbar { top: 3.6rem; } }
 </style>

@@ -11,23 +11,24 @@
 
   /* Language Badge 样式适配主题色和亮暗色 */
   /* 覆盖 expressive-code-language-badge 插件的默认样式 */
-  /* 代码块右上角上方（外部），与复制按钮不重叠 */
+  /* 紧贴代码块右上角上方边缘 */
   [data-language]::before {
     color: var(--btn-content) !important;
     background: var(--btn-regular-bg) !important;
     border: 1px solid var(--line-divider) !important;
     border-radius: 4px !important;
-    padding: 0.1rem 0.45rem !important;
+    padding: 0.05rem 0.4rem !important;
     text-transform: none !important;
     font-weight: 500 !important;
     font-size: 0.7rem !important;
-    top: -0.9rem !important;
+    top: 0 !important;
     right: 0.5rem !important;
     bottom: auto !important;
     left: auto !important;
     z-index: 3 !important;
     opacity: 1 !important;
     transition: opacity 0.3s !important;
+    transform: translateY(-50%) !important;
   }
   /* 确保 pre 是定位上下文 */
   .expressive-code pre[data-language] {
@@ -78,11 +79,6 @@
 .expressive-code .gutter .ln {
   min-width: 1ch;
   padding-inline: 0.25ch 0.5ch;
-}
-
-/* 代码块上方留出空间给语言徽章 */
-.expressive-code .frame {
-  margin-top: 0.85rem;
 }
 
 /* 代码块字号缩小一档 */

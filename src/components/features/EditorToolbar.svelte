@@ -196,7 +196,7 @@ const currentAlign = () =>
 				{@html SVG("chevronDown", 14)}
 			</button>
 			{#if openMenu === "block"}
-				<div class="tb-panel" role="listbox" aria-label="段落样式">
+				<div class="tb-panel tb-panel-block" role="listbox" aria-label="段落样式">
 					<button
 						class="tb-panel-item"
 						class:tb-checked={active.paragraph}
@@ -205,9 +205,9 @@ const currentAlign = () =>
 						aria-selected={active.paragraph}
 						onclick={() => act("paragraph")}
 					>
-						<span class="tb-check-slot">{#if active.paragraph}{@html SVG("check", 14)}{/if}</span>
-						<span>正文</span>
-						<span class="tb-kbd">Ctrl+0</span>
+						<span class="tb-check-slot">{#if active.paragraph}{@html SVG("check", 16)}{/if}</span>
+						<span class="tb-block-preview tb-block-normal">正文</span>
+						<span class="tb-kbd">Alt Ctrl 0</span>
 					</button>
 					{#each [1, 2, 3, 4, 5, 6] as level}
 						<button
@@ -218,9 +218,9 @@ const currentAlign = () =>
 							aria-selected={active.headingLevel === level}
 							onclick={() => act(`h${level}`)}
 						>
-							<span class="tb-check-slot">{#if active.headingLevel === level}{@html SVG("check", 14)}{/if}</span>
-							<span>标题 {level}</span>
-							<span class="tb-kbd">Ctrl+{level}</span>
+							<span class="tb-check-slot">{#if active.headingLevel === level}{@html SVG("check", 16)}{/if}</span>
+							<span class={`tb-block-preview tb-block-h${level}`}>标题{level}</span>
+							<span class="tb-kbd">Alt Ctrl {level}</span>
 						</button>
 					{/each}
 				</div>
@@ -645,6 +645,9 @@ const currentAlign = () =>
 	.tb-select :global(svg) {
 		flex: none;
 	}
+	.tb-select.tb-open:focus-visible {
+		outline: none;
+	}
 
 	.tb-char {
 		font-size: 14px;
@@ -680,6 +683,68 @@ const currentAlign = () =>
 		border: 1px solid var(--tb-border);
 		border-radius: 8px;
 		box-shadow: 0 10px 28px color-mix(in srgb, var(--tb-content) 16%, transparent);
+	}
+	.tb-panel-block {
+		top: calc(100% + 4px);
+		width: min(280px, calc(100vw - 24px));
+		padding: 8px;
+	}
+	.tb-panel-block .tb-panel-item {
+		height: 40px;
+		gap: 8px;
+		padding: 0 12px;
+	}
+	.tb-panel-block .tb-panel-item.tb-checked {
+		background: transparent;
+		color: var(--tb-content);
+	}
+	.tb-panel-block .tb-panel-item:hover,
+	.tb-panel-block .tb-panel-item.tb-checked:hover {
+		background: var(--tb-hover);
+	}
+	.tb-panel-block .tb-check-slot {
+		flex-basis: 24px;
+		width: 24px;
+		height: 24px;
+		color: var(--tb-content);
+	}
+	.tb-block-preview {
+		flex: 1;
+		min-width: 0;
+		line-height: 1;
+		color: var(--tb-content);
+	}
+	.tb-block-normal {
+		font-size: 14px;
+		font-weight: 400;
+	}
+	.tb-block-h1 {
+		font-size: 24px;
+		font-weight: 700;
+	}
+	.tb-block-h2 {
+		font-size: 20px;
+		font-weight: 600;
+	}
+	.tb-block-h3 {
+		font-size: 18px;
+		font-weight: 600;
+	}
+	.tb-block-h4 {
+		font-size: 16px;
+		font-weight: 600;
+	}
+	.tb-block-h5 {
+		font-size: 15px;
+		font-weight: 500;
+	}
+	.tb-block-h6 {
+		font-size: 14px;
+		font-weight: 500;
+	}
+	.tb-panel-block .tb-kbd {
+		flex: 0 0 72px;
+		text-align: right;
 	}
 	.tb-panel-scroll {
 		max-height: 280px;

@@ -606,9 +606,14 @@ html.study-editor-active #category-bar-wrapper {
   display: none !important;
 }
 
-/* 主内容容器 overflow-hidden 会破坏内部 sticky，编辑态改用 overflow:clip（不创建滚动容器但保留视觉裁剪） */
+/* 编辑顶栏包含向外展开的格式菜单：编辑态既不能创建滚动容器，也不能裁剪浮层。 */
 html.study-editor-active div:has(> #editor-topbar:not([hidden])) {
-  overflow: clip;
+  overflow: visible;
+}
+
+/* #editor-topbar 带有 card-base 的 overflow-hidden，此处仅在编辑态解除。 */
+html.study-editor-active #editor-topbar {
+  overflow: visible;
 }
 
 #editor-topbar[hidden] { display: none !important; }

@@ -384,7 +384,6 @@ async function createEditor(operation: number) {
 				starter.default.configure({
 					link: { openOnClick: false, autolink: false },
 					underline: {},
-					codeBlock: false,
 				}),
 				markdown.Markdown,
 				table.TableKit,
@@ -2434,8 +2433,8 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   .tiptap-host :global(ol[data-list-style="hierarchical"]), .tiptap-host :global(ol[data-list-style="hierarchical"] ol) { list-style: none; counter-reset: ordered-item; }
   .tiptap-host :global(ol[data-list-style="hierarchical"] li) { counter-increment: ordered-item; }
   .tiptap-host :global(ol[data-list-style="hierarchical"] li::before) { content: counters(ordered-item, ".") ". "; font-variant-numeric: tabular-nums; }
-  .tiptap-host :global(.ProseMirror pre) { position: relative; padding-top: 2rem; }
-  .tiptap-host :global(.ec-code-lang-bar) { position: absolute; top: .35rem; left: .5rem; z-index: 5; }
+  .tiptap-host :global(.ProseMirror pre) { position: relative; }
+  .tiptap-host :global(.ec-code-lang-bar) { position: absolute; top: .35rem; right: .5rem; z-index: 5; }
   .tiptap-host :global(.ec-code-lang-select) { font-size: .72rem; padding: .1rem .35rem; border: 1px solid var(--line-divider); border-radius: 4px; background: var(--btn-regular-bg); color: var(--btn-content); font-family: var(--font-jetbrains-mono), monospace; cursor: pointer; outline: none; }
   .tiptap-host :global(.ec-code-lang-select:focus) { border-color: var(--primary); }
   @media (max-width: 760px) { .toolbar { top: 3.6rem; } }

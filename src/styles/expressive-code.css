@@ -11,13 +11,10 @@
 
   /* Language Badge 样式适配主题色和亮暗色 */
   /* 覆盖 expressive-code-language-badge 插件的默认样式 */
-  /* 移到左上角，Typora 风格：带边框 */
+  /* 右上角，Typora 风格：带边框 */
   [data-language]::before {
     color: var(--btn-content) !important;
     background: var(--btn-regular-bg) !important;
-    right: auto !important;
-    left: 0.5rem !important;
-    top: 0.5rem !important;
     border: 1px solid var(--line-divider) !important;
     border-radius: 4px !important;
     padding: 0.1rem 0.45rem !important;
@@ -68,8 +65,8 @@
 
 /* 行号块：缩小宽度、缩小与代码的间隙 */
 .expressive-code .gutter .ln {
-  min-width: 1.5ch;
-  padding-inline: 0.5ch 1ch;
+  min-width: 1ch;
+  padding-inline: 0.25ch 0.5ch;
 }
 
 /* 代码块字号缩小一档 */

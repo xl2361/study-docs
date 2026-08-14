@@ -1,4 +1,4 @@
-import { mergeAttributes, Node } from "@tiptap/core";
+import { Extension } from "@tiptap/core";
 
 declare module "@tiptap/core" {
 	interface Commands<ReturnType> {
@@ -8,48 +8,25 @@ declare module "@tiptap/core" {
 	}
 }
 
-export const CodeBlockLang = Node.create({
-	name: "codeBlock",
+export const CodeBlockLang = Extension.create({
+	name: "codeBlockLang",
 
-	group: "block",
-
-	content: "text*",
-
-	marks: "",
-
-	code: true,
-
-	addAttributes() {
-		return {
-			language: {
-				default: null,
-				parseHTML: (element) => element.getAttribute("data-language"),
-				renderHTML: (attributes) => {
-					if (!attributes.language) return {};
-					return {
-						"data-language": attributes.language,
-					};
-				},
-			},
-		};
-	},
-
-	parseHTML() {
+	addGlobalAttributes() {
 		return [
 			{
-				tag: "pre",
-				preserveWhitespace: "full",
+				types: ["codeBlock"],
+				attributes: {
+					language: {
+						default: null,
+						parseHTML: (element: HTMLElement) =>
+							element.getAttribute("data-language"),
+						renderHTML: (attributes: { language?: string | null }) =>
+							attributes.language
+								? { "data-language": attributes.language }
+								: {},
+					},
+				},
 			},
-		];
-	},
-
-	renderHTML({ node, HTMLAttributes }) {
-		return [
-			"pre",
-			mergeAttributes(HTMLAttributes, {
-				"data-language": node.attrs.language || "",
-			}),
-			["code", 0],
 		];
 	},
 

@@ -4,6 +4,8 @@ import { CellSelection, tableEditingKey } from "prosemirror-tables";
 import { onMount, tick } from "svelte";
 import { FontSize } from "@/extensions/FontSize";
 import { Indent } from "@/extensions/Indent";
+import { LineHeight } from "@/extensions/LineHeight";
+import { OrderedListStyle } from "@/extensions/OrderedListStyle";
 import EditorToolbar from "./EditorToolbar.svelte";
 
 export let slug: string;
@@ -94,6 +96,9 @@ type EditorChain = {
 	setTextAlign: (alignment: string) => EditorChain;
 	setFontSize: (size: string) => EditorChain;
 	unsetFontSize: () => EditorChain;
+	setLineHeight: (lineHeight: string) => EditorChain;
+	unsetLineHeight: () => EditorChain;
+	setOrderedListStyle: (style: string) => EditorChain;
 	indent: () => EditorChain;
 	outdent: () => EditorChain;
 	setLink: (options: { href: string }) => EditorChain;
@@ -167,6 +172,8 @@ let activeState = {
 	color: null as string | null,
 	highlight: null as string | null,
 	fontSize: null as string | null,
+	lineHeight: null as string | null,
+	orderedListStyle: "mixed",
 };
 let readingBodyEl: HTMLElement | null = null;
 let savedReadingHTML = "";
@@ -389,6 +396,8 @@ async function createEditor(operation: number) {
 				taskItem.default,
 				FontSize,
 				Indent,
+				LineHeight,
+				OrderedListStyle,
 			],
 			content: "",
 			onUpdate: () => {
@@ -440,6 +449,10 @@ function syncHistoryState() {
 		string,
 		unknown
 	>;
+	const orderedListAttrs = editor.getAttributes("orderedList") as Record<
+		string,
+		unknown
+	>;
 	const textStyleAttrs = editor.getAttributes("textStyle") as Record<
 		string,
 		unknown
@@ -466,6 +479,10 @@ function syncHistoryState() {
 			? String(editor.getAttributes("highlight").color ?? "#ffe08a")
 			: null,
 		fontSize: (String(textStyleAttrs.fontSize ?? "") || null) as string | null,
+		lineHeight: (String(
+			paragraphAttrs.lineHeight ?? headingAttrs.lineHeight ?? "",
+		) || null) as string | null,
+		orderedListStyle: String(orderedListAttrs.listStyle ?? "mixed"),
 	};
 }
 
@@ -2171,6 +2188,11 @@ function format(action: string, payload?: unknown) {
 		unsetHighlight: () => chain.unsetHighlight(),
 		fontSize: () => chain.setFontSize(String(payload ?? "16px")),
 		unsetFontSize: () => chain.unsetFontSize(),
+		lineHeight: () =>
+			payload === null
+				? chain.unsetLineHeight()
+				: chain.setLineHeight(String(payload ?? "1.75")),
+		orderedStyle: () => chain.setOrderedListStyle(String(payload ?? "mixed")),
 		clearFormat: () => chain.unsetAllMarks().clearNodes(),
 	};
 	const fn = actions[action];
@@ -2317,5 +2339,14 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
  :global(.post-meta-cover .article-category-select), :global(.post-meta-cover .article-tags-input) { color: white; background: rgb(0 0 0 / .35); }
    :global(.table-toolbar) { position: fixed; z-index: 40; display: flex; flex-wrap: wrap; gap: .35rem; padding: .45rem .55rem; border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); border-radius: .7rem; background: color-mix(in srgb, var(--card-bg) 94%, transparent); backdrop-filter: blur(10px); box-shadow: 0 10px 28px color-mix(in srgb, var(--btn-content) 10%, transparent); } :global(.table-toolbar button) { flex: 0 0 auto; min-width: 3.6rem; border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .3rem .55rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } :global(.table-toolbar button:hover) { border-color: color-mix(in srgb, var(--primary) 45%, transparent); transform: translateY(-1px); } :global(.table-toolbar .danger) { color: #c74747; } :global(.table-drag-handle) { display: none; position: fixed; z-index: 41; width: 14px; height: 14px; padding: 3px; border-radius: 4px; background: #3f3f46; box-shadow: 0 2px 6px rgb(0 0 0 / 28%); cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none; } :global(.table-drag-handle::before) { content: ""; display: block; width: 100%; height: 100%; background-image: radial-gradient(circle, #fff 1px, transparent 1px); background-size: 4px 4px; background-position: center; } :global(.table-drag-handle:hover) { background: #52525b; } :global(.table-drag-handle:active) { cursor: grabbing; } :global(.table-row-handle), :global(.table-col-handle) { display: none; position: fixed; z-index: 42; border-radius: 3px; background-color: #3f3f46; background-image: radial-gradient(circle, #fff 0.85px, transparent 0.85px); background-size: 3.5px 3.5px; background-position: center; background-repeat: no-repeat; box-shadow: 0 1px 4px rgb(0 0 0 / 25%); cursor: grab; touch-action: none; -webkit-user-select: none; user-select: none; } :global(.table-row-handle) { width: 12px; height: 12px; } :global(.table-col-handle) { width: 14px; height: 14px; } :global(.table-row-handle:hover), :global(.table-col-handle:hover) { background-color: #4f6ef7; } :global(.table-row-handle:active), :global(.table-col-handle:active) { cursor: grabbing; } :global(body.table-dragging) { cursor: grabbing !important; } :global(.table-drop-line) { display: none; position: fixed; z-index: 9999; background: #4a90e2; border-radius: 1px; pointer-events: none; } :global(.table-drag-badge) { display: none; position: fixed; z-index: 10001; padding: 4px 9px; border-radius: 6px; background: #4a90e2; color: #fff; font-size: 12px; line-height: 1; white-space: nowrap; pointer-events: none; box-shadow: 0 2px 8px rgb(0 0 0 / 25%); } :global(.ProseMirror td.table-drag-source), :global(.ProseMirror th.table-drag-source) { background: #d6eefc !important; } :global(.table-drag-ghost) { position: fixed; z-index: 10000; width: max-content; max-width: 92vw; overflow: hidden; border-radius: 6px; opacity: 0.86; pointer-events: none; box-shadow: 0 14px 34px rgb(0 0 0 / 32%); transform: rotate(0.5deg); } :global(.table-drag-ghost *), :global(.table-drag-ghost) { -webkit-user-select: none; user-select: none; } :global(.table-drag-ghost table) { width: 100%; }
  :global(.tiptap-host .ProseMirror td.selectedCell), :global(.tiptap-host .ProseMirror th.selectedCell) { background: #d3e4ff !important; }
- @media (max-width: 760px) { .toolbar { top: 3.6rem; } }
+  .tiptap-host :global(ol[data-list-style="mixed"]) { list-style-type: decimal; }
+  .tiptap-host :global(ol[data-list-style="mixed"] ol) { list-style-type: lower-alpha; }
+  .tiptap-host :global(ol[data-list-style="mixed"] ol ol) { list-style-type: lower-roman; }
+  .tiptap-host :global(ol[data-list-style="cjk"]) { list-style-type: cjk-ideographic; }
+  .tiptap-host :global(ol[data-list-style="cjk"] ol) { list-style-type: decimal; }
+  .tiptap-host :global(ol[data-list-style="cjk"] ol ol) { list-style-type: lower-alpha; }
+  .tiptap-host :global(ol[data-list-style="hierarchical"]), .tiptap-host :global(ol[data-list-style="hierarchical"] ol) { list-style: none; counter-reset: ordered-item; }
+  .tiptap-host :global(ol[data-list-style="hierarchical"] li) { counter-increment: ordered-item; }
+  .tiptap-host :global(ol[data-list-style="hierarchical"] li::before) { content: counters(ordered-item, ".") ". "; font-variant-numeric: tabular-nums; }
+  @media (max-width: 760px) { .toolbar { top: 3.6rem; } }
 </style>

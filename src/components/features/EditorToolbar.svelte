@@ -23,6 +23,8 @@ export let active: {
 	color: string | null;
 	highlight: string | null;
 	fontSize: string | null;
+	lineHeight: string | null;
+	orderedListStyle: string;
 } = {
 	bold: false,
 	italic: false,
@@ -41,6 +43,8 @@ export let active: {
 	color: null,
 	highlight: null,
 	fontSize: null,
+	lineHeight: null,
+	orderedListStyle: "mixed",
 };
 
 const dispatch = createEventDispatcher<{
@@ -64,6 +68,7 @@ const ICONS: Record<string, string> = {
 	listBulleted: `<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3" cy="6" r=".75" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r=".75" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r=".75" fill="currentColor" stroke="none"/>`,
 	listNumbered: `<path d="M11 5h10m-10 7h10m-10 7h10M4 4h1v5M4 9h2m.5 11H3.4c0-1 2.6-1.9 2.6-3.5A1.5 1.5 0 0 0 3.4 15.5"/>`,
 	checklist: `<path d="m3 5 2 2 4-4M3 17l2 2 4-4M13 6h8M13 12h8M13 18h8"/>`,
+	lineHeight: `<path d="M8 6h13M8 12h13M8 18h13M3 5v14M1 7l2-2 2 2M1 17l2 2 2-2"/>`,
 	indentDecrease: `<path d="M21 6H11m10 6H11m10 6H11M7 8l-4 4 4 4"/>`,
 	indentIncrease: `<path d="M21 6H11m10 6H11m10 6H11M3 8l4 4-4 4"/>`,
 	table: `<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M12 3v18"/>`,
@@ -109,6 +114,12 @@ onDestroy(() => {
 });
 
 const FONT_SIZES = [12, 13, 14, 15, 16, 19, 22, 24, 29, 32, 40, 48];
+const LINE_HEIGHTS = ["1", "1.15", "1.5", "2", "2.5", "3"];
+const ORDERED_STYLES = [
+	{ value: "mixed", lines: ["1. 示例", "a. 示例", "i. 示例"] },
+	{ value: "cjk", lines: ["一、示例", "（一）示例", "1. 示例"] },
+	{ value: "hierarchical", lines: ["1. 示例", "1.1 示例", "1.1.1 示例"] },
+];
 const TEXT_COLORS = [
 	{ name: "默认", value: "" },
 	{ name: "黑", value: "#1f2329" },
@@ -242,7 +253,7 @@ const currentAlign = () =>
 				{@html SVG("chevronDown", 12)}
 			</button>
 			{#if openMenu === "size"}
-				<div class="tb-panel tb-panel-scroll" role="listbox" aria-label="字号">
+				<div class="tb-panel tb-panel-scroll tb-panel-size" role="listbox" aria-label="字号">
 					{#each FONT_SIZES as size}
 						<button
 							class="tb-panel-item"
@@ -266,7 +277,7 @@ const currentAlign = () =>
 			<b class="tb-char">B</b>
 		</button>
 		<button class="tb-btn" disabled={disabled} class:tb-on={active.italic} type="button" title="斜体 (Ctrl+I)" aria-label="斜体" aria-pressed={active.italic} onclick={() => act("italic")}>
-			<i class="tb-char">I</i>
+			<i class="tb-char tb-italic">I</i>
 		</button>
 		<button class="tb-btn" disabled={disabled} class:tb-on={active.strike} type="button" title="删除线 (Ctrl+Shift+X)" aria-label="删除线" aria-pressed={active.strike} onclick={() => act("strike")}>
 			<s class="tb-char">S</s>
@@ -388,59 +399,29 @@ const currentAlign = () =>
 				onclick={() => toggleMenu("align")}
 			>
 				{@html SVG(currentAlign().icon)}
+				{@html SVG("chevronDown", 10)}
 			</button>
 			{#if openMenu === "align"}
-				<div class="tb-panel" role="menu">
+				<div class="tb-panel tb-panel-align" role="menu" aria-label="对齐方式">
 					{#each ALIGNS as a}
 						<button
-							class="tb-panel-item"
+							class="tb-btn tb-align-option"
 							class:tb-checked={(active.textAlign ?? "left") === a.action}
 							type="button"
+							title={a.name}
+							aria-label={a.name}
 							onclick={() => act("align", a.action)}
 						>
-							{@html SVG(a.icon, 16)}<span>{a.name}</span>
+							{@html SVG(a.icon, 16)}
 						</button>
 					{/each}
 				</div>
 			{/if}
 		</div>
 
-		<div class="tb-drop">
-			<button
-				class="tb-btn"
-				class:tb-on={active.bulletList}
-				class:tb-open={openMenu === "bullet"}
-				type="button"
-				disabled={disabled}
-				title="无序列表"
-				aria-label="无序列表"
-				aria-haspopup="menu"
-				aria-expanded={openMenu === "bullet"}
-				onclick={() => toggleMenu("bullet")}
-			>
-				{@html SVG("listBulleted")}
-			</button>
-			{#if openMenu === "bullet"}
-				<div class="tb-panel" role="menu">
-					<button
-						class="tb-panel-item"
-						class:tb-checked={active.bulletList}
-						type="button"
-						onclick={() => act("bullet")}
-					>
-						{@html SVG("listBulleted", 16)}<span>无序列表</span>
-					</button>
-					<button
-						class="tb-panel-item"
-						class:tb-checked={active.taskList}
-						type="button"
-						onclick={() => act("task")}
-					>
-						{@html SVG("checklist", 16)}<span>任务列表</span>
-					</button>
-				</div>
-			{/if}
-		</div>
+		<button class="tb-btn" class:tb-on={active.bulletList} disabled={disabled} type="button" title="无序列表" aria-label="无序列表" aria-pressed={active.bulletList} onclick={() => act("bullet")}>
+			{@html SVG("listBulleted")}
+		</button>
 
 		<div class="tb-drop">
 			<button
@@ -456,17 +437,49 @@ const currentAlign = () =>
 				onclick={() => toggleMenu("ordered")}
 			>
 				{@html SVG("listNumbered")}
+				{@html SVG("chevronDown", 10)}
 			</button>
 			{#if openMenu === "ordered"}
-				<div class="tb-panel" role="menu">
-					<button
-						class="tb-panel-item"
-						class:tb-checked={active.orderedList}
-						type="button"
-						onclick={() => act("ordered")}
-					>
-						{@html SVG("listNumbered", 16)}<span>有序列表</span>
+				<div class="tb-panel tb-panel-ordered" role="menu" aria-label="有序列表样式">
+					{#each ORDERED_STYLES as style}
+						<button
+							class="tb-ordered-option"
+							class:tb-checked={active.orderedList && active.orderedListStyle === style.value}
+							type="button"
+							onclick={() => act("orderedStyle", style.value)}
+						>
+							{#each style.lines as line}<span>{line}</span>{/each}
+						</button>
+					{/each}
+				</div>
+			{/if}
+		</div>
+
+		<div class="tb-drop">
+			<button
+				class="tb-btn"
+				class:tb-open={openMenu === "lineHeight"}
+				type="button"
+				disabled={disabled}
+				title="行高"
+				aria-label="行高"
+				aria-haspopup="menu"
+				aria-expanded={openMenu === "lineHeight"}
+				onclick={() => toggleMenu("lineHeight")}
+			>
+				{@html SVG("lineHeight")}
+				{@html SVG("chevronDown", 10)}
+			</button>
+			{#if openMenu === "lineHeight"}
+				<div class="tb-panel tb-panel-line-height" role="menu" aria-label="行高">
+					<button class="tb-panel-item" class:tb-checked={active.lineHeight === null} type="button" onclick={() => act("lineHeight", null)}>
+						<span class="tb-check-slot">{#if active.lineHeight === null}{@html SVG("check", 14)}{/if}</span><span>默认</span>
 					</button>
+					{#each LINE_HEIGHTS as value}
+						<button class="tb-panel-item" class:tb-checked={active.lineHeight === value} type="button" onclick={() => act("lineHeight", value)}>
+							<span class="tb-check-slot">{#if active.lineHeight === value}{@html SVG("check", 14)}{/if}</span><span>{value}</span>
+						</button>
+					{/each}
 				</div>
 			{/if}
 		</div>
@@ -521,6 +534,9 @@ const currentAlign = () =>
 				</button>
 				<button class="tb-btn tb-more-btn" class:tb-on={active.blockquote} disabled={disabled} type="button" title="引用" aria-label="引用" aria-pressed={active.blockquote} onclick={() => act("quote", undefined, false)}>
 					{@html SVG("quote")}
+				</button>
+				<button class="tb-btn tb-more-btn" class:tb-on={active.taskList} disabled={disabled} type="button" title="任务列表" aria-label="任务列表" aria-pressed={active.taskList} onclick={() => act("task", undefined, false)}>
+					{@html SVG("checklist")}
 				</button>
 				<button class="tb-btn tb-more-btn" disabled={disabled} type="button" title="分隔线" aria-label="分隔线" onclick={() => act("hr", undefined, false)}>
 					{@html SVG("hr")}
@@ -632,10 +648,10 @@ const currentAlign = () =>
 		letter-spacing: 0;
 	}
 	.tb-select-block {
-		width: 76px;
+		width: 64px;
 	}
 	.tb-select-size {
-		width: 66px;
+		width: 56px;
 	}
 	.tb-select-label {
 		overflow: hidden;
@@ -653,6 +669,12 @@ const currentAlign = () =>
 		font-size: 13px;
 		font-weight: 600;
 		font-style: normal;
+	}
+	.tb-italic {
+		font-family: Georgia, "Times New Roman", serif;
+		font-size: 15px;
+		font-weight: 600;
+		font-style: italic;
 	}
 
 	.tb-painter.tb-on {
@@ -706,13 +728,13 @@ const currentAlign = () =>
 	}
 	.tb-panel-block {
 		top: calc(100% + 4px);
-		width: min(280px, calc(100vw - 24px));
-		padding: 8px;
+		width: min(236px, calc(100vw - 24px));
+		padding: 6px;
 	}
 	.tb-panel-block .tb-panel-item {
-		height: 40px;
-		gap: 8px;
-		padding: 0 12px;
+		height: 36px;
+		gap: 6px;
+		padding: 0 8px;
 	}
 	.tb-panel-block .tb-panel-item.tb-checked {
 		background: transparent;
@@ -723,9 +745,9 @@ const currentAlign = () =>
 		background: var(--tb-hover);
 	}
 	.tb-panel-block .tb-check-slot {
-		flex-basis: 24px;
-		width: 24px;
-		height: 24px;
+		flex-basis: 18px;
+		width: 18px;
+		height: 18px;
 		color: var(--tb-content);
 	}
 	.tb-block-preview {
@@ -763,8 +785,71 @@ const currentAlign = () =>
 		font-weight: 500;
 	}
 	.tb-panel-block .tb-kbd {
-		flex: 0 0 72px;
+		flex: 0 0 64px;
 		text-align: right;
+	}
+	.tb-panel-size {
+		width: 96px;
+		min-width: 96px;
+	}
+	.tb-panel-size .tb-panel-item {
+		gap: 5px;
+		padding: 5px 7px;
+	}
+	.tb-panel-align {
+		display: flex;
+		width: max-content;
+		min-width: 0;
+		gap: 3px;
+		padding: 5px;
+	}
+	.tb-align-option {
+		flex: 0 0 28px;
+	}
+	.tb-align-option.tb-checked {
+		background: color-mix(in srgb, var(--tb-primary) 13%, transparent);
+		color: var(--tb-primary);
+	}
+	.tb-panel-ordered {
+		right: 0;
+		left: auto;
+		display: grid;
+		grid-template-columns: repeat(3, 96px);
+		width: max-content;
+		min-width: 0;
+		gap: 6px;
+		padding: 7px;
+	}
+	.tb-ordered-option {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		height: 78px;
+		padding: 8px 10px;
+		border: 1px solid var(--tb-border);
+		border-radius: 6px;
+		background: transparent;
+		color: var(--tb-content);
+		font: inherit;
+		font-size: 11px;
+		line-height: 1.25;
+		text-align: left;
+		cursor: pointer;
+	}
+	.tb-ordered-option:hover {
+		background: var(--tb-hover);
+	}
+	.tb-ordered-option.tb-checked {
+		border-color: var(--tb-primary);
+		background: color-mix(in srgb, var(--tb-primary) 9%, transparent);
+		color: var(--tb-primary);
+	}
+	.tb-panel-line-height {
+		width: 108px;
+		min-width: 108px;
+	}
+	.tb-panel-line-height .tb-panel-item {
+		padding: 5px 8px;
 	}
 	.tb-panel-scroll {
 		max-height: 280px;
@@ -851,10 +936,10 @@ const currentAlign = () =>
 			font-size: 12px;
 		}
 		.tb-select-block {
-			width: 70px;
+			width: 58px;
 		}
 		.tb-select-size {
-			width: 60px;
+			width: 52px;
 		}
 		.tb-char {
 			font-size: 12px;

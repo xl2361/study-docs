@@ -614,10 +614,13 @@ const currentAlign = () =>
 		outline: 2px solid var(--tb-primary);
 		outline-offset: 1px;
 	}
-	.tb-btn.tb-on,
-	.tb-btn.tb-open {
+	.tb-btn.tb-on {
 		background: color-mix(in srgb, var(--tb-primary) 13%, transparent);
 		color: var(--tb-primary);
+	}
+	.tb-btn.tb-open {
+		background: var(--tb-hover);
+		color: var(--tb-content);
 	}
 
 	.tb-select {
@@ -641,10 +644,6 @@ const currentAlign = () =>
 	}
 	.tb-select :global(svg) {
 		flex: none;
-		transition: transform 0.15s ease;
-	}
-	.tb-select.tb-open :global(svg) {
-		transform: rotate(180deg);
 	}
 
 	.tb-char {

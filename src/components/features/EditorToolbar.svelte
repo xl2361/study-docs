@@ -76,7 +76,7 @@ const ICONS: Record<string, string> = {
 	chevronDown: `<path d="m6 9 6 6 6-6"/>`,
 };
 
-const SVG = (name: string, size = 16) =>
+const SVG = (name: string, size = 15) =>
 	`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICONS[name]}</svg>`;
 
 let openMenu: string | null = null;
@@ -645,7 +645,7 @@ const currentAlign = () =>
 	.tb-select :global(svg) {
 		flex: none;
 	}
-	.tb-select.tb-open:focus-visible {
+	.tb-btn.tb-open:focus-visible {
 		outline: none;
 	}
 
@@ -834,6 +834,40 @@ const currentAlign = () =>
 	}
 
 	@media (max-width: 900px) {
+		.editor-toolbar {
+			gap: 0;
+			padding: 4px 6px;
+		}
+		.tb-group {
+			gap: 0;
+			margin-right: 3px;
+			padding-right: 3px;
+		}
+		.tb-btn {
+			min-width: 24px;
+			height: 26px;
+			padding: 0 4px;
+			border-radius: 5px;
+		}
+		.tb-select {
+			padding: 0 5px 0 7px;
+			font-size: 12px;
+		}
+		.tb-select-block {
+			width: 70px;
+		}
+		.tb-select-size {
+			width: 60px;
+		}
+		.tb-char {
+			font-size: 12px;
+		}
+		.tb-more-btn {
+			flex-basis: 24px;
+		}
+	}
+
+	@media (max-width: 640px) {
 		.editor-toolbar {
 			flex-wrap: wrap;
 		}

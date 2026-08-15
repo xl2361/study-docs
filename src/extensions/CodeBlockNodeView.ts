@@ -19,14 +19,27 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 		const bar = document.createElement("div");
 		bar.className = "ec-code-lang-bar";
 		bar.contentEditable = "false";
-		const select = document.createElement("select");
-		select.className = "ec-code-lang-select";
-		select.contentEditable = "false";
+		const languagePicker = document.createElement("div");
+		languagePicker.className = "ec-code-lang-picker";
+		languagePicker.contentEditable = "false";
+		const languageButton = document.createElement("button");
+		languageButton.type = "button";
+		languageButton.className = "ec-code-lang-select";
+		languageButton.setAttribute("aria-haspopup", "listbox");
+		languageButton.setAttribute("aria-expanded", "false");
+		languageButton.contentEditable = "false";
+		const languageList = document.createElement("div");
+		languageList.className = "ec-code-lang-list";
+		languageList.setAttribute("role", "listbox");
+		languageList.hidden = true;
 		for (const language of languages) {
-			const option = document.createElement("option");
-			option.value = language;
+			const option = document.createElement("button");
+			option.type = "button";
+			option.className = "ec-code-lang-option";
+			option.dataset.language = language;
+			option.setAttribute("role", "option");
 			option.textContent = language;
-			select.appendChild(option);
+			languageList.appendChild(option);
 		}
 
 		const copyButton = document.createElement("button");
@@ -39,11 +52,27 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 		const code = document.createElement("code");
 		pre.append(chrome, code);
 		chrome.append(gutter, bar, copyButton);
-		bar.appendChild(select);
+		bar.appendChild(languagePicker);
+		languagePicker.append(languageButton, languageList);
+
+		const closeLanguageList = () => {
+			languageList.hidden = true;
+			languageButton.setAttribute("aria-expanded", "false");
+		};
+		const openLanguageList = () => {
+			languageList.hidden = false;
+			languageButton.setAttribute("aria-expanded", "true");
+		};
 
 		const updateChrome = (currentNode: ProseMirrorNode) => {
 			const language = currentNode.attrs.language || "";
-			select.value = language;
+			languageButton.textContent = language || "text";
+			for (const option of languageList.querySelectorAll<HTMLButtonElement>(
+				".ec-code-lang-option",
+			)) {
+				const selected = option.dataset.language === language;
+				option.setAttribute("aria-selected", String(selected));
+			}
 			gutter.replaceChildren();
 			for (const [index] of currentNode.textContent.split("\n").entries()) {
 				const line = document.createElement("span");
@@ -61,15 +90,23 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 			subtree: true,
 		});
 
-		select.addEventListener("change", () => {
+		languageButton.addEventListener("click", () => {
+			if (languageList.hidden) openLanguageList();
+			else closeLanguageList();
+		});
+		languageList.addEventListener("click", (event) => {
+			const target = event.target;
+			if (!(target instanceof HTMLButtonElement)) return;
 			const position = getPos();
 			if (position === undefined) return;
+			const language = target.dataset.language || null;
 			view.dispatch(
 				view.state.tr.setNodeMarkup(position, undefined, {
 					...node.attrs,
-					language: select.value || null,
+					language,
 				}),
 			);
+			closeLanguageList();
 			editor.commands.focus();
 		});
 

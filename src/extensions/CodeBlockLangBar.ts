@@ -73,7 +73,7 @@ export const CodeBlockLangBar = Extension.create({
 							bar.appendChild(select);
 							bar.appendChild(copyBtn);
 							decos.push(
-								Decoration.widget(pos + 1, bar, {
+								Decoration.widget(pos, bar, {
 									side: -1,
 									key: `ec-bar-${pos}`,
 								}),

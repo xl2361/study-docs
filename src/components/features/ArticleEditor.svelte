@@ -2443,5 +2443,7 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   :global(:root.dark) .tiptap-host :global(.ec-line-gutter) { color: #767c89; }
   .tiptap-host :global(.ec-code-lang-bar) { position: absolute; top: 0; right: .5rem; display: flex; align-items: center; gap: .35rem; transform: translateY(-100%); pointer-events: auto; }
   .tiptap-host :global(.ec-code-copy-btn) { top: .5rem; right: .6rem; z-index: 3; pointer-events: auto; }
+  .tiptap-host :global(.ProseMirror pre code) { padding-left: 1rem !important; }
+  .tiptap-host :global(.ec-line-gutter) { width: 1.9rem; padding-right: .35rem; }
   @media (max-width: 760px) { .toolbar { top: 3.6rem; } }
 </style>

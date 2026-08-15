@@ -3,8 +3,7 @@ import { TextSelection } from "prosemirror-state";
 import { CellSelection, tableEditingKey } from "prosemirror-tables";
 import { onMount, tick } from "svelte";
 import { CodeBlockLang } from "@/extensions/CodeBlockLang";
-import { CodeBlockLangBar } from "@/extensions/CodeBlockLangBar";
-import { CodeBlockLineNumbers } from "@/extensions/CodeBlockLineNumbers";
+import { createCodeBlockNodeView } from "@/extensions/CodeBlockNodeView";
 import { FontSize } from "@/extensions/FontSize";
 import { Indent } from "@/extensions/Indent";
 import { LineHeight } from "@/extensions/LineHeight";
@@ -408,11 +407,15 @@ async function createEditor(operation: number) {
 				LineHeight,
 				OrderedListStyle,
 				CodeBlockLang,
-				CodeBlockLineNumbers,
-				CodeBlockLangBar.configure({ languages: CODE_LANGUAGES }),
-				codeBlockLowlight.default.configure({
-					lowlight: lowlight.createLowlight(lowlight.all),
-				}),
+				codeBlockLowlight.default
+					.extend({
+						addNodeView() {
+							return createCodeBlockNodeView(CODE_LANGUAGES);
+						},
+					})
+					.configure({
+						lowlight: lowlight.createLowlight(lowlight.all),
+					}),
 			],
 			content: "",
 			onUpdate: () => {
@@ -2433,5 +2436,12 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   :global(:root.dark) .tiptap-host :global(.ProseMirror pre code .hljs-link) { color: #61afef; }
   :global(:root.dark) .tiptap-host :global(.ProseMirror pre code .hljs-addition) { color: #98c379; }
   :global(:root.dark) .tiptap-host :global(.ProseMirror pre code .hljs-deletion) { color: #e06c75; }
+  .tiptap-host :global(.ProseMirror pre) { margin-top: 1.4rem !important; }
+  .tiptap-host :global(.ProseMirror pre > .ec-code-block-chrome) { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+  .tiptap-host :global(.ec-line-gutter) { position: absolute; left: 0; top: 0; width: 2.2rem; padding-top: 1rem; padding-right: .5rem; text-align: right; box-sizing: border-box; color: #8a8a8c; line-height: 1.5rem; user-select: none; pointer-events: none; }
+  .tiptap-host :global(.ec-line-gutter span) { display: block; height: 1.5rem; line-height: 1.5rem; }
+  :global(:root.dark) .tiptap-host :global(.ec-line-gutter) { color: #767c89; }
+  .tiptap-host :global(.ec-code-lang-bar) { position: absolute; top: 0; right: .5rem; display: flex; align-items: center; gap: .35rem; transform: translateY(-100%); pointer-events: auto; }
+  .tiptap-host :global(.ec-code-copy-btn) { top: .5rem; right: .6rem; z-index: 3; pointer-events: auto; }
   @media (max-width: 760px) { .toolbar { top: 3.6rem; } }
 </style>

@@ -2445,5 +2445,6 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   .tiptap-host :global(.ec-code-copy-btn) { top: .5rem; right: .6rem; z-index: 3; pointer-events: auto; }
   .tiptap-host :global(.ProseMirror pre code) { padding-left: .7rem !important; }
   .tiptap-host :global(.ec-line-gutter) { width: 1.55rem; padding-right: .2rem; }
+  .tiptap-host :global(.ec-line-gutter) { border-right: 1px solid color-mix(in srgb, currentColor 22%, transparent); }
   @media (max-width: 760px) { .toolbar { top: 3.6rem; } }
 </style>

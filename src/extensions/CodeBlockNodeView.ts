@@ -22,10 +22,6 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 		const select = document.createElement("select");
 		select.className = "ec-code-lang-select";
 		select.contentEditable = "false";
-		const placeholder = document.createElement("option");
-		placeholder.value = "";
-		placeholder.textContent = "语言";
-		select.appendChild(placeholder);
 		for (const language of languages) {
 			const option = document.createElement("option");
 			option.value = language;
@@ -57,6 +53,13 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 			pre.toggleAttribute("data-language", Boolean(language));
 			if (language) pre.setAttribute("data-language", language);
 		};
+		const refreshLines = () => updateChrome(node);
+		const observer = new MutationObserver(refreshLines);
+		observer.observe(code, {
+			childList: true,
+			characterData: true,
+			subtree: true,
+		});
 
 		select.addEventListener("change", () => {
 			const position = getPos();
@@ -96,6 +99,7 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 				updateChrome(nextNode);
 				return true;
 			},
+			destroy: () => observer.disconnect(),
 			stopEvent: (event: Event) =>
 				event.target instanceof HTMLElement && chrome.contains(event.target),
 			ignoreMutation: (mutation: ViewMutationRecord) =>

@@ -854,6 +854,11 @@ const currentAlign = () =>
 	.tb-panel-scroll {
 		max-height: 280px;
 		overflow-y: auto;
+		-ms-overflow-style: none;
+		scrollbar-width: none;
+	}
+	.tb-panel-scroll::-webkit-scrollbar {
+		display: none;
 	}
 	.tb-panel-item {
 		display: flex;

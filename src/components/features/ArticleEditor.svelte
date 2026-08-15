@@ -3,6 +3,7 @@ import { TextSelection } from "prosemirror-state";
 import { CellSelection, tableEditingKey } from "prosemirror-tables";
 import { onMount, tick } from "svelte";
 import { CodeBlockLang } from "@/extensions/CodeBlockLang";
+import { CodeBlockLineNumbers } from "@/extensions/CodeBlockLineNumbers";
 import { FontSize } from "@/extensions/FontSize";
 import { Indent } from "@/extensions/Indent";
 import { LineHeight } from "@/extensions/LineHeight";
@@ -406,6 +407,7 @@ async function createEditor(operation: number) {
 				LineHeight,
 				OrderedListStyle,
 				CodeBlockLang,
+				CodeBlockLineNumbers,
 				codeBlockLowlight.default.configure({
 					lowlight: lowlight.createLowlight(lowlight.all),
 				}),
@@ -490,6 +492,7 @@ function setupCodeBlockLangLabels() {
 	codeBlockLangObserver = new MutationObserver(schedule);
 	codeBlockLangObserver.observe(editorMount, {
 		childList: true,
+		subtree: true,
 	});
 }
 
@@ -529,7 +532,31 @@ function injectCodeBlockLangLabels() {
 				.setCodeBlockLanguage(select.value)
 				.run();
 		});
-		bar.appendChild(select);
+		const copyBtn = document.createElement("button");
+		copyBtn.type = "button";
+		copyBtn.className = "ec-code-copy-btn";
+		copyBtn.title = "复制代码";
+		copyBtn.innerHTML =
+			'<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.2"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg>';
+		copyBtn.addEventListener("click", async () => {
+			if (!editor || !editorMount) return;
+			const pos = editor.view.posAtDOM(pre, 0);
+			const node = editor.state.doc.nodeAt(pos);
+			const text = node?.textContent ?? "";
+			try {
+				await navigator.clipboard.writeText(text);
+			} catch {
+				const ta = document.createElement("textarea");
+				ta.value = text;
+				document.body.appendChild(ta);
+				ta.select();
+				document.execCommand("copy");
+				ta.remove();
+			}
+			copyBtn.classList.add("copied");
+			setTimeout(() => copyBtn.classList.remove("copied"), 1200);
+		});
+		bar.appendChild(copyBtn);
 		pre.insertBefore(bar, pre.firstChild);
 	}
 }
@@ -2463,11 +2490,17 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   .tiptap-host :global(ol[data-list-style="hierarchical"] li) { counter-increment: ordered-item; }
   .tiptap-host :global(ol[data-list-style="hierarchical"] li::before) { content: counters(ordered-item, ".") ". "; font-variant-numeric: tabular-nums; }
   .tiptap-host :global(.ProseMirror pre) { position: relative; }
-  .tiptap-host :global(.ProseMirror pre code) { display: block; overflow-x: auto !important; font-family: inherit !important; font-size: inherit !important; line-height: inherit !important; color: inherit !important; background: none !important; padding: 0 !important; }
+  .tiptap-host :global(.ProseMirror pre code) { display: block; overflow-x: auto !important; font-family: inherit !important; font-size: inherit !important; line-height: inherit !important; color: inherit !important; background: none !important; padding: 0 !important; padding-left: 3.2rem !important; }
   .tiptap-host :global(.ec-code-lang-bar) { position: absolute; top: 0; right: .5rem; transform: translateY(-100%); display: flex; align-items: center; justify-content: flex-end; }
   .tiptap-host :global(.ec-code-lang-select) { font-size: .7rem; padding: .05rem .5rem; width: auto; min-width: 0; border: 1px solid var(--line-divider); border-radius: 4px; background: var(--btn-regular-bg); color: var(--btn-content); font-family: var(--font-jetbrains-mono), monospace; cursor: pointer; outline: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23888'%3E%3Cpath d='M4.5 6.5 8 10l3.5-3.5z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right .3rem center; background-size: .7rem; padding-right: 1.1rem; }
   .tiptap-host :global(.ec-code-lang-select:hover) { background-color: var(--btn-regular-bg-hover); }
   .tiptap-host :global(.ec-code-lang-select:focus) { border-color: var(--primary); }
+  .tiptap-host :global(.ec-code-copy-btn) { display: inline-flex; align-items: center; justify-content: center; margin-left: .3rem; border: 1px solid var(--line-divider); border-radius: 4px; padding: .1rem .3rem; background: var(--btn-regular-bg); color: var(--btn-content); font-size: .7rem; cursor: pointer; }
+  .tiptap-host :global(.ec-code-copy-btn:hover) { background-color: var(--btn-regular-bg-hover); border-color: color-mix(in srgb, var(--primary) 45%, transparent); }
+  .tiptap-host :global(.ec-code-copy-btn.copied) { color: var(--primary); border-color: var(--primary); }
+  .tiptap-host :global(.ProseMirror pre code .ec-line-gutter) { position: absolute; left: 0; top: 0; bottom: 0; width: 2.6rem; padding-top: 1rem; padding-right: .75rem; text-align: right; box-sizing: border-box; color: #8a8a8c; background: transparent; font-size: inherit; line-height: 1.5rem; user-select: none; -webkit-user-select: none; pointer-events: none; overflow: hidden; }
+  .tiptap-host :global(.ProseMirror pre code .ec-line-gutter span) { display: block; }
+  :global(:root.dark) .tiptap-host :global(.ProseMirror pre code .ec-line-gutter) { color: #767c89; }
   .tiptap-host :global(.ProseMirror pre code .hljs-comment), .tiptap-host :global(.ProseMirror pre code .hljs-quote) { color: #646568; font-style: italic; }
   .tiptap-host :global(.ProseMirror pre code .hljs-keyword), .tiptap-host :global(.ProseMirror pre code .hljs-selector-tag), .tiptap-host :global(.ProseMirror pre code .hljs-doctag), .tiptap-host :global(.ProseMirror pre code .hljs-template-tag) { color: #a626a4; }
   .tiptap-host :global(.ProseMirror pre code .hljs-string), .tiptap-host :global(.ProseMirror pre code .hljs-regexp), .tiptap-host :global(.ProseMirror pre code .hljs-char) { color: #387138; }

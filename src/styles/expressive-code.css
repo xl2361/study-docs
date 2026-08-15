@@ -11,16 +11,17 @@
 
   /* Language Badge 样式适配主题色和亮暗色 */
   /* 覆盖 expressive-code-language-badge 插件的默认样式 */
-  /* 紧贴代码块右上角上方边缘 */
+  /* 紧贴代码块右上角内部（Typora 风格，不悬浮在代码块上方） */
   [data-language]::before {
     color: var(--btn-content) !important;
     background: var(--btn-regular-bg) !important;
     border: 1px solid var(--line-divider) !important;
     border-radius: 4px !important;
-    padding: 0.05rem 0.4rem !important;
+    padding: 0.03rem 0.35rem !important;
     text-transform: none !important;
     font-weight: 500 !important;
-    font-size: 0.7rem !important;
+    font-size: 0.65rem !important;
+    line-height: 1.2 !important;
     top: 0 !important;
     right: 0.5rem !important;
     bottom: auto !important;
@@ -28,7 +29,7 @@
     z-index: 3 !important;
     opacity: 1 !important;
     transition: opacity 0.3s !important;
-    transform: translateY(-50%) !important;
+    transform: none !important;
   }
   /* 确保 pre 是定位上下文 */
   .expressive-code pre[data-language] {

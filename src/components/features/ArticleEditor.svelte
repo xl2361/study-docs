@@ -530,7 +530,7 @@ function injectCodeBlockLangLabels() {
 				.run();
 		});
 		bar.appendChild(select);
-		pre.appendChild(bar);
+		pre.insertBefore(bar, pre.firstChild);
 	}
 }
 
@@ -2463,10 +2463,10 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   .tiptap-host :global(ol[data-list-style="hierarchical"] li::before) { content: counters(ordered-item, ".") ". "; font-variant-numeric: tabular-nums; }
   .tiptap-host :global(.ProseMirror pre) { position: relative; }
   .tiptap-host :global(.ProseMirror pre code) { font-family: inherit !important; font-size: inherit !important; line-height: inherit !important; color: inherit !important; background: none !important; padding: 0 !important; }
-  .tiptap-host :global(.ec-code-lang-bar) { display: flex; align-items: center; justify-content: flex-end; margin-top: .4rem; }
-  .tiptap-host :global(.ec-code-lang-select) { font-size: .72rem; padding: .12rem .55rem; width: auto; min-width: 0; border: none; border-radius: 999px; background: #161b22; color: #e6edf3; font-family: var(--font-jetbrains-mono), monospace; cursor: pointer; outline: none; appearance: none; }
-  .tiptap-host :global(.ec-code-lang-select:hover) { background: #21262d; }
-  .tiptap-host :global(.ec-code-lang-select:focus) { border: 1px solid var(--primary); }
+  .tiptap-host :global(.ec-code-lang-bar) { display: flex; align-items: center; justify-content: flex-end; margin-bottom: .35rem; }
+  .tiptap-host :global(.ec-code-lang-select) { font-size: .7rem; padding: .05rem .5rem; width: auto; min-width: 0; border: 1px solid var(--line-divider); border-radius: 4px; background: var(--btn-regular-bg); color: var(--btn-content); font-family: var(--font-jetbrains-mono), monospace; cursor: pointer; outline: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23888'%3E%3Cpath d='M4.5 6.5 8 10l3.5-3.5z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right .3rem center; background-size: .7rem; padding-right: 1.1rem; }
+  .tiptap-host :global(.ec-code-lang-select:hover) { background-color: var(--btn-regular-bg-hover); }
+  .tiptap-host :global(.ec-code-lang-select:focus) { border-color: var(--primary); }
   .tiptap-host :global(.ProseMirror pre code .hljs-comment), .tiptap-host :global(.ProseMirror pre code .hljs-quote) { color: #8b949e; font-style: italic; }
   .tiptap-host :global(.ProseMirror pre code .hljs-keyword), .tiptap-host :global(.ProseMirror pre code .hljs-selector-tag), .tiptap-host :global(.ProseMirror pre code .hljs-doctag), .tiptap-host :global(.ProseMirror pre code .hljs-template-tag), .tiptap-host :global(.ProseMirror pre code .hljs-type) { color: #ff7b72; }
   .tiptap-host :global(.ProseMirror pre code .hljs-string), .tiptap-host :global(.ProseMirror pre code .hljs-regexp), .tiptap-host :global(.ProseMirror pre code .hljs-char) { color: #a5d6ff; }

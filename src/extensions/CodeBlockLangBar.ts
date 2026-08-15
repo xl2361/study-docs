@@ -52,6 +52,7 @@ export const CodeBlockLangBar = Extension.create({
 							copyBtn.type = "button";
 							copyBtn.className = "ec-code-copy-btn";
 							copyBtn.title = "复制代码";
+							copyBtn.contentEditable = "false";
 							copyBtn.innerHTML =
 								'<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.2"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg>';
 							copyBtn.addEventListener("click", async () => {
@@ -71,11 +72,14 @@ export const CodeBlockLangBar = Extension.create({
 								setTimeout(() => copyBtn.classList.remove("copied"), 1200);
 							});
 							bar.appendChild(select);
-							bar.appendChild(copyBtn);
 							decos.push(
 								Decoration.widget(pos, bar, {
 									side: -1,
 									key: `ec-bar-${pos}`,
+								}),
+								Decoration.widget(pos + 1, copyBtn, {
+									side: -1,
+									key: `ec-copy-${pos}`,
 								}),
 							);
 						});

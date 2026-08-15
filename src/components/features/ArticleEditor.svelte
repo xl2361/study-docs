@@ -354,6 +354,8 @@ async function createEditor(operation: number) {
 			textAlign,
 			taskList,
 			taskItem,
+			codeBlockLowlight,
+			lowlight,
 		] = await Promise.all([
 			import("@tiptap/core"),
 			import("@tiptap/starter-kit"),
@@ -368,6 +370,8 @@ async function createEditor(operation: number) {
 			import("@tiptap/extension-text-align"),
 			import("@tiptap/extension-task-list"),
 			import("@tiptap/extension-task-item"),
+			import("@tiptap/extension-code-block-lowlight"),
+			import("lowlight"),
 		]);
 		if (
 			!mounted ||
@@ -384,6 +388,7 @@ async function createEditor(operation: number) {
 				starter.default.configure({
 					link: { openOnClick: false, autolink: false },
 					underline: {},
+					codeBlock: false,
 				}),
 				markdown.Markdown,
 				table.TableKit,
@@ -401,6 +406,9 @@ async function createEditor(operation: number) {
 				LineHeight,
 				OrderedListStyle,
 				CodeBlockLang,
+				codeBlockLowlight.default.configure({
+					lowlight: lowlight.createLowlight(lowlight.all),
+				}),
 			],
 			content: "",
 			onUpdate: () => {
@@ -2458,5 +2466,26 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   .tiptap-host :global(.ec-code-lang-bar) { display: flex; align-items: center; justify-content: flex-end; margin-bottom: .35rem; }
   .tiptap-host :global(.ec-code-lang-select) { font-size: .7rem; padding: .1rem .3rem; width: auto; min-width: 0; border: 1px solid var(--line-divider); border-radius: 4px; background: var(--btn-regular-bg); color: var(--btn-content); font-family: var(--font-jetbrains-mono), monospace; cursor: pointer; outline: none; }
   .tiptap-host :global(.ec-code-lang-select:focus) { border-color: var(--primary); }
+  .tiptap-host :global(.ProseMirror pre code .hljs-comment), .tiptap-host :global(.ProseMirror pre code .hljs-quote) { color: #7f848e; }
+  .tiptap-host :global(.ProseMirror pre code .hljs-keyword), .tiptap-host :global(.ProseMirror pre code .hljs-selector-tag) { color: #c678dd; }
+  .tiptap-host :global(.ProseMirror pre code .hljs-string), .tiptap-host :global(.ProseMirror pre code .hljs-attribute-value) { color: #98c379; }
+  .tiptap-host :global(.ProseMirror pre code .hljs-number), .tiptap-host :global(.ProseMirror pre code .hljs-literal) { color: #d19a66; }
+  .tiptap-host :global(.ProseMirror pre code .hljs-title), .tiptap-host :global(.ProseMirror pre code .hljs-function) { color: #61afef; }
+  .tiptap-host :global(.ProseMirror pre code .hljs-attr), .tiptap-host :global(.ProseMirror pre code .hljs-attribute), .tiptap-host :global(.ProseMirror pre code .hljs-name) { color: #d19a66; }
+  .tiptap-host :global(.ProseMirror pre code .hljs-tag) { color: #e06c75; }
+  .tiptap-host :global(.ProseMirror pre code .hljs-built_in), .tiptap-host :global(.ProseMirror pre code .hljs-type), .tiptap-host :global(.ProseMirror pre code .hljs-class) { color: #e5c07b; }
+  .tiptap-host :global(.ProseMirror pre code .hljs-variable), .tiptap-host :global(.ProseMirror pre code .hljs-template-variable) { color: #e06c75; }
+  .tiptap-host :global(.ProseMirror pre code .hljs-symbol), .tiptap-host :global(.ProseMirror pre code .hljs-bullet), .tiptap-host :global(.ProseMirror pre code .hljs-section) { color: #e5c07b; }
+  .tiptap-host :global(.ProseMirror pre code .hljs-meta), .tiptap-host :global(.ProseMirror pre code .hljs-meta-keyword) { color: #7f848e; }
+  .tiptap-host :global(.ProseMirror pre code .hljs-link) { color: #61afef; }
+  .tiptap-host :global(.ProseMirror pre code .hljs-emphasis) { font-style: italic; }
+  .tiptap-host :global(.ProseMirror pre code .hljs-strong) { font-weight: 700; }
+  .tiptap-host :global(.ProseMirror pre code .hljs-addition) { color: #98c379; }
+  .tiptap-host :global(.ProseMirror pre code .hljs-deletion) { color: #e06c75; }
+  .tiptap-host :global(.ProseMirror pre code .hljs-selector-id), .tiptap-host :global(.ProseMirror pre code .hljs-selector-class) { color: #e5c07b; }
+  .tiptap-host :global(.ProseMirror pre code .hljs-selector-attr), .tiptap-host :global(.ProseMirror pre code .hljs-selector-pseudo) { color: #d19a66; }
+  .tiptap-host :global(.ProseMirror pre code .hljs-regexp), .tiptap-host :global(.ProseMirror pre code .hljs-char) { color: #e06c75; }
+  .tiptap-host :global(.ProseMirror pre code .hljs-params) { color: #d19a66; }
+  .tiptap-host :global(.ProseMirror pre code .hljs-punctuation), .tiptap-host :global(.ProseMirror pre code .hljs-operator) { color: #abb2bf; }
   @media (max-width: 760px) { .toolbar { top: 3.6rem; } }
 </style>

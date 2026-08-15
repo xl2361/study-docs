@@ -53,14 +53,6 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 			pre.toggleAttribute("data-language", Boolean(language));
 			if (language) pre.setAttribute("data-language", language);
 		};
-		const refreshLines = () => updateChrome(node);
-		const observer = new MutationObserver(refreshLines);
-		observer.observe(code, {
-			childList: true,
-			characterData: true,
-			subtree: true,
-		});
-
 		select.addEventListener("change", () => {
 			const position = getPos();
 			if (position === undefined) return;
@@ -99,7 +91,6 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 				updateChrome(nextNode);
 				return true;
 			},
-			destroy: () => observer.disconnect(),
 			stopEvent: (event: Event) =>
 				event.target instanceof HTMLElement && chrome.contains(event.target),
 			ignoreMutation: (mutation: ViewMutationRecord) =>

@@ -3,6 +3,7 @@ import { TextSelection } from "prosemirror-state";
 import { CellSelection, tableEditingKey } from "prosemirror-tables";
 import { onMount, tick } from "svelte";
 import { CodeBlockLang } from "@/extensions/CodeBlockLang";
+import { CodeBlockLangBar } from "@/extensions/CodeBlockLangBar";
 import { CodeBlockLineNumbers } from "@/extensions/CodeBlockLineNumbers";
 import { FontSize } from "@/extensions/FontSize";
 import { Indent } from "@/extensions/Indent";
@@ -408,6 +409,7 @@ async function createEditor(operation: number) {
 				OrderedListStyle,
 				CodeBlockLang,
 				CodeBlockLineNumbers,
+				CodeBlockLangBar.configure({ languages: CODE_LANGUAGES }),
 				codeBlockLowlight.default.configure({
 					lowlight: lowlight.createLowlight(lowlight.all),
 				}),
@@ -435,7 +437,6 @@ async function createEditor(operation: number) {
 			passive: true,
 		});
 		window.addEventListener("resize", onWindowScrollOrResize);
-		setupCodeBlockLangLabels();
 	} catch (reason) {
 		if (!mounted || operation !== openOperation || !editing) return;
 		editor?.destroy();
@@ -474,99 +475,6 @@ const CODE_LANGUAGES = [
 	"xml",
 	"yaml",
 ].sort();
-
-let codeBlockLangObserver: MutationObserver | null = null;
-let codeBlockLangRaf: number | null = null;
-
-function setupCodeBlockLangLabels() {
-	codeBlockLangObserver?.disconnect();
-	if (!editorMount) return;
-	const schedule = () => {
-		if (codeBlockLangRaf != null) return;
-		codeBlockLangRaf = requestAnimationFrame(() => {
-			codeBlockLangRaf = null;
-			injectCodeBlockLangLabels();
-		});
-	};
-	schedule();
-	codeBlockLangObserver = new MutationObserver(schedule);
-	codeBlockLangObserver.observe(editorMount, {
-		childList: true,
-		subtree: true,
-	});
-}
-
-function injectCodeBlockLangLabels() {
-	if (!editor || !editorMount) return;
-	const pres = editorMount.querySelectorAll<HTMLPreElement>("pre");
-	for (const pre of pres) {
-		if (pre.querySelector(".ec-code-lang-bar")) {
-			updateCodeBlockLangBar(pre);
-			continue;
-		}
-		const lang = pre.getAttribute("data-language") || "";
-		const bar = document.createElement("div");
-		bar.className = "ec-code-lang-bar";
-		bar.contentEditable = "false";
-		const select = document.createElement("select");
-		select.className = "ec-code-lang-select";
-		select.contentEditable = "false";
-		const placeholder = document.createElement("option");
-		placeholder.value = "";
-		placeholder.textContent = "语言";
-		select.appendChild(placeholder);
-		for (const langCode of CODE_LANGUAGES) {
-			const opt = document.createElement("option");
-			opt.value = langCode;
-			opt.textContent = langCode;
-			if (langCode === lang) opt.selected = true;
-			select.appendChild(opt);
-		}
-		select.addEventListener("change", () => {
-			if (!editor || !editorMount) return;
-			const pos = editor.view.posAtDOM(pre, 0);
-			editor
-				.chain()
-				.focus()
-				.setTextSelection(pos)
-				.setCodeBlockLanguage(select.value)
-				.run();
-		});
-		const copyBtn = document.createElement("button");
-		copyBtn.type = "button";
-		copyBtn.className = "ec-code-copy-btn";
-		copyBtn.title = "复制代码";
-		copyBtn.innerHTML =
-			'<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8" rx="1.2"/><path d="M10.5 3.5v-1a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h1"/></svg>';
-		copyBtn.addEventListener("click", async () => {
-			if (!editor || !editorMount) return;
-			const pos = editor.view.posAtDOM(pre, 0);
-			const node = editor.state.doc.nodeAt(pos);
-			const text = node?.textContent ?? "";
-			try {
-				await navigator.clipboard.writeText(text);
-			} catch {
-				const ta = document.createElement("textarea");
-				ta.value = text;
-				document.body.appendChild(ta);
-				ta.select();
-				document.execCommand("copy");
-				ta.remove();
-			}
-			copyBtn.classList.add("copied");
-			setTimeout(() => copyBtn.classList.remove("copied"), 1200);
-		});
-		bar.appendChild(copyBtn);
-		pre.insertBefore(bar, pre.firstChild);
-	}
-}
-
-function updateCodeBlockLangBar(pre: HTMLPreElement) {
-	const select = pre.querySelector<HTMLSelectElement>(".ec-code-lang-select");
-	if (!select) return;
-	const lang = pre.getAttribute("data-language") || "";
-	if (select.value !== lang) select.value = lang;
-}
 
 function syncHistoryState() {
 	canUndo = Boolean(editor?.can().undo());
@@ -1725,12 +1633,6 @@ function destroyEditor() {
 	if (editor) {
 		editor.off("selectionUpdate", onTableSelectionChange);
 		editor.off("transaction", onTableSelectionChange);
-	}
-	codeBlockLangObserver?.disconnect();
-	codeBlockLangObserver = null;
-	if (codeBlockLangRaf != null) {
-		cancelAnimationFrame(codeBlockLangRaf);
-		codeBlockLangRaf = null;
 	}
 	cancelAnimationFrame(pointerRefreshRaf);
 	pointerRefreshPending = false;

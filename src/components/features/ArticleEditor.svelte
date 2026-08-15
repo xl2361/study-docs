@@ -2446,11 +2446,5 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   .tiptap-host :global(.ProseMirror pre code) { padding-left: .7rem !important; }
   .tiptap-host :global(.ec-line-gutter) { width: 1.55rem; padding-right: .2rem; }
   .tiptap-host :global(.ec-line-gutter) { border-right: 1px solid color-mix(in srgb, currentColor 22%, transparent); }
-  .tiptap-host :global(.ec-code-lang-picker) { position: relative; }
-  .tiptap-host :global(.ec-code-lang-select) { min-width: 5rem; text-align: left; }
-  .tiptap-host :global(.ec-code-lang-list) { position: absolute; top: calc(100% + .25rem); right: 0; z-index: 5; display: flex; flex-direction: column; width: 8.5rem; max-height: 15rem; overflow-y: auto; padding: .25rem; border: 1px solid var(--line-divider); border-radius: 4px; background: var(--btn-regular-bg); box-shadow: 0 8px 20px rgb(0 0 0 / 22%); scrollbar-width: none; }
-  .tiptap-host :global(.ec-code-lang-list::-webkit-scrollbar) { display: none; }
-  .tiptap-host :global(.ec-code-lang-option) { flex: none; width: 100%; padding: .3rem .45rem; border: 0; border-radius: 3px; background: transparent; color: var(--btn-content); font: inherit; font-size: .7rem; text-align: left; cursor: pointer; }
-  .tiptap-host :global(.ec-code-lang-option:hover), .tiptap-host :global(.ec-code-lang-option[aria-selected="true"]) { background: var(--btn-regular-bg-hover); }
   @media (max-width: 760px) { .toolbar { top: 3.6rem; } }
 </style>

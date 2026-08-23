@@ -50,11 +50,9 @@ XShell 是一个强大的安全终端模拟软件，支持SSH1、SSH2、SFTP、T
 
 1. 点击左侧「用户身份验证」
 2. 输入用户名（如：root）
-
   ![1](/uploads/images/2026-03-26/7cd79f71-a4a6-4fd0-a634-47baf7ee317c.png)
 3. 输入密码
 4. 点击「确定」连接
-
   ![1](/uploads/images/2026-03-26/f80fd206-14c3-4fc9-a8d4-1191b03c6309.png)
 
 ### 1.4 保存会话技巧
@@ -97,7 +95,6 @@ XShell 会话管理
 **问题4：中文乱码**
 
 - 将编码设置为 UTF-8
-
   ![1](/uploads/images/2026-03-26/197ee8cb-d59b-438b-8667-8d8696102450.png)
 
 ---
@@ -367,30 +364,30 @@ vi和vim是Linux中的文本编辑器，用来在Linux中创建、查看或者�
 **4. 查看文件内容（Java开发常用）**
 
 
-| 命令                         | 说明                      |
-| -------------------------- | ----------------------- |
-| cat file.txt               | 查看文件全部内容，一次性显示          |
-| more file.txt              | 分页查看文件内容，空格翻页，q退出       |
-| less file.txt              | 分页查看文件内容，支持上下翻页，q退出     |
-| head -n 50 file.log        | 查看文件前50行                |
-| tail -n 50 file.log        | 查看文件后50行                |
-| tail -f file.log           | 实时监控文件末尾内容（查看日志常用）      |
-| tail -f file.log |         | grep error              |
-| grep "mysql" file.log      | 查看文件中包含"mysql"的内容       |
-| grep -n "error" file.log   | 查看文件中包含"error"的内容，并显示行号 |
-| grep -i "error" file.log   | 忽略大小写搜索                 |
-| grep -C 5 "error" file.log | 显示匹配行及其前后5行             |
+| 命令                            | 说明                      |
+| ----------------------------- | ----------------------- |
+| cat file.txt                  | 查看文件全部内容，一次性显示          |
+| more file.txt                 | 分页查看文件内容，空格翻页，q退出       |
+| less file.txt                 | 分页查看文件内容，支持上下翻页，q退出     |
+| head -n 50 file.log           | 查看文件前50行                |
+| tail -n 50 file.log           | 查看文件后50行                |
+| tail -f file.log              | 实时监控文件末尾内容（查看日志常用）      |
+| tail -f file.log | grep error | 实时监控文件末尾含 **error** 的行  |
+| grep "mysql" file.log         | 查看文件中包含"mysql"的内容       |
+| grep -n "error" file.log      | 查看文件中包含"error"的内容，并显示行号 |
+| grep -i "error" file.log      | 忽略大小写搜索                 |
+| grep -C 5 "error" file.log    | 显示匹配行及其前后5行             |
 
 
 **5. 查找文件**
 
 
-| 命令                             | 说明                  |
-| ------------------------------ | ------------------- |
-| find / -name file.txt          | 从根目录查找名为file.txt的文件 |
-| find /opt -name "\*.java"      | 查找opt目录下所有.java文件   |
-| find /opt -name "\*.java"      | grep user           |
-| find /opt -type d -name "logs" | 查找名为logs的目录         |
+| 命令                                    | 说明                        |
+| ------------------------------------- | ------------------------- |
+| find / -name file.txt                 | 从根目录查找名为file.txt的文件       |
+| find /opt -name "\*.java"             | 查找opt目录下所有.java文件         |
+| find /opt -name "\*.java" | grep user | 查找opt目录下所有.java并只含user的文件 |
+| find /opt -type d -name "logs"        | 查找名为logs的目录               |
 
 
 ---
@@ -443,11 +440,11 @@ vi和vim是Linux中的文本编辑器，用来在Linux中创建、查看或者�
 **3. tar（Java开发最常用）**
 
 
-| 命令                                        | 说明      |
-| ----------------------------------------- | ------- |
-| tar -zcvf archive.tar.gz file1 file2 dir/ | 打包并压缩   |
-| tar -zxvf archive.tar.gz                  | 解压到当前目录 |
-| tar -zxvf archive.tar.gz -C /opt/data     | 解压到指定目录 |
+| 命令                                        | 说明                |
+| ----------------------------------------- | ----------------- |
+| tar -zcvf archive.tar.gz file1 file2 dir/ | 打包并压缩 (文件&amp;目录) |
+| tar -zxvf archive.tar.gz                  | 解压到当前目录           |
+| tar -zxvf archive.tar.gz -C /opt/data     | 解压到指定目录           |
 
 
 > **参数说明**：
@@ -494,6 +491,8 @@ Linux中每个文件或目录都有三部分权限：所有者权限、同组用
 
 
 
+
+&nbsp;
 
 
 | 权限组合 | 说明   | 数字        |

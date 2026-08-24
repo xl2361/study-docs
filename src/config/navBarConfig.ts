@@ -33,8 +33,8 @@ const getDynamicNavBarConfig = (): NavBarConfig => {
 		],
 	});
 
-	// 关于页面（性能精简：移除动态/相册/追番/番组/打赏/友链等不需要的导航项，仅保留关于）
-	links.push(LinkPresets.About);
+	// 关于页面（性能精简：移除动态/相册/追番/番组/打赏/友链等不需要的导航项）
+	// "关于我"导航入口已按需求移除，/about/ 页面本身保留
 
 	// 文档链接
 	// links.push({
@@ -100,11 +100,6 @@ export const LinkPresets: Record<string, NavBarLink> = {
 		url: "/guestbook/",
 		icon: "material-symbols:chat",
 		pageKey: "guestbook",
-	},
-	About: {
-		name: "关于我",
-		url: "/about/",
-		icon: "material-symbols:person",
 	},
 	Bangumi: {
 		name: "番组计划",

@@ -184,6 +184,7 @@ const logoVariants = await Promise.all(
                     ? "justify-center"
                     : "justify-start pl-2"
             ]}>
+                <LogoutButton client:load />
                 {links.map((l) => {
                     return <DropdownMenu link={l} />;
                 })}
@@ -194,7 +195,7 @@ const logoVariants = await Promise.all(
                 <Search
                     client:load
                 />
-                <LogoutButton client:load />
+                <div class="lg:hidden!"><LogoutButton client:load /></div>
                 <button aria-label={i18n(I18nKey.announcement)} class="btn-plain scale-animation rounded-lg h-9 w-9 md:h-11 md:w-11 active:scale-90" id="announcement-switch">
                     <Icon is:inline name="material-symbols:notifications-outline" class="text-[1.25rem]"></Icon>
                 </button>

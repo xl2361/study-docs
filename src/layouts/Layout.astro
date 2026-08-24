@@ -89,6 +89,10 @@ if (!lang) {
 }
 const siteLang = lang.replace("_", "-");
 
+// 构建时注入的 Git 提交标记，用于前端检测后台部署是否完成（部署后标记变化）
+const buildCommit =
+	process.env.CF_PAGES_COMMIT_SHA || process.env.GITHUB_SHA || "";
+
 // 使用固定的banner偏移量，position配置用于图片定位
 ---
 
@@ -161,6 +165,7 @@ const siteLang = lang.replace("_", "-");
 
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="generator" content={Astro.generator} />
+    <meta name="build-commit" content={buildCommit} />
     {
       favicons.map((favicon) => (
         <link

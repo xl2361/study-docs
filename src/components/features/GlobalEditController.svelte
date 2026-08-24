@@ -10,6 +10,74 @@ let authenticated = false;
 let editing = false;
 let submitting = false;
 let message = "";
+// 提交后轮询后台部署，部署完成（页面构建标记变化）时自动刷新
+const deployPollInterval = 15_000;
+const deployPollTimeout = 10 * 60 * 1000;
+let deployTimer: ReturnType<typeof setInterval> | null = null;
+let deployStopTimer: ReturnType<typeof setTimeout> | null = null;
+let deployPendingReload = false;
+
+function initialBuildCommit(): string {
+	return (
+		document
+			.querySelector('meta[name="build-commit"]')
+			?.getAttribute("content") || ""
+	);
+}
+
+function stopDeployWatch(note?: string) {
+	if (deployTimer) {
+		clearInterval(deployTimer);
+		deployTimer = null;
+	}
+	if (deployStopTimer) {
+		clearTimeout(deployStopTimer);
+		deployStopTimer = null;
+	}
+	if (note) message = note;
+}
+
+async function checkDeployOnce(baseline: string): Promise<boolean> {
+	try {
+		const response = await fetch(location.pathname + location.search, {
+			cache: "no-store",
+		});
+		if (!response.ok) return false;
+		const html = await response.text();
+		const doc = new DOMParser().parseFromString(html, "text/html");
+		const marker =
+			doc.querySelector('meta[name="build-commit"]')?.getAttribute("content") ||
+			"";
+		return marker !== "" && marker !== baseline;
+	} catch {
+		return false;
+	}
+}
+
+function watchDeploy(commit: unknown) {
+	const baseline = initialBuildCommit();
+	// 本地构建或拿不到基线标记时不轮询，避免误刷新
+	if (!commit || !baseline || deployTimer) return;
+	deployPendingReload = false;
+	deployTimer = setInterval(() => {
+		void checkDeployOnce(baseline).then((changed) => {
+			if (!changed) return;
+			if (editing) {
+				// 正在编辑时暂缓刷新，等退出编辑后下一轮再刷新，避免丢失编辑内容
+				deployPendingReload = true;
+				return;
+			}
+			location.reload();
+		});
+	}, deployPollInterval);
+	deployStopTimer = setTimeout(() => {
+		stopDeployWatch(
+			deployPendingReload
+				? "新版本已就绪，刷新页面即可查看"
+				: "部署等待超时，请稍后手动刷新查看最新内容",
+		);
+	}, deployPollTimeout);
+}
 
 function dispatchMode() {
 	window.dispatchEvent(
@@ -111,11 +179,18 @@ async function toggleEditing() {
 			}
 			throw new Error(errorMessage);
 		}
+		let commit: unknown = null;
+		try {
+			const body = (await response.json()) as { commit?: unknown };
+			commit = body?.commit ?? null;
+		} catch {
+			// 无响应体时不做部署轮询。
+		}
 		sessionStorage.removeItem(draftsKey);
 		sessionStorage.removeItem(categoryDraftsKey);
-		window.dispatchEvent(new CustomEvent("study-article-commit-success"));
 		stopEditing();
-		message = "已提交，网站正在后台部署";
+		message = "已提交，正在等待后台部署，完成后自动刷新";
+		watchDeploy(commit);
 	} catch (reason) {
 		message = reason instanceof Error ? reason.message : "提交失败，请稍后重试";
 	} finally {
@@ -129,7 +204,10 @@ onMount(() => {
 		if (authenticated) restoreMode();
 	};
 	document.addEventListener("swup:page:view", resendMode);
-	return () => document.removeEventListener("swup:page:view", resendMode);
+	return () => {
+		document.removeEventListener("swup:page:view", resendMode);
+		stopDeployWatch();
+	};
 });
 </script>
 

@@ -57,6 +57,25 @@ export async function validateSession(context: {
 	}
 }
 
+// 用裸 token 直接校验（供带缓存的中间件使用，避免构造假 context）
+export async function validateSessionToken(token: string): Promise<boolean> {
+	try {
+		const response = await fetchEditor(
+			{
+				request: new Request("https://session-check.internal/", {
+					headers: {
+						Cookie: `${SESSION_COOKIE}=${encodeURIComponent(token)}`,
+					},
+				}),
+			},
+			"/api/session",
+		);
+		return response.ok;
+	} catch {
+		return false;
+	}
+}
+
 export async function validateToken(token: string): Promise<boolean> {
 	try {
 		const response = await fetch(`${EDITOR_URL}/api/session`, {

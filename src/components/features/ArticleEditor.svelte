@@ -1,6 +1,5 @@
 <script lang="ts">
-import { TextSelection } from "prosemirror-state";
-import { CellSelection, tableEditingKey } from "prosemirror-tables";
+import { CellSelection } from "prosemirror-tables";
 import { onMount, tick } from "svelte";
 import { CodeBlockLang } from "@/extensions/CodeBlockLang";
 import { createCodeBlockNodeView } from "@/extensions/CodeBlockNodeView";
@@ -39,7 +38,10 @@ type EditorLike = {
 		posAtDOM: (node: Node, offset: number) => number;
 	};
 	commands: {
-		setContent: (content: string, options: Record<string, unknown>) => void;
+		setContent: (
+			content: string | JsonNode,
+			options: Record<string, unknown>,
+		) => void;
 		undo: () => void;
 		redo: () => void;
 	};
@@ -65,11 +67,23 @@ type EditorLike = {
 	on: (event: string, handler: () => void) => void;
 	off: (event: string, handler: () => void) => void;
 	destroy: () => void;
+	markdown: {
+		parse: (markdown: string) => JsonNode;
+	};
+	schema: {
+		spec: {
+			marks: {
+				forEach: (callback: (type: unknown, name: string) => void) => void;
+			};
+		};
+	};
 };
+type JsonMark = { type: string; attrs?: Record<string, unknown> };
 type JsonNode = {
 	type?: string;
-	attrs?: { level?: number };
+	attrs?: Record<string, unknown>;
 	text?: string;
+	marks?: JsonMark[];
 	content?: JsonNode[];
 };
 type EditorChain = {
@@ -200,27 +214,26 @@ let inCategorySelect: HTMLSelectElement | null = null;
 let inTagsEl: HTMLElement | null = null;
 let inTagsInput: HTMLInputElement | null = null;
 let titleEl: HTMLElement | null = null;
-let pendingOptimisticHTML: string | null = null;
 let editScrollY = 0;
 let editBodyAnchor = 0;
 let scrollRestored = false;
 let tableToolbar = { visible: false, left: 0, top: 0 };
 let hoverTableEl: HTMLElement | null = null;
+// 工具条钉住状态：点击表格内后置 true，点击表格外（或隐藏工具条）时复位。
+// 只有钉住时工具条才显示；悬浮不再触发工具条，仅驱动行/列手柄。
+let toolbarPinned = false;
 let activeTableEl: HTMLElement | null = null;
 // 自研划选拖拽：起点 cell pos（mousedown 记录，mouseup 清理）
 let cellDragStartPos: number | null = null;
-// 自研划选拖拽：是否已越过位移阈值进入拖动（拖动中才 preventDefault，
-// 避免杀死 PM 单击定位依赖的浏览器默认光标行为）
+// 是否已接管为跨单元格的 CellSelection 拖选（接管后才 preventDefault）；
+// 同一单元格内的拖动保持浏览器原生文字划选，不做任何干预
 let cellDragging = false;
 let cellDragClientX = 0;
 let cellDragClientY = 0;
-// 单击（未拖动）时用于手动 dispatch 光标定位的点击 pos
-let cellDragClickPos: number | null = null;
 let tableToolbarEl: HTMLElement | null = null;
 let dragHandleEl: HTMLDivElement | null = null;
 let rowHandleEl: HTMLDivElement | null = null;
 let colHandleEl: HTMLDivElement | null = null;
-let tableHideTimer: ReturnType<typeof setTimeout> | null = null;
 let lastMouseX = 0;
 let lastMouseY = 0;
 let pointerRefreshPending = false;
@@ -330,6 +343,103 @@ function readDrafts(): Record<string, Draft> {
 	}
 }
 
+// 将围栏代码块和行内代码之外、疑似 HTML 标签的 `<` 转义为 `\<`，
+// 使 Tiptap 能按纯文本解析（CommonMark 中 `\<` 渲染结果仍是字面 `<`，不改变显示效果）
+function escapeRawHtmlOutsideCode(markdown: string): string {
+	const lines = markdown.split("\n");
+	let inFence = false;
+	let fenceMarker = "";
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i];
+		const fence = line.match(/^\s{0,3}(`{3,}|~{3,})/);
+		if (fence) {
+			const marker = fence[1];
+			if (!inFence) {
+				inFence = true;
+				fenceMarker = marker[0].repeat(marker.length);
+			} else if (line.trim().startsWith(fenceMarker)) {
+				inFence = false;
+				fenceMarker = "";
+			}
+			continue;
+		}
+		if (inFence) continue;
+		lines[i] = line
+			.split(/(`+[^`]*`+)/g)
+			.map((segment, index) =>
+				index % 2 === 1
+					? segment
+					: segment.replace(
+							/(?<!\\)<(?=\/?[a-zA-Z][a-zA-Z0-9]*(?:\s|\/|>))/g,
+							"\\<",
+						),
+			)
+			.join("");
+	}
+	return lines.join("\n");
+}
+
+// 判断节点是否携带可见内容（用于丢弃拆分后残留的空白文本）
+function jsonNodeHasContent(node: JsonNode): boolean {
+	if (node.type === "image") return true;
+	if (typeof node.text === "string" && node.text.trim() !== "") return true;
+	return Array.isArray(node.content) && node.content.some(jsonNodeHasContent);
+}
+
+function makeInlineWrapper(template: JsonNode, content: JsonNode[]): JsonNode {
+	const wrapper: JsonNode = { type: template.type, content };
+	if (template.type === "heading" && template.attrs) {
+		wrapper.attrs = template.attrs;
+	}
+	return wrapper;
+}
+
+// 段落/标题中夹带的块级 image 会因 schema 不允许而校验失败：
+// 把 image 拆分为独立兄弟块，前后文本保留在原类型容器中，渲染效果与只读页基本一致
+let imagePlacementAdjusted = 0;
+function normalizeImagePlacement(node: JsonNode): JsonNode[] {
+	if (!Array.isArray(node.content)) return [node];
+	const children = node.content.flatMap((child) =>
+		normalizeImagePlacement(child),
+	);
+	if (!children.some((child) => child.type === "image")) {
+		return [{ ...node, content: children }];
+	}
+	if (node.type !== "paragraph" && node.type !== "heading") {
+		return [{ ...node, content: children }];
+	}
+	const segments: JsonNode[] = [];
+	let buffer: JsonNode[] = [];
+	for (const child of children) {
+		if (child.type === "image") {
+			buffer = buffer.filter(jsonNodeHasContent);
+			if (buffer.length) {
+				segments.push(makeInlineWrapper(node, buffer));
+				imagePlacementAdjusted++;
+				buffer = [];
+			}
+			segments.push(child);
+		} else {
+			buffer.push(child);
+		}
+	}
+	buffer = buffer.filter(jsonNodeHasContent);
+	if (buffer.length) {
+		segments.push(makeInlineWrapper(node, buffer));
+		imagePlacementAdjusted++;
+	}
+	return segments;
+}
+
+function finalizeParsedDoc(json: JsonNode): JsonNode {
+	imagePlacementAdjusted = 0;
+	const content = Array.isArray(json.content)
+		? json.content.flatMap((child) => normalizeImagePlacement(child))
+		: [];
+	if (!content.length) return { ...json, content: [{ type: "paragraph" }] };
+	return { ...json, content };
+}
+
 function markDirty(bodyChanged = false) {
 	dirty = true;
 	bodyDirty = bodyDirty || bodyChanged;
@@ -383,6 +493,48 @@ async function createEditor(operation: number) {
 			editor
 		)
 			return;
+		// 允许与粗体等标记共存的 code 标记（官方默认互斥，`**\`x\`**` 会校验失败）；
+		// markdownTokenName/parseMarkdown/renderMarkdown 与官方 Code 保持一致
+		const PermissiveCode = core.Mark.create({
+			name: "code",
+			excludes: "",
+			code: true,
+			markdownTokenName: "codespan",
+			parseHTML() {
+				return [{ tag: "code" }];
+			},
+			renderHTML({ HTMLAttributes }) {
+				return ["code", core.mergeAttributes(HTMLAttributes), 0];
+			},
+			parseMarkdown: (
+				token: { text?: string },
+				helpers: {
+					applyMark: (name: string, content: unknown) => unknown;
+				},
+			) =>
+				helpers.applyMark("code", [{ type: "text", text: token.text || "" }]),
+			renderMarkdown: (
+				node: JsonNode,
+				h: { renderChildren: (content: unknown) => string },
+			) => (node.content ? `\`${h.renderChildren(node.content)}\`` : ""),
+			addCommands() {
+				return {
+					toggleCode:
+						() =>
+						({
+							commands,
+						}: {
+							commands: { toggleMark: (name: string) => unknown };
+						}) =>
+							commands.toggleMark(this.name),
+				};
+			},
+			addKeyboardShortcuts() {
+				return {
+					"Mod-e": () => this.editor.commands.toggleCode(),
+				};
+			},
+		});
 		editor = new core.Editor({
 			element: editorMount,
 			extensions: [
@@ -390,7 +542,9 @@ async function createEditor(operation: number) {
 					link: { openOnClick: false, autolink: false },
 					underline: {},
 					codeBlock: false,
+					code: false,
 				}),
+				PermissiveCode,
 				markdown.Markdown,
 				table.TableKit,
 				image.default,
@@ -424,11 +578,40 @@ async function createEditor(operation: number) {
 			},
 			onTransaction: syncHistoryState,
 		});
-		editor.commands.setContent(originalBody, {
-			contentType: "markdown",
-			emitUpdate: false,
-			errorOnInvalidContent: true,
-		});
+		// 依次尝试：原文 → HTML转义；每个候选先 parse 再做结构归一化
+		// （拆分段落/标题中夹带的块级 image、补空文档），全部失败才降级源码模式
+		const candidates = Array.from(
+			new Set([originalBody, escapeRawHtmlOutsideCode(originalBody)]),
+		);
+		let bodyLoaded = false;
+		let lastError: unknown;
+		for (const candidate of candidates) {
+			try {
+				const parsed = editor.markdown.parse(candidate);
+				const normalized = finalizeParsedDoc(parsed);
+				editor.commands.setContent(normalized, {
+					emitUpdate: false,
+					errorOnInvalidContent: true,
+				});
+				bodyLoaded = true;
+				if (candidate !== originalBody || imagePlacementAdjusted > 0) {
+					console.warn("[article-editor] 原文需自动调整后才能进入富文本模式");
+					savedMessage =
+						"文章包含富文本模式无法直接解析的内容（图片排版/原始 HTML），已自动调整显示";
+				}
+				break;
+			} catch (reason) {
+				lastError = reason;
+				console.error(
+					"[article-editor] markdown 解析失败（含HTML转义候选）",
+					reason,
+				);
+			}
+		}
+		if (!bodyLoaded)
+			throw lastError instanceof Error
+				? lastError
+				: new Error("markdown 解析失败");
 		editorReady = true;
 		syncHistoryState();
 		editor.on("selectionUpdate", onTableSelectionChange);
@@ -442,6 +625,7 @@ async function createEditor(operation: number) {
 		window.addEventListener("resize", onWindowScrollOrResize);
 	} catch (reason) {
 		if (!mounted || operation !== openOperation || !editing) return;
+		console.error("[article-editor] 编辑器初始化失败，降级为源码模式", reason);
 		editor?.destroy();
 		editor = null;
 		sourceMode = true;
@@ -532,58 +716,9 @@ function syncHistoryState() {
 
 function onTableSelectionChange() {
 	const tableEl = positionTableToolbar();
-	if (
-		!tableEl &&
-		!hoverTableEl &&
-		!tableToolbarEl?.matches(":hover") &&
-		!pointerOverTableOrToolbar()
-	) {
+	if (!tableEl && !hoverTableEl && !tableToolbarEl?.matches(":hover")) {
 		hideTableToolbarNow();
 	}
-}
-
-function clearTableHideTimer() {
-	if (tableHideTimer) clearTimeout(tableHideTimer);
-	tableHideTimer = null;
-}
-
-function pointerOverTableOrToolbar() {
-	const el =
-		lastMouseX || lastMouseY
-			? document.elementFromPoint(lastMouseX, lastMouseY)
-			: null;
-	if (
-		el?.closest(".article-reading-body-editing .ProseMirror table") ||
-		el?.closest(".table-toolbar")
-	)
-		return true;
-	// 间隙带保持区：鼠标从表格移向工具条途中会经过这段空隙，
-	// 360 下事件节流导致 mousemove 延迟到达时，定时器兜底判定若只认
-	// elementFromPoint 会把间隙误判为"已离开"而闪隐。
-	return inGapKeepZone();
-}
-
-// 工具条与表格之间的间隙带（含两者矩形外扩 4px）视为保持区。
-function inGapKeepZone() {
-	if (!tableToolbar.visible || !tableToolbarEl || !activeTableEl) return false;
-	const tb = tableToolbarEl.getBoundingClientRect();
-	const tr = activeTableEl.getBoundingClientRect();
-	return (
-		lastMouseX >= Math.min(tb.left, tr.left) - 4 &&
-		lastMouseX <= Math.max(tb.right, tr.right) + 4 &&
-		lastMouseY >= Math.min(tb.top, tr.top) - 4 &&
-		lastMouseY <= Math.max(tb.bottom, tr.bottom) + 4
-	);
-}
-
-function hideTableToolbarLater() {
-	clearTableHideTimer();
-	tableHideTimer = setTimeout(() => {
-		// 用鼠标真实位置兜底判断（360 下 mouseout.relatedTarget 不可靠）
-		if (hoverTableEl || tableToolbarEl?.matches(":hover")) return;
-		if (pointerOverTableOrToolbar()) return;
-		hideTableToolbarNow();
-	}, 140);
 }
 
 const tableCommands: Array<[string, string, string]> = [
@@ -769,7 +904,7 @@ function updateHandlesForPointer(tableEl: HTMLElement, mx: number, my: number) {
 }
 
 function hideTableToolbarNow() {
-	clearTableHideTimer();
+	toolbarPinned = false;
 	hoverTableEl = null;
 	activeTableEl = null;
 	hoverRowIndex = -1;
@@ -782,7 +917,6 @@ function hideTableToolbarNow() {
 }
 
 function showTableToolbar(tableEl: HTMLElement): HTMLElement {
-	clearTableHideTimer();
 	activeTableEl = tableEl;
 	const bar = ensureTableToolbar();
 	if (!bar) return tableEl;
@@ -839,30 +973,29 @@ function positionTableToolbar(): HTMLElement | null {
 	return showTableToolbar(tableEl);
 }
 
-// 指针轮询：mousemove 时用 elementFromPoint 判定鼠标落在哪，稳定显示/隐藏表格工具条。
-// 相比 mouseover/mouseout 方案，360 的 relatedTarget 不可靠会导致工具条闪现即失，
-// 这里完全绕开 event.relatedTarget，鼠标真实坐标判定对真实操作最稳。
+// 指针轮询：mousemove 时用 elementFromPoint 判定鼠标落在哪。
+// 工具条为"点击钉住"模式：悬浮只驱动行/列手柄，不显示/隐藏工具条；
+// 工具条的显示与收起完全由 onTableDocMouseDown 的点击逻辑管理。
 function refreshTableToolbarByPointer() {
 	pointerRefreshPending = false;
 	if (!editor || sourceMode) return;
 	// 拖拽中不刷新工具条/手柄，避免幽灵跟随被 rAF 干扰
 	if (tableDrag || lineDrag) return;
 	const target = document.elementFromPoint(lastMouseX, lastMouseY);
-	if (!target) {
-		hideTableToolbarLater();
-		return;
-	}
-	const tableEl = target.closest<HTMLElement>(
+	const tableEl = target?.closest<HTMLElement>(
 		".article-reading-body-editing .ProseMirror table",
 	);
 	if (tableEl) {
 		hoverTableEl = tableEl;
-		showTableToolbar(tableEl);
+		// 钉住的是当前表格时，滚动/布局变化后跟随刷新工具条位置
+		if (toolbarPinned && tableToolbar.visible && activeTableEl === tableEl) {
+			showTableToolbar(tableEl);
+		}
 		updateHandlesForPointer(tableEl, lastMouseX, lastMouseY);
 		return;
 	}
 	// 鼠标不在表格元素上：若仍处于 hover 表格的边缘带（表格外 ±HANDLE_EDGE），
-	// 保持显示并按边缘位置更新手柄（行左边缘/列上边缘/左上角对角都在表格外触发）
+	// 继续更新行/列手柄位置（行左边缘/列上边缘/左上角对角都在表格外触发）
 	if (hoverTableEl?.isConnected) {
 		const rect = hoverTableEl.getBoundingClientRect();
 		const inBand =
@@ -871,39 +1004,24 @@ function refreshTableToolbarByPointer() {
 			lastMouseY >= rect.top - HANDLE_EDGE &&
 			lastMouseY <= rect.bottom + HANDLE_EDGE;
 		if (inBand) {
-			clearTableHideTimer();
-			showTableToolbar(hoverTableEl);
 			updateHandlesForPointer(hoverTableEl, lastMouseX, lastMouseY);
 			return;
 		}
 	}
-	// 鼠标落在任意手柄上：保持手柄显示，等待按下拖拽
+	// 鼠标落在任意手柄/工具条上：保持现状（手柄等待按下拖拽、工具条保持钉住）
 	if (
-		target.closest(".table-drag-handle") ||
-		target.closest(".table-row-handle") ||
-		target.closest(".table-col-handle")
+		target?.closest(".table-drag-handle") ||
+		target?.closest(".table-row-handle") ||
+		target?.closest(".table-col-handle") ||
+		target?.closest(".table-toolbar")
 	) {
-		clearTableHideTimer();
 		hoverTableEl = null;
 		return;
 	}
 	hideDragHandle();
 	hideRowHandle();
 	hideColHandle();
-	if (target.closest(".table-toolbar")) {
-		clearTableHideTimer();
-		hoverTableEl = null;
-		return;
-	}
-	// 间隙带保持区：鼠标从表格移向工具条途中会经过这段空隙，
-	// 360 事件节流下 mousemove 延迟到达时定时器先触发，若只认 elementFromPoint
-	// 会把间隙误判为"已离开"而闪隐。这里复用本次 hit-test 的 target 判定保持区。
 	hoverTableEl = null;
-	if (tableToolbar.visible && inGapKeepZone()) {
-		clearTableHideTimer();
-		return;
-	}
-	if (tableToolbar.visible) hideTableToolbarLater();
 }
 
 function schedulePointerRefresh() {
@@ -920,7 +1038,8 @@ function onTableMouseMove(event: Event) {
 	schedulePointerRefresh();
 }
 
-// 点击页面任意处：若点在表格/工具条外，立刻收起；点在表格内则保持显示
+// 点击页面任意处：点在表格内→钉住并显示工具条；
+// 点在表格外（含工具条/手柄以外任意区域）→解除钉住并收起工具条
 function onTableDocMouseDown(event: Event) {
 	if (!editor || sourceMode) return;
 	const target = event.target as Element | null;
@@ -929,6 +1048,32 @@ function onTableDocMouseDown(event: Event) {
 	const tableEl = target.closest<HTMLElement>(
 		".article-reading-body-editing .ProseMirror table",
 	);
+	// 工具条点击触发：点在手柄/工具条上不改变钉住状态（按钮命令照常执行）
+	if (
+		mouse.button === 0 &&
+		(target.closest(".table-toolbar") ||
+			target.closest(".table-drag-handle") ||
+			target.closest(".table-row-handle") ||
+			target.closest(".table-col-handle"))
+	) {
+		return;
+	}
+	if (mouse.button === 0) {
+		if (tableEl) {
+			// 点击表格：钉住并显示（若已钉住同一表格，仅刷新位置）
+			if (
+				!toolbarPinned ||
+				activeTableEl !== tableEl ||
+				!tableToolbar.visible
+			) {
+				showTableToolbar(tableEl);
+				toolbarPinned = true;
+			}
+		} else if (toolbarPinned) {
+			// 点击表格与手柄之外：立即收起
+			hideTableToolbarNow();
+		}
+	}
 	// 左键无修饰键的按下：统一注册拖动监听。
 	// - 起点在 cell 内：立即记录起点并 preventDefault（阻止原生文本选择）；
 	// - 起点在 cell 外：不 preventDefault（保留正常文本选择/定位），
@@ -942,24 +1087,9 @@ function onTableDocMouseDown(event: Event) {
 		if (tableEl) {
 			const cell = target.closest<HTMLElement>("td, th");
 			if (cell) {
-				// 阻止浏览器原生文本选择：拖动划选完全由我们自己 dispatch
-				// CellSelection 管理，mouseup 后 PM 读回空选择就不会覆盖多选高亮。
-				// 单击定位不能依赖 PM/浏览器默认（preventDefault 会杀死原生光标
-				// 行为），改为在 mouseup 时手动 dispatch TextSelection 定位。
-				event.preventDefault();
-				const pm = document.querySelector(".ProseMirror");
-				if (pm && document.activeElement !== pm) {
-					(pm as HTMLElement).focus({ preventScroll: true });
-				}
-				try {
-					const p = editor.view.posAtCoords({
-						left: mouse.clientX,
-						top: mouse.clientY,
-					});
-					cellDragClickPos = p ? p.pos : null;
-				} catch {
-					cellDragClickPos = null;
-				}
+				// 不 preventDefault：同一单元格内的拖动交给浏览器原生文字划选，
+				// 单击定位也走 PM/浏览器默认行为；只有拖动跨入其他单元格时
+				// 才由 onCellDragMove 接管为 CellSelection（届时清除原生选择）。
 				let pos: number | null = null;
 				try {
 					const startPos = editor.view.posAtDOM(cell, 0);
@@ -978,21 +1108,12 @@ function onTableDocMouseDown(event: Event) {
 				cellDragging = false;
 				cellDragClientX = mouse.clientX;
 				cellDragClientY = mouse.clientY;
-				if (pos != null) {
-					// 重置 tableEditing 的拖选 anchor：prosemirror-tables 的 stop()
-					// 会在 mouseup 时写入 -1，下一次拖动时其 move() 对 -1 执行
-					// doc.resolve(-1) 会抛 RangeError 导致拖动失效；这里把 anchor
-					// 重置为本次拖动起点，既避免崩溃又让库自身逻辑从正确起点走。
-					try {
-						editor.view.dispatch(editor.state.tr.setMeta(tableEditingKey, pos));
-					} catch {
-						/* 忽略 */
-					}
-				}
+				// 注意：不要在这里预设 tableEditingKey 锚点。库自身的 move()
+				// 只要发现锚点非空就会对当前格调 setCellSelection，连同一格内
+				// 拖动都会被整格选中；保持锚点为空，库才会放行原生文字划选。
 			} else {
 				cellDragStartPos = null;
 				cellDragging = false;
-				cellDragClickPos = null;
 			}
 			document.addEventListener("mousemove", onCellDragMove);
 			document.addEventListener("mouseup", onCellDragUp);
@@ -1000,7 +1121,6 @@ function onTableDocMouseDown(event: Event) {
 			// 表格外按下：注册监听，若拖入表格则接管划选；否则不影响原生文本选择
 			cellDragStartPos = null;
 			cellDragging = false;
-			cellDragClickPos = null;
 			document.addEventListener("mousemove", onCellDragMove);
 			document.addEventListener("mouseup", onCellDragUp);
 		}
@@ -1041,24 +1161,42 @@ function onCellDragMove(event: MouseEvent) {
 			}
 		}
 		if (cellPos == null) return;
-		// 进入表格：接管拖动，清除 mousedown 后可能已开始的原生文本选择
+		// 进入表格：接管拖动，清除 mousedown 后可能已开始的原生文本选择。
+		// 同样不预设 tableEditingKey 锚点，避免库在同一格内抢选整格
 		cellDragStartPos = cellPos;
 		cellDragging = true;
 		const sel = window.getSelection();
 		if (sel && !sel.isCollapsed) sel.removeAllRanges();
-		try {
-			editor.view.dispatch(editor.state.tr.setMeta(tableEditingKey, cellPos));
-		} catch {
-			/* 忽略 */
-		}
 	} else if (!cellDragging) {
 		// 位移未越过阈值视为单击（允许 PM/浏览器正常定位光标），不 preventDefault
 		const dx = event.clientX - cellDragClientX;
 		const dy = event.clientY - cellDragClientY;
 		if (Math.abs(dx) <= 4 && Math.abs(dy) <= 4) return;
+		// 判断当前鼠标是否仍在起点单元格内：
+		// 同一格内拖动 = 用户想划选文字，交给浏览器原生行为，绝不接管；
+		// 只有跨入其他单元格才升级为 CellSelection（整格拖选）
+		const p = editor.view.posAtCoords({
+			left: event.clientX,
+			top: event.clientY,
+		});
+		let currentCellPos: number | null = null;
+		if (p) {
+			const $p = editor.state.doc.resolve(p.pos);
+			for (let d = $p.depth; d > 0; d--) {
+				const role = $p.node(d).type.spec.tableRole;
+				if (role === "cell" || role === "header_cell") {
+					currentCellPos = $p.before(d);
+					break;
+				}
+			}
+		}
+		if (currentCellPos == null || currentCellPos === cellDragStartPos) return;
 		cellDragging = true;
+		// 接管瞬间清除同格阶段产生的原生文字选择，避免与整格高亮叠加
+		const sel = window.getSelection();
+		if (sel && !sel.isCollapsed) sel.removeAllRanges();
 	}
-	// 拖动已开始：阻止浏览器原生文本选择，避免覆盖 CellSelection 高亮
+	// 已接管为跨单元格拖选：阻止浏览器原生文本选择，避免覆盖 CellSelection 高亮
 	event.preventDefault();
 	const pos = editor.view.posAtCoords({
 		left: event.clientX,
@@ -1093,27 +1231,15 @@ function onCellDragUp() {
 	document.removeEventListener("mousemove", onCellDragMove);
 	document.removeEventListener("mouseup", onCellDragUp);
 	const wasDragging = cellDragging;
-	const clickPos = cellDragClickPos;
 	cellDragStartPos = null;
 	cellDragging = false;
-	cellDragClickPos = null;
 	if (wasDragging) {
-		// 拖动过：清除残留 DOM 选择（正常路径 preventDefault 后不会有原生选择）
+		// 跨单元格拖选结束：清除残留 DOM 选择（正常路径 preventDefault 后
+		// 不会有原生选择），防止 PM 在 selectionchange 时把文本选择写回 state
 		const sel = window.getSelection();
 		if (sel && !sel.isCollapsed) sel.removeAllRanges();
-	} else if (clickPos != null && editor && !sourceMode) {
-		// 单击：mousedown 被 preventDefault 后浏览器/PM 都不会定位光标，
-		// 这里手动 dispatch 光标定位（等价 PM 单击定位行为）。
-		try {
-			editor.view.dispatch(
-				editor.state.tr.setSelection(
-					TextSelection.near(editor.state.doc.resolve(clickPos)),
-				),
-			);
-		} catch {
-			/* 忽略 */
-		}
 	}
+	// 未接管的同格划选/单击：原生行为已完整处理，无需额外干预
 }
 
 // 拖拽划选结束后，浏览器若仍有残留原生文本选择，prosemirror 会在
@@ -1645,7 +1771,7 @@ function destroyEditor() {
 	if (editor) editor.destroy();
 	editor = null;
 	editorReady = false;
-	clearTableHideTimer();
+	toolbarPinned = false;
 	hoverTableEl = null;
 	if (tableToolbarEl) {
 		tableToolbarEl.remove();
@@ -2104,10 +2230,6 @@ function leaveEditor() {
 	if (readingBodyEl) {
 		readingBodyEl.innerHTML = savedReadingHTML;
 		readingBodyEl.classList.remove("article-reading-body-editing");
-		if (pendingOptimisticHTML) {
-			readingBodyEl.innerHTML = pendingOptimisticHTML;
-			pendingOptimisticHTML = null;
-		}
 		readingBodyEl = null;
 		savedReadingHTML = "";
 	}
@@ -2117,14 +2239,6 @@ function leaveEditor() {
 	editing = false;
 	if (clearGlobalState)
 		document.documentElement.classList.remove("study-editor-active");
-}
-
-function captureOptimisticHTML() {
-	if (pendingOptimisticHTML) return;
-	// 源码模式（含原始 HTML/XML 无法被富文本解析）无法在前端还原渲染效果，
-	// 不做乐观更新，等待后台部署后的静态页面。
-	if (sourceMode) return;
-	pendingOptimisticHTML = editor?.getHTML() || null;
 }
 
 function moveTopbar() {
@@ -2328,10 +2442,6 @@ onMount(() => {
 	window.addEventListener("study-article-editor-open", onOpen);
 	window.addEventListener("study-article-editor-revert", onRevert);
 	window.addEventListener("study-article-editor-flush", flush);
-	window.addEventListener(
-		"study-article-commit-success",
-		captureOptimisticHTML,
-	);
 	window.addEventListener("beforeunload", beforeUnload);
 	window.addEventListener("keydown", onKeydown);
 	if (sessionStorage.getItem(editModeKey) === "1") void openEditor();
@@ -2343,10 +2453,6 @@ onMount(() => {
 		window.removeEventListener("study-article-editor-open", onOpen);
 		window.removeEventListener("study-article-editor-revert", onRevert);
 		window.removeEventListener("study-article-editor-flush", flush);
-		window.removeEventListener(
-			"study-article-commit-success",
-			captureOptimisticHTML,
-		);
 		window.removeEventListener("beforeunload", beforeUnload);
 		window.removeEventListener("keydown", onKeydown);
 		const clearGlobalState = restoreTopbar();

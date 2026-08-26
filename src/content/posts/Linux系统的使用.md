@@ -4,7 +4,7 @@ published: 2026-08-01
 description: "Linux系统的使用"
 category: "开发工具"
 draft: false
-updated: 2026-08-25
+updated: 2026-08-26
 tags: []
 ---
 
@@ -50,9 +50,11 @@ XShell 是一个强大的安全终端模拟软件，支持SSH1、SSH2、SFTP、T
 
 1. 点击左侧「用户身份验证」
 2. 输入用户名（如：root）
+
   ![1](/uploads/images/2026-03-26/7cd79f71-a4a6-4fd0-a634-47baf7ee317c.png)
 3. 输入密码
 4. 点击「确定」连接
+
   ![1](/uploads/images/2026-03-26/f80fd206-14c3-4fc9-a8d4-1191b03c6309.png)
 
 ### 1.4 保存会话技巧
@@ -95,6 +97,7 @@ XShell 会话管理
 **问题4：中文乱码**
 
 - 将编码设置为 UTF-8
+
   ![1](/uploads/images/2026-03-26/197ee8cb-d59b-438b-8667-8d8696102450.png)
 
 ---
@@ -382,12 +385,12 @@ vi和vim是Linux中的文本编辑器，用来在Linux中创建、查看或者�
 **5. 查找文件**
 
 
-| 命令                                    | 说明                          |
-| ------------------------------------- | --------------------------- |
-| find / -name file.txt                 | 从根目录查找名为file.txt的文件         |
-| find /opt -name "\*.java"             | 查找opt目录下所有.java文件           |
-| find /opt -name "\*.java" | grep user | 查找opt目录下所有含有user名称的 .java文件 |
-| find /opt -type d -name "logs"        | 查找名为logs的目录                 |
+| 命令                                    | 说明                  |
+| ------------------------------------- | ------------------- |
+| find / -name file.txt                 | 从根目录查找名为file.txt的文件 |
+| find /opt -name "\*.java"             | 查找opt目录下所有.java文件   |
+| find /opt -name "\*.java" | grep user |                     |
+| find /opt -type d -name "logs"        | 查找名为logs的目录         |
 
 
 ---

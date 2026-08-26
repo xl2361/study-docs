@@ -90,8 +90,21 @@ if (!lang) {
 const siteLang = lang.replace("_", "-");
 
 // 构建时注入的 Git 提交标记，用于前端检测后台部署是否完成（部署后标记变化）
-const buildCommit =
+// 优先用 CI/CF 注入的环境变量；本地或 wrangler 直接部署时两者都没有，
+// 回退到当前仓库 HEAD，保证 watchDeploy 轮询基线非空、提交后能检测到部署完成
+let buildCommit =
 	process.env.CF_PAGES_COMMIT_SHA || process.env.GITHUB_SHA || "";
+if (!buildCommit) {
+	try {
+		const { execSync } = await import("node:child_process");
+		buildCommit = execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"] })
+			.toString()
+			.trim()
+			.slice(0, 7);
+	} catch {
+		buildCommit = "";
+	}
+}
 
 // 使用固定的banner偏移量，position配置用于图片定位
 ---

@@ -466,7 +466,7 @@ async function createEditor(operation: number) {
 			taskList,
 			taskItem,
 			codeBlockLowlight,
-			lowlight,
+			createLowlight,
 		] = await Promise.all([
 			import("@tiptap/core"),
 			import("@tiptap/starter-kit"),
@@ -482,12 +482,63 @@ async function createEditor(operation: number) {
 			import("@tiptap/extension-task-list"),
 			import("@tiptap/extension-task-item"),
 			import("@tiptap/extension-code-block-lowlight"),
-			import("lowlight"),
+			// 只取 createLowlight，避免把 lowlight.all/common 全量语法打进产物
+			import("lowlight").then((m) => m.createLowlight),
 		]);
+
+		// 只注册编辑器实际支持的语言语法，避免导入 lowlight.all（190+ 语言全量打包）
+		const hlLangs = await Promise.all([
+			import("highlight.js/lib/languages/bash"),
+			import("highlight.js/lib/languages/c"),
+			import("highlight.js/lib/languages/cpp"),
+			import("highlight.js/lib/languages/css"),
+			import("highlight.js/lib/languages/dart"),
+			import("highlight.js/lib/languages/go"),
+			import("highlight.js/lib/languages/java"),
+			import("highlight.js/lib/languages/javascript"),
+			import("highlight.js/lib/languages/json"),
+			import("highlight.js/lib/languages/kotlin"),
+			import("highlight.js/lib/languages/markdown"),
+			import("highlight.js/lib/languages/php"),
+			import("highlight.js/lib/languages/python"),
+			import("highlight.js/lib/languages/ruby"),
+			import("highlight.js/lib/languages/rust"),
+			import("highlight.js/lib/languages/scala"),
+			import("highlight.js/lib/languages/shell"),
+			import("highlight.js/lib/languages/sql"),
+			import("highlight.js/lib/languages/swift"),
+			import("highlight.js/lib/languages/typescript"),
+			import("highlight.js/lib/languages/xml"),
+			import("highlight.js/lib/languages/yaml"),
+		]);
+		const editorLowlight = createLowlight({
+			bash: hlLangs[0].default,
+			c: hlLangs[1].default,
+			cpp: hlLangs[2].default,
+			css: hlLangs[3].default,
+			dart: hlLangs[4].default,
+			go: hlLangs[5].default,
+			java: hlLangs[6].default,
+			javascript: hlLangs[7].default,
+			json: hlLangs[8].default,
+			kotlin: hlLangs[9].default,
+			markdown: hlLangs[10].default,
+			php: hlLangs[11].default,
+			python: hlLangs[12].default,
+			ruby: hlLangs[13].default,
+			rust: hlLangs[14].default,
+			scala: hlLangs[15].default,
+			shell: hlLangs[16].default,
+			sql: hlLangs[17].default,
+			swift: hlLangs[18].default,
+			typescript: hlLangs[19].default,
+			xml: hlLangs[20].default,
+			yaml: hlLangs[21].default,
+		});
+		// html/rss 等别名由 xml 语法自带，registerLanguage 时自动注册
 		if (
 			!mounted ||
 			operation !== openOperation ||
-			!editing ||
 			!editorMount ||
 			sourceMode ||
 			editor
@@ -568,7 +619,7 @@ async function createEditor(operation: number) {
 						},
 					})
 					.configure({
-						lowlight: lowlight.createLowlight(lowlight.all),
+						lowlight: editorLowlight,
 					}),
 			],
 			content: "",
@@ -624,7 +675,7 @@ async function createEditor(operation: number) {
 		});
 		window.addEventListener("resize", onWindowScrollOrResize);
 	} catch (reason) {
-		if (!mounted || operation !== openOperation || !editing) return;
+		if (!mounted || operation !== openOperation) return;
 		console.error("[article-editor] 编辑器初始化失败，降级为源码模式", reason);
 		editor?.destroy();
 		editor = null;
@@ -1989,6 +2040,33 @@ function captureScrollAnchor() {
 		: 0;
 }
 
+const prefersReducedMotion = () =>
+	typeof matchMedia === "function" &&
+	matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// 切换过渡动画：短暂压暗正文卡片 → 同帧完成全部布局变更 → 亮起。
+// 布局变更的中间帧被半透明状态掩盖，视觉上呈现为平滑过渡而非跳动。
+async function swapWithTransition(apply: () => Promise<void> | void) {
+	const panel = document.getElementById("post-container");
+	if (!panel || prefersReducedMotion()) {
+		await apply();
+		return;
+	}
+	panel.style.transition = "opacity .18s ease";
+	// 读取计算样式确保 transition 先注册，再改变透明度触发动画
+	getComputedStyle(panel).opacity;
+	panel.style.opacity = "0.45";
+	await new Promise((resolve) => setTimeout(resolve, 190));
+	await apply();
+	requestAnimationFrame(() => {
+		panel.style.opacity = "1";
+		window.setTimeout(() => {
+			panel.style.transition = "";
+			panel.style.opacity = "";
+		}, 240);
+	});
+}
+
 function restoreScrollAfterEdit() {
 	// 恢复滚动到"正文相对位置"：让编辑模式下正文容器顶部对应读模式的
 	// 相对视口偏移一致（viewPortInBody 不变），从而保证正文整体在视口中
@@ -2048,26 +2126,25 @@ async function openEditor() {
 		const topbar = document.getElementById("editor-topbar");
 		if (topbar) topbar.dataset.editorOwner = editorInstanceId;
 		scrollRestored = false;
-		// 在 editing=true 之前记录当前滚动位置
-		captureScrollAnchor();
-		editing = true;
-		// 立即切换全局编辑态样式：隐藏分类栏、让 editor-topbar 容器 overflow:clip。
-		// 必须与 moveTopbar（显示 editor-topbar）在同一渲染帧完成，
-		// 否则会出现 "editor-topbar 出现(+75px) 但分类栏尚未隐藏(-75px)" 的中间帧，
-		// 导致正文下移产生视觉跳动。正文不再由 CSS display:none 隐藏，此处安全。
-		document.documentElement.classList.add("study-editor-active");
-		await tick();
-		if (!mounted || operation !== openOperation || !editing) return;
-		moveTopbar();
-		setupInPlace();
+		// 先构建编辑器（懒加载 chunk + ProseMirror 初始化 + markdown 解析），
+		// 期间阅读视图完全不动；chunk 网络耗时不再暴露任何中间布局帧
 		await createEditor(operation);
-		if (!mounted || operation !== openOperation || !editing) return;
-		hostIntoReadingBody();
-		// 立即恢复滚动位置（与 class 切换同一帧，避免分类栏隐藏导致的位移被用户看到）
-		if (mounted && editing && !scrollRestored) {
+		if (!mounted || operation !== openOperation) return;
+		// 在切换前一刻记录滚动锚点（等待期间用户可能滚动）
+		captureScrollAnchor();
+		await swapWithTransition(async () => {
+			editing = true;
+			// 分类栏隐藏、topbar 显示、正文替换、滚动恢复必须在同一帧完成，
+			// 否则会出现分步位移的中间帧（+75px/-75px 抵消关系被拆开就会跳动）
+			document.documentElement.classList.add("study-editor-active");
+			moveTopbar();
+			setupInPlace();
+			await tick();
+			if (!mounted || operation !== openOperation || !editing) return;
+			hostIntoReadingBody();
 			scrollRestored = true;
 			restoreScrollAfterEdit();
-		}
+		});
 	} finally {
 		opening = false;
 		if (
@@ -2241,6 +2318,45 @@ function leaveEditor() {
 		document.documentElement.classList.remove("study-editor-active");
 }
 
+// 按正文相对位置恢复滚动：编辑/阅读两种模式正文高度不同，
+// 绝对 scrollY 会停在错误文本处；用锚点差值换算保证视口对准同一段内容
+function restoreScrollByAnchor(prevScrollY: number, prevAnchor: number) {
+	const bodyEl = document.querySelector<HTMLElement>(".article-reading-body");
+	const anchor = bodyEl
+		? Math.round(bodyEl.getBoundingClientRect().top + window.scrollY)
+		: prevAnchor;
+	const maxScroll = Math.max(
+		0,
+		document.documentElement.scrollHeight - window.innerHeight,
+	);
+	const target = Math.min(
+		Math.max(0, prevScrollY + (anchor - prevAnchor)),
+		maxScroll,
+	);
+	document.scrollingElement?.scrollTo({
+		top: Math.round(target),
+		behavior: "instant",
+	});
+}
+
+async function complete() {
+	if (!editing) return;
+	syncArticleMeta();
+	// 记录退出前视口锚点，动画切换后按锚点恢复，避免退出跳动
+	const exitScrollY = window.scrollY;
+	const bodyEl = document.querySelector<HTMLElement>(".article-reading-body");
+	const exitAnchor = bodyEl
+		? Math.round(bodyEl.getBoundingClientRect().top + window.scrollY)
+		: 0;
+	await swapWithTransition(async () => {
+		leaveEditor();
+		await tick();
+		restoreScrollByAnchor(exitScrollY, exitAnchor);
+	});
+	// 本轮"退出并放弃"结束，后续新会话恢复正常草稿保存
+	reverting = false;
+}
+
 function moveTopbar() {
 	if (!statuslineEl || !toolbarEl) return;
 	const topbar = document.getElementById("editor-topbar");
@@ -2270,11 +2386,6 @@ function restoreTopbar(): boolean {
 		topbar.hidden = true;
 	}
 	return ownsTopbar;
-}
-
-function complete() {
-	syncArticleMeta();
-	leaveEditor();
 }
 
 function syncArticleMeta() {
@@ -2412,7 +2523,7 @@ onMount(() => {
 	// 目录点击定位依赖 SidebarTOC 的 getEditorHeading 文本匹配兜底，无需 DOM id。
 	const setMode = (enabled: boolean) => {
 		if (enabled) void openEditor();
-		else complete();
+		else void complete();
 	};
 	const flush = (event: Event) => {
 		const detail = (event as CustomEvent<{ success: boolean }>).detail;
@@ -2469,22 +2580,23 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
 	syncHostIntoBody();
 </script>
 
-{#if editing}
- <section class="ha-editor" bind:this={editorSectionEl} aria-busy={loading} aria-label="文章编辑器">
+<!-- 编辑器区块常驻 DOM，用原生 hidden 属性隐藏（SSR HTML 自带，无 FOUC），
+     使 createEditor 可在阅读视图完全不动的情况下预先完成构建，
+     之后所有可见布局变更合并为同一帧原子切换 -->
+<section class="ha-editor" hidden={!editing} bind:this={editorSectionEl} aria-busy={loading} aria-label="文章编辑器">
   <div class="statusline" bind:this={statuslineEl} role="status" aria-live="polite" style={!emergency ? 'display:none' : ''}>
    {#if emergency}
      <button class="recover" type="button" onclick={restoreEmergencyDraft} title={emergency.error}>恢复备份</button>
    {/if}
   </div>
-  <nav class="toolbar" bind:this={toolbarEl} aria-label="正文格式"><EditorToolbar {canUndo} {canRedo} {painterActive} active={activeState} disabled={!editorReady || sourceMode} on:action={onToolbarAction} /></nav>
+  <nav class="toolbar" bind:this={toolbarEl} aria-label="正文格式"><EditorToolbar {canUndo} {canRedo} {painterActive} active={activeState} disabled={!editorReady || sourceMode || !editing} on:action={onToolbarAction} /></nav>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   {#if savedMessage}<p class="success">{savedMessage}</p>{/if}
   {#if sourceMode}<p class="source-note">源码模式：当前 Markdown 含有富文本编辑器无法解析的原始内容。</p><textarea class="source-editor" bind:this={sourceEditEl} bind:value={sourceValue} oninput={() => markDirty(true)} aria-label="Markdown 正文源码编辑器" spellcheck="false" disabled={!loaded}></textarea>{:else}<div class="tiptap-host prose dark:prose-invert prose-base max-w-none custom-md" bind:this={editorMount}></div>{/if}
- </section>
-{/if}
+</section>
 
 <style>
- .ha-editor { color: var(--btn-content); } .statusline { display: flex; align-items: center; gap: .55rem; margin: .15rem 0 .25rem; } .edit-badge { flex: none; border: 1px solid var(--primary); border-radius: .4rem; padding: .12rem .5rem; color: var(--primary); font-size: .75rem; font-weight: 750; } .status { font-size: .75rem; opacity: .75; } .recover { border-color: color-mix(in srgb, #e0a23c 45%, transparent); color: #b7791f; } button { border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .35rem .6rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } button:disabled { cursor: not-allowed; opacity: .5; } .primary { border-color: var(--primary); color: white; background: var(--primary); } .danger { color: #c74747; } .error { color: #c74747; font-size: .8rem; } .success { color: #27845f; font-size: .8rem; } .toolbar { position: sticky; top: 4.3rem; z-index: 20; margin: .35rem 0 .9rem; border-radius: .6rem; box-shadow: 0 1px 8px color-mix(in srgb, var(--btn-content) 10%, transparent); } .tiptap-host :global(.ProseMirror) { min-height: 26rem; outline: none; line-height: 1.75; } .tiptap-host :global(.ProseMirror pre) { margin: 0 !important; overflow: visible !important; border-radius: 0.75rem !important; border: 1.5px solid #d4d4d4 !important; padding: 1rem 1.35rem !important; background: #fafafa !important; font-family: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important; font-size: 0.875rem !important; line-height: 1.5rem !important; color: #383a42 !important; }
+   .ha-editor { color: var(--btn-content); } .statusline { display: flex; align-items: center; gap: .55rem; margin: .15rem 0 .25rem; } .edit-badge { flex: none; border: 1px solid var(--primary); border-radius: .4rem; padding: .12rem .5rem; color: var(--primary); font-size: .75rem; font-weight: 750; } .status { font-size: .75rem; opacity: .75; } .recover { border-color: color-mix(in srgb, #e0a23c 45%, transparent); color: #b7791f; } button { border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .35rem .6rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } button:disabled { cursor: not-allowed; opacity: .5; } .primary { border-color: var(--primary); color: white; background: var(--primary); } .danger { color: #c74747; } .error { color: #c74747; font-size: .8rem; } .success { color: #27845f; font-size: .8rem; } .toolbar { position: sticky; top: 4.3rem; z-index: 20; margin: .35rem 0 .9rem; border-radius: .6rem; box-shadow: 0 1px 8px color-mix(in srgb, var(--btn-content) 10%, transparent); } .tiptap-host :global(.ProseMirror) { min-height: 26rem; outline: none; line-height: 1.75; } .tiptap-host :global(.ProseMirror pre) { margin: 0 !important; overflow: visible !important; border-radius: 0.75rem !important; border: 1.5px solid #d4d4d4 !important; padding: 1rem 1.35rem !important; background: #fafafa !important; font-family: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important; font-size: 0.875rem !important; line-height: 1.5rem !important; color: #383a42 !important; }
   :global(:root.dark) .tiptap-host :global(.ProseMirror pre) { border-color: #3c424e !important; background: #282c34 !important; color: #abb2bf !important; } .tiptap-host :global(.ProseMirror table) { display: table; width: max-content; max-width: 100%; min-width: 100%; border-collapse: separate; border-spacing: 0; } .tiptap-host :global(.ProseMirror td), .tiptap-host :global(.ProseMirror th) { min-width: 120px; padding: 8px 12px; word-break: break-word; text-align: left; } .tiptap-host :global(.ProseMirror table p) { margin: 0; padding: 0; } .tiptap-host :global(.ProseMirror li p), .tiptap-host :global(.ProseMirror blockquote p) { margin: 0; padding: 0; } .tiptap-host :global(.ProseMirror table colgroup) { display: table-column-group; } .tiptap-host :global(.ProseMirror img) { max-width: 100%; height: auto; } .tiptap-host :global(.ProseMirror code) { font-size: .85rem !important; } .source-note { margin-top: .5rem; color: color-mix(in srgb, var(--btn-content) 65%, transparent); font-size: .8rem; } .source-editor { display: block; width: 100%; min-height: 26rem; resize: vertical; font-family: var(--font-jetbrains-mono), monospace; font-size: .86rem; line-height: 1.65; border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .6rem; color: inherit; background: var(--card-bg); }
  :global([data-article-title].article-title-editing) { outline: 2px dashed color-mix(in srgb, var(--primary) 45%, transparent); outline-offset: 2px; border-radius: .25rem; }
  :global(.article-category-select), :global(.article-tags-input) { display: inline-block; max-width: 14rem; border: 1px dashed color-mix(in srgb, var(--primary) 45%, transparent); border-radius: .3rem; padding: .08rem .3rem; color: inherit; background: var(--card-bg); font: inherit; font-size: .78rem; }

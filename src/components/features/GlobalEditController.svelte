@@ -107,7 +107,9 @@ function stopEditing() {
 }
 
 function discard() {
-	// 点击“退出”：丢弃本轮全部修改，回到进入编辑模式前的状态
+	// 点击“退出”：丢弃本轮全部修改，回到进入编辑模式前的状态。
+	// 草稿清空后由 study-edit-mode-change 事件驱动编辑器平滑还原阅读视图，
+	// 不做整页刷新，避免页面跳动与滚动位置丢失。
 	for (let i = sessionStorage.length - 1; i >= 0; i--) {
 		const key = sessionStorage.key(i);
 		if (!key?.startsWith(emergencyKey)) continue;
@@ -117,7 +119,6 @@ function discard() {
 	sessionStorage.removeItem(categoryDraftsKey);
 	window.dispatchEvent(new CustomEvent("study-article-editor-revert"));
 	stopEditing();
-	location.reload();
 }
 
 async function toggleEditing() {
@@ -154,7 +155,10 @@ async function toggleEditing() {
 
 	const articles = Object.values(drafts);
 	if (articles.length === 0 && Object.keys(categoryRenames).length === 0) {
-		stopEditing();
+		// 草稿为空说明没有任何“已保存到本轮”的修改：明确提示并留在编辑模式，
+		// 避免用户误以为已提交成功而线上却毫无变化。
+		message =
+			"没有可提交的修改：请先在文章内保存修改（Ctrl+S 或“保存”按钮），再点“更新”；若要放弃请点“退出”";
 		return;
 	}
 
@@ -180,16 +184,24 @@ async function toggleEditing() {
 			throw new Error(errorMessage);
 		}
 		let commit: unknown = null;
+		let changed = 0;
 		try {
-			const body = (await response.json()) as { commit?: unknown };
+			const body = (await response.json()) as {
+				commit?: unknown;
+				changed?: number;
+			};
 			commit = body?.commit ?? null;
+			changed = typeof body?.changed === "number" ? body.changed : 0;
 		} catch {
 			// 无响应体时不做部署轮询。
 		}
 		sessionStorage.removeItem(draftsKey);
 		sessionStorage.removeItem(categoryDraftsKey);
 		stopEditing();
-		message = "已提交，正在等待后台部署，完成后自动刷新";
+		message =
+			changed > 0
+				? `已提交 ${changed} 个文件，正在等待后台部署，完成后自动刷新`
+				: "已提交，正在等待后台部署，完成后自动刷新";
 		watchDeploy(commit);
 	} catch (reason) {
 		message = reason instanceof Error ? reason.message : "提交失败，请稍后重试";

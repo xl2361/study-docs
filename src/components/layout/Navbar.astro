@@ -190,7 +190,7 @@ const logoVariants = await Promise.all(
                 })}
             </div>
             <div class="flex col-start-3 justify-self-end">
-                <GlobalEditController client:load />
+                <GlobalEditController client:idle />
                 <!--<SearchPanel client:load>-->
                 <Search
                     client:load
@@ -255,7 +255,7 @@ const logoVariants = await Promise.all(
             }
         </div>
         <NavMenuPanel links={links}></NavMenuPanel>
-        <DisplaySettings client:load></DisplaySettings>
+        <DisplaySettings client:idle></DisplaySettings>
     </div>
 </div>
 

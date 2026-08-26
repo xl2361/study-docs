@@ -11,8 +11,10 @@ let editing = false;
 let submitting = false;
 let message = "";
 // 提交后轮询后台部署，部署完成（页面构建标记变化）时自动刷新
+// 超时设为 20 分钟：GitHub Actions 排队 + 构建部署实际常需 12-15 分钟，
+// 原 10 分钟会在部署完成前超时导致不自动刷新
 const deployPollInterval = 15_000;
-const deployPollTimeout = 10 * 60 * 1000;
+const deployPollTimeout = 20 * 60 * 1000;
 let deployTimer: ReturnType<typeof setInterval> | null = null;
 let deployStopTimer: ReturnType<typeof setTimeout> | null = null;
 let deployPendingReload = false;

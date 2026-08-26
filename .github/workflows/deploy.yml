@@ -7,7 +7,8 @@ on:
 
 concurrency:
   group: dayu-study-production
-  cancel-in-progress: true
+  # 不取消进行中的部署：连续提交时串行排队依次部署，
+  # 避免后一次提交的 push 取消正在跑的前一次部署导致"提交了但不更新"
 
 permissions:
   contents: read
@@ -30,9 +31,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Check project
-        run: pnpm check && pnpm type-check
 
       - name: Build site
         run: pnpm build

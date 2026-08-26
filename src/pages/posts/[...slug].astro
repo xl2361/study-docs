@@ -301,7 +301,7 @@ const editorArticlePath =
       }
 
       {
-        <ArticleEditor client:load slug={editorArticlePath} title={entry.data.title} categories={categories} />
+        <ArticleEditor client:idle slug={editorArticlePath} title={entry.data.title} categories={categories} />
       }
 
       {entry.data.password ? (

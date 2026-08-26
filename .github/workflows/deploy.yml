@@ -37,43 +37,6 @@ jobs:
       - name: Build site
         run: pnpm build
 
-      - name: Debug dump prerender chunks on failure
-        if: failure()
-        run: |
-          cat > /tmp/dumpchunks.cjs <<'EOF'
-          const fs = require('fs');
-          const root = 'dist/.prerender';
-          console.log('typeof window at debug time:', typeof globalThis.window);
-          function walk(d) {
-            let entries = [];
-            try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch (e) { console.log('no dir', d, e.message); return; }
-            for (const ent of entries) {
-              const fp = d + '/' + ent.name;
-              if (ent.isDirectory()) walk(fp);
-              else if (ent.name.endsWith('.mjs')) {
-                const t = fs.readFileSync(fp, 'utf8');
-                const lines = t.split('\n');
-                lines.forEach((ln, i) => {
-                  if (ln.includes('removeEventListener')) {
-                    console.log('=== ' + fp.replace(/'/g, '') + ':' + (i + 1) + ' ===');
-                    console.log(lines.slice(Math.max(0, i - 4), i + 5).join('\n'));
-                  }
-                });
-              }
-            }
-          }
-          walk(root);
-          EOF
-          node /tmp/dumpchunks.cjs
-
-      - name: Upload prerender chunks artifact on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: prerender-chunks
-          path: dist/.prerender
-          retention-days: 3
-
       - name: Deploy production
         run: pnpm wrangler pages deploy dist --project-name dayu-study --branch main --commit-dirty=false
         env:

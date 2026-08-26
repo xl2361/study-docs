@@ -1,5 +1,5 @@
 <script lang="ts">
-import { createEventDispatcher, onDestroy, onMount } from "svelte";
+import { createEventDispatcher, onMount } from "svelte";
 
 export let canUndo = false;
 export let canRedo = false;
@@ -104,13 +104,15 @@ function onGlobalKeyDown(event: KeyboardEvent) {
 	if (event.key === "Escape") openMenu = null;
 }
 
+// 挂载/清理统一放 onMount：Svelte 5 的 onDestroy 会在 SSR 阶段执行，
+// 服务端 window shim 缺少 removeEventListener 会导致构建报错
 onMount(() => {
 	window.addEventListener("pointerdown", onGlobalPointerDown, true);
 	window.addEventListener("keydown", onGlobalKeyDown);
-});
-onDestroy(() => {
-	window.removeEventListener("pointerdown", onGlobalPointerDown, true);
-	window.removeEventListener("keydown", onGlobalKeyDown);
+	return () => {
+		window.removeEventListener("pointerdown", onGlobalPointerDown, true);
+		window.removeEventListener("keydown", onGlobalKeyDown);
+	};
 });
 
 const FONT_SIZES = [12, 13, 14, 15, 16, 19, 22, 24, 29, 32, 40, 48];

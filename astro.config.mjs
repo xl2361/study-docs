@@ -41,6 +41,7 @@ import { rehypeDiagramPanZoom } from "./src/plugins/rehype-diagram-panzoom.mjs";
 import rehypeEmailProtection from "./src/plugins/rehype-email-protection.mjs";
 import rehypeExternalLinks from "./src/plugins/rehype-external-links.mjs";
 import rehypeFigure from "./src/plugins/rehype-figure.mjs";
+import rehypeImageDimensions from "./src/plugins/rehype-image-dimensions.mjs";
 import rehypeImageReferrerPolicy from "./src/plugins/rehype-image-referrerpolicy.mjs";
 import { rehypeMermaid } from "./src/plugins/rehype-mermaid.mjs";
 import { rehypePlantuml } from "./src/plugins/rehype-plantuml.mjs";
@@ -288,6 +289,7 @@ export default defineConfig({
 				rehypePlantuml,
 				rehypeDiagramPanZoom,
 				rehypeFigure,
+				rehypeImageDimensions,
 				[
 					rehypeImageReferrerPolicy,
 					{ domains: siteConfig.imageOptimization?.noReferrerDomains || [] },

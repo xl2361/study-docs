@@ -613,13 +613,14 @@ if (!buildCommit) {
       })();
     </script>
     <script is:inline>
-      // 手动滚动恢复：主内容区是 position:absolute，不在正常文档流中，
-      // 浏览器原生 overflow-anchor 无效，原生 scrollRestoration 也会因
-      // 图片/字体异步加载改变正文高度而恢复到错误位置。
-      // 方案：禁用原生恢复，自己保存 scrollY；DOMContentLoaded 立即恢复
-      // （即使正文只加载一部分也先恢复到 min(savedY,max)，不等高度到位），
-      // 再用 ResizeObserver 监听正文高度变化持续校正（图片懒加载、字体、
-      // 代码块折叠都会改变高度），观察窗口 5 秒后停止。
+      // 手动滚动恢复：主内容区初始 position:absolute 不在文档流中，
+      // initWallpaperMode（adjustMainContentPosition）会在 DOMContentLoaded
+      // 把它改为 relative/静态并加 body.wallpaper-initialized 类。
+      // 必须等该类出现后 scrollHeight 才准确，否则 Math.min(savedY,max)
+      // 会被钳制到首屏 → 停首行；之后布局剧变又跳动。
+      // 方案：禁用原生恢复，自己保存 scrollY；等 wallpaper-initialized
+      // 出现（2秒超时兜底）后再首次 restore，之后 ResizeObserver 持续
+      // 校正 5 秒。
       (function () {
         if (window.location.hash) return; // 锚点跳转交给浏览器原生
         var key = 'ff_scrollY:' + window.location.pathname;
@@ -648,8 +649,6 @@ if (!buildCommit) {
           if (Date.now() - lastUserScroll < 1500) return;
           var max = document.documentElement.scrollHeight - window.innerHeight;
           if (max <= 0) return;
-          // 立即恢复到 min(savedY, max)：正文未加载完时部分恢复也好过停在首行，
-          // 后续高度变化由 ResizeObserver 持续校正到位
           var target = Math.min(savedY, max);
           var cur = window.scrollY || document.documentElement.scrollTop || 0;
           if (Math.abs(cur - target) > 3) {
@@ -666,7 +665,6 @@ if (!buildCommit) {
               restore();
             });
             ro.observe(target);
-            // 5 秒后停止观察，交给用户控制
             setTimeout(function () {
               stabilized = true;
               ro.disconnect();
@@ -688,10 +686,33 @@ if (!buildCommit) {
           }
         }
 
+        // 等主内容区布局稳定（wallpaper-initialized 出现）再开始恢复，
+        // 避免在初始 absolute 状态下读到错误的 scrollHeight。
+        // 2 秒超时兜底：防止 initWallpaperMode 异常未加类时永远不恢复。
+        function whenLayoutReady(cb) {
+          if (document.body && document.body.classList.contains('wallpaper-initialized')) {
+            cb();
+            return;
+          }
+          var done = false;
+          var fire = function () { if (!done) { done = true; cb(); } };
+          if (window.MutationObserver && document.body) {
+            var mo = new MutationObserver(function () {
+              if (document.body.classList.contains('wallpaper-initialized')) {
+                mo.disconnect();
+                fire();
+              }
+            });
+            mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+          }
+          setTimeout(fire, 2000);
+        }
+
+        function begin() { whenLayoutReady(startObserve); }
         if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', startObserve);
+          document.addEventListener('DOMContentLoaded', begin);
         } else {
-          startObserve();
+          begin();
         }
         window.addEventListener('pagehide', function () {
           try {

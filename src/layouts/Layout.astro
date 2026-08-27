@@ -656,13 +656,53 @@ if (!buildCommit) {
           if (restored) return;
           var max = document.documentElement.scrollHeight - window.innerHeight;
           var target = Math.min(savedY, max);
+          var targetR = Math.round(target);
           restored = true;
+
+          // 诊断：定位 360 等浏览器下停首行的根因
           try {
-            window.scrollTo({ top: Math.round(target), left: 0, behavior: 'instant' });
-          } catch (e) {
-            document.scrollingElement.scrollTop = Math.round(target);
+            console.log('[ff-restore]', {
+              savedY: savedY, max: max, target: targetR,
+              scrollHeight: document.documentElement.scrollHeight,
+              innerHeight: window.innerHeight,
+              readyState: document.readyState,
+              wallpaperInit: document.body.classList.contains('wallpaper-initialized'),
+              ua: navigator.userAgent.slice(0, 80)
+            });
+          } catch (e) {}
+
+          // 加固1：临时禁用 scroll-behavior:smooth，防止部分 Chromium
+          // 忽略 behavior:'instant' 仍走 smooth 导致 scrollTo 静默失败/慢滚
+          var html = document.documentElement;
+          var prevSB = html.style.scrollBehavior;
+          html.style.scrollBehavior = 'auto';
+
+          function verify() {
+            var y = window.scrollY || (document.scrollingElement && document.scrollingElement.scrollTop) || 0;
+            try { console.log('[ff-restore] after scrollTo scrollY=', y, 'target=', targetR); } catch (e) {}
+            // 加固2：scrollTo 静默失败时用 scrollTop 赋值强力恢复
+            if (Math.abs(y - targetR) > 5) {
+              try {
+                if (document.scrollingElement) document.scrollingElement.scrollTop = targetR;
+                else document.documentElement.scrollTop = targetR;
+                document.body.scrollTop = targetR;
+              } catch (e) {}
+              try { console.log('[ff-restore] fallback scrollTop ->', window.scrollY); } catch (e) {}
+            }
+            html.style.scrollBehavior = prevSB || '';
+            reveal();
           }
-          reveal();
+
+          try {
+            window.scrollTo({ top: targetR, left: 0, behavior: 'instant' });
+          } catch (e) {
+            try {
+              if (document.scrollingElement) document.scrollingElement.scrollTop = targetR;
+              else document.documentElement.scrollTop = targetR;
+            } catch (e2) {}
+          }
+          // 加固3：下一帧验证是否真到位（兼容 scrollTo 异步平滑/静默失败）
+          setTimeout(verify, 0);
         }
 
         // 兜底：4 秒后无论如何都恢复并显示（防止字体卡住时永远隐藏）

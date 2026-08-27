@@ -613,14 +613,14 @@ if (!buildCommit) {
       })();
     </script>
     <script is:inline>
-      // 手动滚动恢复（一步到位方案）：
-      // 主内容区初始 absolute，initWallpaperMode 在 DOMContentLoaded 改为
-      // relative/静态并加 body.wallpaper-initialized；字体异步加载改变行高。
-      // 渐进式 ResizeObserver 校正（Math.min 钳制）本身会跳动。
-      // 方案：等 wallpaper-initialized + fonts.ready 都满足后，延迟 50ms
-      // 让重排完成，一次性 scrollTo(instant) 到 savedY，不做渐进校正。
-      // 2 秒超时兜底防止 fonts.ready 卡住时永远不恢复。
+      // 手动滚动恢复（一步到位 + 恢复前隐藏消除闪现跳动）：
+      // scrollRestoration=manual 后页面从 scrollY=0 渲染首帧，restore 才跳到
+      // savedY，中间会闪现首行 → 跳动。
+      // 方案：有 savedY 时立即隐藏主内容（visibility:hidden 不影响布局），等布局+
+      // 字体稳定后 scrollTo(instant) 到 savedY，再显示主内容。用户只看到内容
+      // 直接出现在正确位置，无闪现。
       (function () {
+        var dbg = function (m) { try { console.log('[ffscroll] ' + m + ' t=' + Date.now()); } catch (e) {} };
         var key = 'ff_scrollY:' + window.location.pathname;
         try {
           if ('scrollRestoration' in history) {
@@ -629,11 +629,18 @@ if (!buildCommit) {
         } catch (e) {}
         var savedY = null;
         try { savedY = parseFloat(sessionStorage.getItem(key) || '') || null; } catch (e) {}
+        dbg('init savedY=' + savedY + ' scrollY=' + (window.scrollY||0) + ' sh=' + (document.documentElement.scrollHeight||0));
         if (savedY == null || savedY <= 0) return;
+
+        // 立即隐藏主内容，避免恢复前闪现首行
+        var styleEl = document.createElement('style');
+        styleEl.textContent = 'html.ff-pending #content-wrapper{visibility:hidden !important;}';
+        (document.head || document.documentElement).appendChild(styleEl);
+        document.documentElement.classList.add('ff-pending');
+        dbg('hidden added');
 
         var restored = false;
         var userScrolled = false;
-        // 用户主动滚动则放弃恢复（尊重用户）
         function onUserScroll() { if (restored) userScrolled = true; }
         window.addEventListener('wheel', onUserScroll, { passive: true });
         window.addEventListener('touchmove', onUserScroll, { passive: true });
@@ -641,24 +648,44 @@ if (!buildCommit) {
           if (['PageUp','PageDown','ArrowUp','ArrowDown','Home','End'].indexOf(e.key) >= 0) onUserScroll();
         }, { passive: true });
 
+        function reveal() {
+          if (document.documentElement.classList.contains('ff-pending')) {
+            document.documentElement.classList.remove('ff-pending');
+            setTimeout(function () { if (styleEl.parentNode) styleEl.parentNode.removeChild(styleEl); }, 100);
+            dbg('revealed');
+          }
+        }
+
         function doRestore() {
-          if (restored || userScrolled) return;
+          if (restored) return;
           var max = document.documentElement.scrollHeight - window.innerHeight;
-          if (max <= 0) return;
-          restored = true;
           var target = Math.min(savedY, max);
-          // behavior:'instant' 一步到位，无平滑过渡中间帧
+          dbg('doRestore before scrollY=' + (window.scrollY||0) + ' max=' + max + ' target=' + target + ' sh=' + document.documentElement.scrollHeight);
+          restored = true;
           try {
             window.scrollTo({ top: Math.round(target), left: 0, behavior: 'instant' });
           } catch (e) {
             document.scrollingElement.scrollTop = Math.round(target);
           }
+          dbg('doRestore after scrollY=' + (window.scrollY||0));
+          reveal();
+          // 监测恢复后是否被冲走
+          [100, 300, 600, 1000].forEach(function (ms) {
+            setTimeout(function () {
+              dbg('post-' + ms + 'ms scrollY=' + (window.scrollY||0) + ' sh=' + document.documentElement.scrollHeight);
+            }, ms);
+          });
         }
 
-        // 条件1：布局稳定（wallpaper-initialized 出现，2 秒超时）
+        // 兜底：4 秒后无论如何都恢复并显示（防止字体卡住时永远隐藏）
+        var fallbackTimer = setTimeout(function () {
+          dbg('fallback fire');
+          doRestore();
+        }, 4000);
+
         function waitLayout(cb) {
-          if (document.body && document.body.classList.contains('wallpaper-initialized')) { cb(); return; }
-          var done = false, fire = function () { if (!done) { done = true; cb(); } };
+          if (document.body && document.body.classList.contains('wallpaper-initialized')) { dbg('layout ready (already)'); cb(); return; }
+          var done = false, fire = function () { if (!done) { done = true; dbg('layout ready'); cb(); } };
           if (window.MutationObserver && document.body) {
             var mo = new MutationObserver(function () {
               if (document.body.classList.contains('wallpaper-initialized')) { mo.disconnect(); fire(); }
@@ -667,19 +694,18 @@ if (!buildCommit) {
           }
           setTimeout(fire, 2000);
         }
-        // 条件2：字体加载完成（2 秒超时）
         function waitFonts(cb) {
           if (document.fonts && document.fonts.ready) {
-            var done = false, fire = function () { if (!done) { done = true; cb(); } };
+            var done = false, fire = function () { if (!done) { done = true; dbg('fonts ready'); cb(); } };
             document.fonts.ready.then(fire);
             setTimeout(fire, 2000);
-          } else { cb(); }
+          } else { dbg('no fonts API'); cb(); }
         }
 
         function begin() {
           waitLayout(function () {
             waitFonts(function () {
-              // 延迟 50ms 让布局重排完成再一步恢复
+              clearTimeout(fallbackTimer);
               setTimeout(doRestore, 50);
             });
           });
@@ -694,7 +720,6 @@ if (!buildCommit) {
           var y = window.scrollY || 0;
           try { sessionStorage.setItem(key, String(y)); } catch (e) {}
         }
-        // scroll 节流保存：TOC 跳转/smooth scroll 后位置也存，刷新才能恢复
         var saveTimer = null;
         window.addEventListener('scroll', function () {
           if (saveTimer) return;

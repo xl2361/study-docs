@@ -97,7 +97,9 @@ let buildCommit =
 if (!buildCommit) {
 	try {
 		const { execSync } = await import("node:child_process");
-		buildCommit = execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"] })
+		buildCommit = execSync("git rev-parse HEAD", {
+			stdio: ["ignore", "pipe", "ignore"],
+		})
 			.toString()
 			.trim()
 			.slice(0, 7);

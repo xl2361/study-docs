@@ -644,19 +644,24 @@ if (!buildCommit) {
           if (['PageUp','PageDown','ArrowUp','ArrowDown','Home','End'].indexOf(e.key) >= 0) onUserScroll();
         }, { passive: true });
 
+        var dbg = function (m) { try { console.log('[ffscroll] ' + m); } catch (e) {} };
+        dbg('savedY=' + savedY + ' path=' + window.location.pathname + ' readyState=' + document.readyState);
+
         function restore() {
           if (stabilized) return;
           if (Date.now() - lastUserScroll < 1500) return;
           var max = document.documentElement.scrollHeight - window.innerHeight;
-          if (max <= 0) return;
+          if (max <= 0) { dbg('restore skip max<=0 max=' + max); return; }
           var target = Math.min(savedY, max);
           var cur = window.scrollY || document.documentElement.scrollTop || 0;
+          dbg('restore max=' + max + ' target=' + target + ' cur=' + cur + ' sh=' + document.documentElement.scrollHeight);
           if (Math.abs(cur - target) > 3) {
             document.scrollingElement.scrollTop = Math.round(target);
           }
         }
 
         function startObserve() {
+          dbg('startObserve init=' + (document.body && document.body.classList.contains('wallpaper-initialized')));
           restore();
           var target = document.getElementById('content-wrapper') || document.body;
           if (window.ResizeObserver) {
@@ -691,11 +696,12 @@ if (!buildCommit) {
         // 2 秒超时兜底：防止 initWallpaperMode 异常未加类时永远不恢复。
         function whenLayoutReady(cb) {
           if (document.body && document.body.classList.contains('wallpaper-initialized')) {
+            dbg('whenLayoutReady: already initialized');
             cb();
             return;
           }
           var done = false;
-          var fire = function () { if (!done) { done = true; cb(); } };
+          var fire = function () { if (!done) { done = true; dbg('whenLayoutReady fire via ' + (document.body.classList.contains('wallpaper-initialized') ? 'class' : 'timeout')); cb(); } };
           if (window.MutationObserver && document.body) {
             var mo = new MutationObserver(function () {
               if (document.body.classList.contains('wallpaper-initialized')) {

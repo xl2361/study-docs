@@ -373,7 +373,7 @@ vi和vim是Linux中的文本编辑器，用来在Linux中创建、查看或者�
 |------|------|
 | `find / -name file.txt` | 从根目录查找名为file.txt的文件 |
 | `find /opt -name "*.java"` | 查找opt目录下所有.java文件 |
-| `find /opt -name "*.java" \| grep user` | 查找opt目录下名称包含user的.java文件 |
+| `find /opt -name "*.java" ｜ grep user` | 查找opt目录下名称包含user的.java文件 |
 | `find /opt -type d -name "logs"` | 查找名为logs的目录 |
 
 ---
@@ -484,11 +484,11 @@ Linux中每个文件或目录都有三部分权限：所有者权限、同组用
 
 | 命令 | 说明 |
 |------|------|
-| `ps -ef | grep mysql` | 查找mysql服务相关的进程 |
-| `ps -ef | grep java` | 查找Java进程 |
+| `ps -ef ｜ grep mysql` | 查找mysql服务相关的进程 |
+| `ps -ef ｜ grep java` | 查找Java进程 |
 | `jps` | **查看当前运行的Java进程**（JDK自带，最常用） |
 | `lsof -i :3306` | 查看占用3306端口的进程 |
-| `netstat -tunlp | grep 8080` | 查看占用8080端口的进程 |
+| `netstat -tunlp ｜ grep 8080` | 查看占用8080端口的进程 |
 | `kill -9 PID` | 强制关闭指定PID的进程 |
 | `kill -15 PID` | 正常关闭指定PID的进程 |
 
@@ -524,14 +524,14 @@ tail -f app.log
 | `rpm -ivh package.rpm` | 安装rpm包（i-安装，v-显示详情，h-进度条） |
 | `rpm -ivh --force package.rpm` | 强制安装 |
 | `rpm -e package.rpm` | 卸载rpm软件包 |
-| `rpm -qa \| grep java` | 查看已安装的软件 |
+| `rpm -qa ｜ grep java` | 查看已安装的软件 |
 
 **2. YUM安装（推荐）**
 
 | 命令 | 说明 |
 |------|------|
 | `yum install firefox` | 安装软件 |
-| `yum list installed \| grep firefox` | 查看已安装的软件 |
+| `yum list installed ｜ grep firefox` | 查看已安装的软件 |
 | `yum remove firefox.x86_64` | 卸载软件 |
 | `yum update` | 更新所有软件包 |
 | `yum search keyword` | 搜索软件包 |

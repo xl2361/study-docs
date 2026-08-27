@@ -717,6 +717,16 @@ if (!buildCommit) {
           var y = window.scrollY || 0;
           try { sessionStorage.setItem(key, String(y)); } catch (e) {}
         }
+        // scroll 节流保存：TOC 跳转/smooth scroll 后位置也要保存，
+        // 否则刷新时 savedY 还是跳转前的旧值。
+        var saveTimer = null;
+        window.addEventListener('scroll', function () {
+          if (saveTimer) return;
+          saveTimer = setTimeout(function () {
+            saveTimer = null;
+            saveY();
+          }, 400);
+        }, { passive: true });
         window.addEventListener('pagehide', saveY);
         window.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') saveY(); });
         window.addEventListener('freeze', saveY);

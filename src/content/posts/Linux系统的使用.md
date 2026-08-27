@@ -361,7 +361,7 @@ vi和vim是Linux中的文本编辑器，用来在Linux中创建、查看或者�
 | `head -n 50 file.log` | 查看文件前50行 |
 | `tail -n 50 file.log` | 查看文件后50行 |
 | `tail -f file.log` | **实时监控**文件末尾内容（查看日志常用） |
-| `tail -f file.log | grep error` | 实时监控并过滤包含error的行 |
+| `tail -f file.log ｜ grep error` | 实时监控并过滤包含error的行 |
 | `grep "mysql" file.log` | 查看文件中包含"mysql"的内容 |
 | `grep -n "error" file.log` | 查看文件中包含"error"的内容，并显示行号 |
 | `grep -i "error" file.log` | 忽略大小写搜索 |

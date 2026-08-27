@@ -612,6 +612,81 @@ if (!buildCommit) {
         });
       })();
     </script>
+    <script is:inline>
+      // 手动滚动恢复：主内容区是 position:absolute，不在正常文档流中，
+      // 浏览器原生 overflow-anchor 无效，原生 scrollRestoration 也会因
+      // 图片/字体异步加载改变正文高度而恢复到错误位置。
+      // 方案：禁用原生恢复，自己保存 scrollY，在 DOM 解析完成、字体 ready、
+      // 首屏图片加载后多次校正，保证可视内容稳定。
+      (function () {
+        if (window.location.hash) return; // 锚点跳转交给浏览器原生
+        var key = 'ff_scrollY:' + window.location.pathname;
+        try {
+          if ('scrollRestoration' in history) {
+            history.scrollRestoration = 'manual';
+          }
+        } catch (e) {}
+        var savedY = null;
+        try { savedY = parseFloat(sessionStorage.getItem(key) || '') || null; } catch (e) {}
+        if (savedY == null || savedY <= 0) return;
+        var applied = false;
+        function apply() {
+          if (applied) return;
+          var max = document.documentElement.scrollHeight - window.innerHeight;
+          if (max <= 0) return;
+          // 正文高度可能还没到位，只在能恢复时应用
+          if (savedY > max + 200) return; // 高度差太大，等下一轮
+          applied = true;
+          document.scrollingElement.scrollTop = Math.round(savedY);
+        }
+        function loop() {
+          if (applied) return;
+          apply();
+          if (!applied && (document.documentElement.scrollHeight > 0)) {
+            // 高度还不够，继续等
+          }
+        }
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', function () {
+            apply();
+            // 多轮校正：图片/字体加载会改变高度
+            var tries = 0;
+            function finalize() {
+              if (tries++ > 20) return;
+              var max = document.documentElement.scrollHeight - window.innerHeight;
+              if (max > 0 && savedY <= max) {
+                document.scrollingElement.scrollTop = Math.round(savedY);
+              }
+              requestAnimationFrame(finishLoop);
+            }
+            function finishLoop() {
+              if (tries > 20) return;
+              finalize();
+            }
+            requestAnimationFrame(finishLoop);
+            if (document.fonts && document.fonts.ready) {
+              document.fonts.ready.then(function () {
+                if (!applied) apply();
+                else {
+                  var max = document.documentElement.scrollHeight - window.innerHeight;
+                  if (max > 0 && savedY <= max) {
+                    document.scrollingElement.scrollTop = Math.round(savedY);
+                  }
+                }
+              });
+            }
+          });
+        } else {
+          apply();
+        }
+        // 页面卸载前保存当前位置（刷新/离开都触发）
+        window.addEventListener('pagehide', function () {
+          try {
+            sessionStorage.setItem(key, String(window.scrollY || 0));
+          } catch (e) {}
+        });
+      })();
+    </script>
   </head>
   <body
     class="min-h-screen"

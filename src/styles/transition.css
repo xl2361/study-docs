@@ -74,17 +74,25 @@ html.is-animating .transition-swup-fade {
    3. Onload Animations
    -------------------------------------------------------------------------- */
 
+/* 首屏（无 is-animating）直接显示，避免浏览器恢复 scrollY 时元素还带
+   translateY(2rem) 初始位移，恢复后动画把元素拉回原位造成"跳上跳下"。
+   动画的 fade-in-up 仅在 Swup 切页（html.is-animating）后才需要。 */
 .onload-animation {
+    opacity: 1;
+    animation: none;
+}
+
+html.is-animating .onload-animation {
     opacity: 0;
     animation: fade-in-up 120ms ease-out forwards;
 }
 
 /* 渐进式动画延迟 */
-.onload-animation:nth-child(1) { animation-delay: 0ms; }
-.onload-animation:nth-child(2) { animation-delay: 30ms; }
-.onload-animation:nth-child(3) { animation-delay: 60ms; }
-.onload-animation:nth-child(4) { animation-delay: 90ms; }
-.onload-animation:nth-child(5) { animation-delay: 120ms; }
+html.is-animating .onload-animation:nth-child(1) { animation-delay: 0ms; }
+html.is-animating .onload-animation:nth-child(2) { animation-delay: 30ms; }
+html.is-animating .onload-animation:nth-child(3) { animation-delay: 60ms; }
+html.is-animating .onload-animation:nth-child(4) { animation-delay: 90ms; }
+html.is-animating .onload-animation:nth-child(5) { animation-delay: 120ms; }
 
 /* --------------------------------------------------------------------------
    4. Navigation Progress Bar

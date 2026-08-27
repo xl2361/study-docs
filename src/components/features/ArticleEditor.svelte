@@ -1989,25 +1989,28 @@ function captureScrollAnchor() {
 		: 0;
 }
 
-function restoreScrollAfterEdit() {
-	// 恢复滚动到"正文相对位置"：让编辑模式下正文容器顶部对应读模式的
+function restoreScrollAfterEdit(mode: "enter" | "leave" = "enter") {
+	// 恢复滚动到"正文相对位置"：让正文容器顶部对应读/编辑模式的
 	// 相对视口偏移一致（viewPortInBody 不变），从而保证正文整体在视口中
-	// 位置稳定，避免 category-bar 隐藏 / editor-topbar 占位导致正文位移跳动。
+	// 位置稳定，避免 category-bar 隐藏 / editor-topbar 占位 / 阅读模式
+	// DOM 高度差异导致正文位移跳动。
 	// 不做文本级锚点匹配：ProseMirror 与阅读模式块结构差异大（P 拆分、
 	// td 内嵌 p 等），文本匹配不可靠，反而会导致回退/错位。
 	// 表格渲染差异已通过 CSS 修复（table p 零 margin、display:table），
 	// 编辑/阅读正文高度差从 +4930px 降到约 +1710px，正文容器 top 对齐后
 	// 内部标题位置偏差集中在 ±150px 内，且正文整体稳定不跳。
+	// mode="leave"：退出编辑后阅读模式 DOM 已稳定，只需 1 次立即校正 +
+	// 字体 ready 后再校正 1 次，无需 rAF 多轮。
 	const maxScrollNow = () =>
 		document.documentElement.scrollHeight - window.innerHeight;
 	const scrollToEditY = () => {
-		if (!mounted || !editing || editScrollY <= 0) return;
+		if (!mounted || editScrollY <= 0) return;
 		const bodyEl = document.querySelector<HTMLElement>(".article-reading-body");
 		const newAnchor = bodyEl
 			? Math.round(bodyEl.getBoundingClientRect().top + window.scrollY)
 			: editBodyAnchor;
-		// 视口顶部相对正文的偏移在读模式为 (editScrollY - editBodyAnchor)，
-		// 编辑模式保持该值不变
+		// 视口顶部相对正文的偏移在另一模式为 (editScrollY - editBodyAnchor)，
+		// 当前模式保持该值不变
 		const target = Math.min(
 			editScrollY + (newAnchor - editBodyAnchor),
 			Math.max(0, maxScrollNow()),
@@ -2022,7 +2025,17 @@ function restoreScrollAfterEdit() {
 		});
 	};
 	scrollToEditY();
-	// 字体/图片等资源加载完成后，若页面高度恢复导致 scrollY 被 clamp 或偏移，再精确校准一次
+	if (mode === "leave") {
+		// 退出编辑：阅读 DOM 已就位，字体加载后补一次即可
+		if (document.fonts?.ready) {
+			void document.fonts.ready.then(() => {
+				if (mounted) scrollToEditY();
+			});
+		}
+		return;
+	}
+	// 进入编辑：字体/图片等资源加载完成后，若页面高度恢复导致 scrollY
+	// 被 clamp 或偏移，再精确校准多次
 	let tries = 0;
 	const finalize = scrollToEditY;
 	const waitThenFinalize = () => {
@@ -2226,6 +2239,10 @@ function restoreEmergencyDraft() {
 
 function leaveEditor() {
 	openOperation++;
+	// 退出编辑前记录滚动锚点：阅读模式 DOM 高度与编辑模式不同（图片懒加载、
+	// ProseMirror 与 HTML 块结构差异），直接恢复 innerHTML 会让正文高度骤变，
+	// scrollY 不变但视口内容偏移 → 视觉跳动。对称 openEditor 的 capture/restore。
+	captureScrollAnchor();
 	const clearGlobalState = restoreTopbar();
 	if (readingBodyEl) {
 		readingBodyEl.innerHTML = savedReadingHTML;
@@ -2239,6 +2256,11 @@ function leaveEditor() {
 	editing = false;
 	if (clearGlobalState)
 		document.documentElement.classList.remove("study-editor-active");
+	// 恢复滚动位置：阅读模式正文顶部偏移与编辑模式不同，按"正文相对位置"
+	// 校正，使正文整体在视口中位置稳定。复用同一套 anchor 算法（editing
+	// 已为 false，但算法依赖 scrollY/body 偏移，与 editing 状态无关）。
+	scrollRestored = false;
+	restoreScrollAfterEdit("leave");
 }
 
 function moveTopbar() {

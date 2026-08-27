@@ -16,6 +16,21 @@
 /* 暗色模式选择器配置 */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* 启用浏览器滚动锚定：刷新/导航后异步内容（图片、字体）加载改变正文高度时，
+   浏览器自动调整 scrollY 保持当前可视内容稳定，避免"跳上跳下"。
+   overflow-anchor: auto 是默认值，但部分浏览器默认 none，显式开启更稳。 */
+html {
+    overflow-anchor: auto;
+}
+/* 正文容器作为锚点优先级最高，避免被侧栏/顶栏干扰 */
+#content-wrapper, .article-reading-body {
+    overflow-anchor: auto;
+}
+/* 侧栏不参与锚定，防止侧栏高度变化拉动正文 */
+#left-sidebar-wrapper, #right-sidebar-static, #floating-toc-wrapper {
+    overflow-anchor: none;
+}
+
 /* Tailwind v4 配置 - 从 tailwind.config.cjs 迁移 */
 @theme {
   --font-sans:

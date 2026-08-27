@@ -616,9 +616,10 @@ if (!buildCommit) {
       // 手动滚动恢复：主内容区是 position:absolute，不在正常文档流中，
       // 浏览器原生 overflow-anchor 无效，原生 scrollRestoration 也会因
       // 图片/字体异步加载改变正文高度而恢复到错误位置。
-      // 方案：禁用原生恢复，自己保存 scrollY；DOMContentLoaded 立即恢复，
-      // 并用 ResizeObserver 监听正文高度变化持续校正（图片懒加载、字体
-      // 加载、代码块折叠都会改变高度），观察窗口 3 秒后停止。
+      // 方案：禁用原生恢复，自己保存 scrollY；DOMContentLoaded 立即恢复
+      // （即使正文只加载一部分也先恢复到 min(savedY,max)，不等高度到位），
+      // 再用 ResizeObserver 监听正文高度变化持续校正（图片懒加载、字体、
+      // 代码块折叠都会改变高度），观察窗口 5 秒后停止。
       (function () {
         if (window.location.hash) return; // 锚点跳转交给浏览器原生
         var key = 'ff_scrollY:' + window.location.pathname;
@@ -631,11 +632,9 @@ if (!buildCommit) {
         try { savedY = parseFloat(sessionStorage.getItem(key) || '') || null; } catch (e) {}
         if (savedY == null || savedY <= 0) return;
 
-        var stabilized = false; // 用户手动滚动后停止校正
+        var stabilized = false;
         var lastUserScroll = 0;
-        // 监测用户主动滚动（wheel/touch），校正期间若用户主动滚则停手
         function onUserScroll() {
-          // 只在已经恢复过一次后才计为用户主动滚（避免恢复动作本身触发）
           if (stabilized) lastUserScroll = Date.now();
         }
         window.addEventListener('wheel', onUserScroll, { passive: true });
@@ -646,13 +645,13 @@ if (!buildCommit) {
 
         function restore() {
           if (stabilized) return;
-          if (Date.now() - lastUserScroll < 1500) return; // 用户刚主动滚过，不抢
+          if (Date.now() - lastUserScroll < 1500) return;
           var max = document.documentElement.scrollHeight - window.innerHeight;
           if (max <= 0) return;
-          if (savedY > max + 500) return; // 高度差太大，正文还没加载完
+          // 立即恢复到 min(savedY, max)：正文未加载完时部分恢复也好过停在首行，
+          // 后续高度变化由 ResizeObserver 持续校正到位
           var target = Math.min(savedY, max);
           var cur = window.scrollY || document.documentElement.scrollTop || 0;
-          // 只在偏差 > 3px 时才校正，避免与浏览器原生滚动打架
           if (Math.abs(cur - target) > 3) {
             document.scrollingElement.scrollTop = Math.round(target);
           }
@@ -660,7 +659,6 @@ if (!buildCommit) {
 
         function startObserve() {
           restore();
-          // ResizeObserver：正文高度变化时持续校正
           var target = document.getElementById('content-wrapper') || document.body;
           if (window.ResizeObserver) {
             var ro = new ResizeObserver(function () {
@@ -668,23 +666,21 @@ if (!buildCommit) {
               restore();
             });
             ro.observe(target);
-            // 3 秒后停止观察，交给用户控制
+            // 5 秒后停止观察，交给用户控制
             setTimeout(function () {
               stabilized = true;
               ro.disconnect();
-            }, 3000);
+            }, 5000);
           } else {
-            // 无 ResizeObserver 降级：rAF 轮询 3 秒
             var start = Date.now();
             function loop() {
               if (stabilized) return;
               restore();
-              if (Date.now() - start < 3000) requestAnimationFrame(loop);
+              if (Date.now() - start < 5000) requestAnimationFrame(loop);
               else stabilized = true;
             }
             requestAnimationFrame(loop);
           }
-          // 字体加载后补一次
           if (document.fonts && document.fonts.ready) {
             document.fonts.ready.then(function () {
               if (!stabilized) restore();
@@ -697,7 +693,6 @@ if (!buildCommit) {
         } else {
           startObserve();
         }
-        // 页面卸载前保存当前位置（刷新/离开都触发）
         window.addEventListener('pagehide', function () {
           try {
             sessionStorage.setItem(key, String(window.scrollY || 0));

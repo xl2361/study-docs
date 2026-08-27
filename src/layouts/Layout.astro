@@ -622,7 +622,8 @@ if (!buildCommit) {
       // 出现（2秒超时兜底）后再首次 restore，之后 ResizeObserver 持续
       // 校正 5 秒。
       (function () {
-        if (window.location.hash) return; // 锚点跳转交给浏览器原生
+        var dbg = function (m) { try { console.log('[ffscroll] ' + m); } catch (e) {} };
+        if (window.location.hash) { dbg('has hash, skip'); return; }
         var key = 'ff_scrollY:' + window.location.pathname;
         try {
           if ('scrollRestoration' in history) {
@@ -630,8 +631,10 @@ if (!buildCommit) {
           }
         } catch (e) {}
         var savedY = null;
-        try { savedY = parseFloat(sessionStorage.getItem(key) || '') || null; } catch (e) {}
-        if (savedY == null || savedY <= 0) return;
+        var raw = null;
+        try { raw = sessionStorage.getItem(key); savedY = parseFloat(raw || '') || null; } catch (e) { dbg('sessionStorage err: ' + e.message); }
+        dbg('path=' + window.location.pathname + ' raw=' + JSON.stringify(raw) + ' savedY=' + savedY + ' readyState=' + document.readyState + ' scrollY=' + (window.scrollY||0));
+        if (savedY == null || savedY <= 0) { dbg('no savedY, exit'); return; }
 
         var stabilized = false;
         var lastUserScroll = 0;
@@ -643,9 +646,6 @@ if (!buildCommit) {
         window.addEventListener('keydown', function (e) {
           if (['PageUp','PageDown','ArrowUp','ArrowDown','Home','End'].indexOf(e.key) >= 0) onUserScroll();
         }, { passive: true });
-
-        var dbg = function (m) { try { console.log('[ffscroll] ' + m); } catch (e) {} };
-        dbg('savedY=' + savedY + ' path=' + window.location.pathname + ' readyState=' + document.readyState);
 
         function restore() {
           if (stabilized) return;
@@ -720,11 +720,13 @@ if (!buildCommit) {
         } else {
           begin();
         }
-        window.addEventListener('pagehide', function () {
-          try {
-            sessionStorage.setItem(key, String(window.scrollY || 0));
-          } catch (e) {}
-        });
+        function saveY() {
+          var y = window.scrollY || 0;
+          try { sessionStorage.setItem(key, String(y)); dbg('saveY=' + y + ' key=' + key); } catch (e) { dbg('saveY err: ' + e.message); }
+        }
+        window.addEventListener('pagehide', saveY);
+        window.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') saveY(); });
+        window.addEventListener('freeze', saveY);
       })();
     </script>
   </head>

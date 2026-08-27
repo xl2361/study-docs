@@ -622,8 +622,6 @@ if (!buildCommit) {
       // 出现（2秒超时兜底）后再首次 restore，之后 ResizeObserver 持续
       // 校正 5 秒。
       (function () {
-        var dbg = function (m) { try { console.log('[ffscroll] ' + m); } catch (e) {} };
-        if (window.location.hash) { dbg('has hash, skip'); return; }
         var key = 'ff_scrollY:' + window.location.pathname;
         try {
           if ('scrollRestoration' in history) {
@@ -631,10 +629,8 @@ if (!buildCommit) {
           }
         } catch (e) {}
         var savedY = null;
-        var raw = null;
-        try { raw = sessionStorage.getItem(key); savedY = parseFloat(raw || '') || null; } catch (e) { dbg('sessionStorage err: ' + e.message); }
-        dbg('path=' + window.location.pathname + ' raw=' + JSON.stringify(raw) + ' savedY=' + savedY + ' readyState=' + document.readyState + ' scrollY=' + (window.scrollY||0));
-        if (savedY == null || savedY <= 0) { dbg('no savedY, exit'); return; }
+        try { savedY = parseFloat(sessionStorage.getItem(key) || '') || null; } catch (e) {}
+        if (savedY == null || savedY <= 0) return;
 
         var stabilized = false;
         var lastUserScroll = 0;
@@ -651,17 +647,15 @@ if (!buildCommit) {
           if (stabilized) return;
           if (Date.now() - lastUserScroll < 1500) return;
           var max = document.documentElement.scrollHeight - window.innerHeight;
-          if (max <= 0) { dbg('restore skip max<=0 max=' + max); return; }
+          if (max <= 0) return;
           var target = Math.min(savedY, max);
           var cur = window.scrollY || document.documentElement.scrollTop || 0;
-          dbg('restore max=' + max + ' target=' + target + ' cur=' + cur + ' sh=' + document.documentElement.scrollHeight);
           if (Math.abs(cur - target) > 3) {
             document.scrollingElement.scrollTop = Math.round(target);
           }
         }
 
         function startObserve() {
-          dbg('startObserve init=' + (document.body && document.body.classList.contains('wallpaper-initialized')));
           restore();
           var target = document.getElementById('content-wrapper') || document.body;
           if (window.ResizeObserver) {
@@ -696,12 +690,11 @@ if (!buildCommit) {
         // 2 秒超时兜底：防止 initWallpaperMode 异常未加类时永远不恢复。
         function whenLayoutReady(cb) {
           if (document.body && document.body.classList.contains('wallpaper-initialized')) {
-            dbg('whenLayoutReady: already initialized');
             cb();
             return;
           }
           var done = false;
-          var fire = function () { if (!done) { done = true; dbg('whenLayoutReady fire via ' + (document.body.classList.contains('wallpaper-initialized') ? 'class' : 'timeout')); cb(); } };
+          var fire = function () { if (!done) { done = true; cb(); } };
           if (window.MutationObserver && document.body) {
             var mo = new MutationObserver(function () {
               if (document.body.classList.contains('wallpaper-initialized')) {
@@ -722,7 +715,7 @@ if (!buildCommit) {
         }
         function saveY() {
           var y = window.scrollY || 0;
-          try { sessionStorage.setItem(key, String(y)); dbg('saveY=' + y + ' key=' + key); } catch (e) { dbg('saveY err: ' + e.message); }
+          try { sessionStorage.setItem(key, String(y)); } catch (e) {}
         }
         window.addEventListener('pagehide', saveY);
         window.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') saveY(); });

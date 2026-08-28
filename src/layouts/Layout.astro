@@ -624,17 +624,6 @@ if (!buildCommit) {
         function curKey() { return 'ff_scrollY:' + window.location.pathname; }
         function curLsKey() { return 'ff_scrollYLS:' + window.location.pathname; }
 
-        // ---- 页面角标诊断（临时）：右上有绿色小字，8秒后自动消失 ----
-        var badge = null;
-        function badgeText(t) { if (badge) { badge.textContent = 'ff ' + t; } }
-        try {
-          badge = document.createElement('div');
-          badge.style.cssText = 'position:fixed;top:4px;right:4px;z-index:2147483647;background:rgba(0,0,0,.72);color:#4f4;font:11px/1.4 monospace;padding:3px 6px;border-radius:4px;pointer-events:none;max-width:72vw;';
-          badge.textContent = 'ff init';
-          document.documentElement.appendChild(badge);
-          setTimeout(function () { if (badge && badge.parentNode) { badge.parentNode.removeChild(badge); badge = null; } }, 8000);
-        } catch (e) {}
-
         try {
           if ('scrollRestoration' in history) {
             history.scrollRestoration = 'manual';
@@ -668,10 +657,8 @@ if (!buildCommit) {
 
         // ---- 读取：sessionStorage 优先，localStorage 兜底（24h 内有效，防 360 清 SS）----
         var savedY = null;
-        var savedFrom = 'none';
         try {
           savedY = parseFloat(sessionStorage.getItem(curKey()) || '') || null;
-          if (savedY) savedFrom = 'SS';
         } catch (e) {}
         if (savedY == null) {
           try {
@@ -680,23 +667,11 @@ if (!buildCommit) {
               var lsObj = JSON.parse(lsRaw);
               if (lsObj && lsObj.y && Date.now() - (lsObj.t || 0) < 86400000) {
                 savedY = lsObj.y;
-                savedFrom = 'LS';
               }
             }
           } catch (e) {}
         }
 
-        // 角标附加上次保存信息：判断保存链路是否存活
-        var lastInfo = 'last=?';
-        try {
-          var lastRaw = sessionStorage.getItem('ff_lastSave') || localStorage.getItem('ff_lastSaveLS');
-          if (lastRaw) {
-            var lastObj = JSON.parse(lastRaw);
-            var lastAgo = Math.round((Date.now() - (lastObj.t || 0)) / 1000);
-            lastInfo = 'last:' + lastAgo + 's前y=' + lastObj.y + (lastObj.p === window.location.pathname ? '@同页' : '@他页');
-          }
-        } catch (e) {}
-        badgeText('saved=' + savedY + '(' + savedFrom + ') ' + lastInfo);
         if (savedY == null || savedY <= 0) return;
 
         // ---- 以下恢复流程仅在有 savedY 时执行 ----
@@ -728,10 +703,6 @@ if (!buildCommit) {
           var target = Math.min(savedY, max);
           var targetR = Math.round(target);
           restored = true;
-          badgeText('restore max=' + max + ' t=' + targetR);
-          try {
-            console.log('[ff-restore]', { savedY: savedY, max: max, target: targetR, scrollHeight: document.documentElement.scrollHeight, ua: navigator.userAgent.slice(0, 60) });
-          } catch (e) {}
 
           // 加固1：临时禁用 scroll-behavior:smooth，防止部分 Chromium
           // 忽略 behavior:'instant' 仍走 smooth 导致 scrollTo 静默失败/慢滚
@@ -751,8 +722,6 @@ if (!buildCommit) {
                   if (document.scrollingElement) document.scrollingElement.scrollTop = targetR;
                   else document.documentElement.scrollTop = targetR;
                 } catch (e) {}
-                badgeText('GUARD->' + targetR);
-                try { console.log('[ff-restore] guard re-assert ->', targetR); } catch (e) {}
               }
             }, 150);
           }
@@ -767,10 +736,6 @@ if (!buildCommit) {
                 document.body.scrollTop = targetR;
               } catch (e) {}
               y = window.scrollY || 0;
-              badgeText('FB y=' + y + '/' + targetR);
-              try { console.log('[ff-restore] fallback scrollTop ->', y); } catch (e) {}
-            } else {
-              badgeText('OK y=' + y);
             }
             html.style.scrollBehavior = prevSB || '';
             reveal();

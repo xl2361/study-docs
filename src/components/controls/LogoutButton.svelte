@@ -1,5 +1,6 @@
 <script lang="ts">
 import { onMount } from "svelte";
+import Icon from "@/components/common/Icon.svelte";
 
 let authenticated = false;
 
@@ -29,34 +30,29 @@ onMount(() => {
 {#if authenticated}
 	<button
 		type="button"
-		class="btn-plain scale-animation rounded-lg active:scale-90"
+		class="btn-plain scale-animation rounded-lg h-9 w-9 md:h-11 md:w-11 active:scale-90"
 		onclick={logout}
 		aria-label="退出登录"
 		title="退出登录"
 	>
-		登出
+		<Icon
+			icon="material-symbols:logout-rounded"
+			class="text-[1.25rem] text-red-500 dark:text-red-400"
+		></Icon>
 	</button>
 {/if}
 
 <style>
 	button {
 		align-self: center;
-		height: 2.25rem;
-		border: 1px solid var(--primary);
-		border-radius: 0.7rem;
-		padding: 0 0.7rem;
-		background: var(--primary);
-		color: #fff;
-		font-size: 0.75rem;
-		font-weight: 750;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 	}
-	button:hover {
-		background: color-mix(in srgb, var(--primary) 85%, #000);
+	button:hover :global(svg) {
+		color: color-mix(in srgb, #ef4444 75%, #000);
 	}
-	@media (max-width: 640px) {
-		button {
-			height: 2.1rem;
-			padding: 0 0.55rem;
-		}
+	:global(html.dark) button:hover :global(svg) {
+		color: color-mix(in srgb, #f87171 75%, #fff);
 	}
 </style>

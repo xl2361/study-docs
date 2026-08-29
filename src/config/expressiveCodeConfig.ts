@@ -18,7 +18,7 @@ export const expressiveCodeConfig: ExpressiveCodeConfig = {
 
 	// 代码块折叠插件配置
 	pluginCollapsible: {
-		enable: true, // 启用折叠功能
+		enable: false, // 关闭折叠：滚动到页面下方时代码块预览态被误判为"截断+空白"
 		lineThreshold: 15, // 当代码行数超过15行时显示折叠按钮
 		previewLines: 8, // 折叠时显示前8行
 		defaultCollapsed: false, // 默认展开长代码块

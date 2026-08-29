@@ -13,9 +13,6 @@ const getDynamicNavBarConfig = (): NavBarConfig => {
 	// 基础导航栏链接
 	const links: NavBarLink[] = [];
 
-	// 主页
-	links.push(LinkPresets.Home);
-
 	// 文章及其子菜单
 	links.push({
 		name: "文章",
@@ -32,6 +29,9 @@ const getDynamicNavBarConfig = (): NavBarConfig => {
 			LinkPresets.Tags,
 		],
 	});
+
+	// 主页
+	links.push(LinkPresets.Home);
 
 	// 关于页面（性能精简：移除动态/相册/追番/番组/打赏/友链等不需要的导航项）
 	// "关于我"导航入口已按需求移除，/about/ 页面本身保留

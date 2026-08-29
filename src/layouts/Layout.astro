@@ -2194,7 +2194,7 @@ function disableAnimation() {
     placeholders.forEach(placeholder => {
       const container = placeholder.parentElement;
       if (!container) return;
-      const img = container.querySelector<HTMLImageElement>('img, picture img');
+      const img = container.querySelector<HTMLImageElement>('img');
       if (!img) return;
 
       if (img.complete && img.naturalWidth > 0) {
@@ -2206,12 +2206,24 @@ function disableAnimation() {
           placeholder.classList.add('loaded');
         }, { once: true });
         img.addEventListener('error', () => {
-          if (!container.classList.contains('cover-image-container')) {
+          // CoverImage 组件用 data-loading 属性自管理占位状态，不在此处淡出
+          // 其余图片（含正文 Markdown 图片）加载失败时统一淡出占位，避免永久遮挡
+          if (!container.hasAttribute('data-loading')) {
             placeholder.classList.add('loaded');
+            img.style.opacity = '1';
           }
         }, { once: true });
       }
     });
+    // 兜底：3 秒后强制淡出仍卡住的占位，避免懒加载竞态或 load 事件遗漏
+    // 导致占位块永久挡住内容（常见于图片加载缓慢/失败/被拦截）
+    setTimeout(() => {
+      document.querySelectorAll<HTMLElement>('.lqip-placeholder:not(.loaded)').forEach(p => {
+        p.classList.add('loaded');
+        const img = p.parentElement?.querySelector('img');
+        if (img) img.style.opacity = '1';
+      });
+    }, 3000);
   }
 
   initImageLoadFadeIn();

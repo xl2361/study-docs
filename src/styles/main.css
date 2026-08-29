@@ -49,7 +49,8 @@ html {
     border-radius: inherit;
     scale: 0.85;
     z-index: -10;
-    transition: all 0.15s ease-out;
+    /* 只过渡 background-color，不过渡 scale，避免快速划过时伪元素缩放闪烁 */
+    transition: background-color 0.15s ease-out;
   }
   &:hover::before {
     background-color: var(--btn-plain-bg-hover);

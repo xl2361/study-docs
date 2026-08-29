@@ -43,6 +43,7 @@ import rehypeExternalLinks from "./src/plugins/rehype-external-links.mjs";
 import rehypeFigure from "./src/plugins/rehype-figure.mjs";
 import rehypeImageDimensions from "./src/plugins/rehype-image-dimensions.mjs";
 import rehypeImageReferrerPolicy from "./src/plugins/rehype-image-referrerpolicy.mjs";
+import rehypeLazyImages from "./src/plugins/rehype-lazy-images.mjs";
 import { rehypeMermaid } from "./src/plugins/rehype-mermaid.mjs";
 import { rehypePlantuml } from "./src/plugins/rehype-plantuml.mjs";
 import { parseDirectiveNode } from "./src/plugins/remark-directive-rehype.js";
@@ -290,6 +291,7 @@ export default defineConfig({
 				rehypeDiagramPanZoom,
 				rehypeFigure,
 				rehypeImageDimensions,
+				rehypeLazyImages,
 				[
 					rehypeImageReferrerPolicy,
 					{ domains: siteConfig.imageOptimization?.noReferrerDomains || [] },

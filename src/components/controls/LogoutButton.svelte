@@ -37,7 +37,7 @@ onMount(() => {
 	>
 		<Icon
 			icon="material-symbols:logout-rounded"
-			class="text-[1.25rem] text-red-500 dark:text-red-400"
+			class="text-[1.25rem] text-red-500"
 		></Icon>
 	</button>
 {/if}
@@ -53,6 +53,6 @@ onMount(() => {
 		color: color-mix(in srgb, #ef4444 75%, #000);
 	}
 	:global(html.dark) button:hover :global(svg) {
-		color: color-mix(in srgb, #f87171 75%, #fff);
+		color: color-mix(in srgb, #ef4444 75%, #fff);
 	}
 </style>

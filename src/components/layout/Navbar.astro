@@ -184,7 +184,6 @@ const logoVariants = await Promise.all(
                     ? "justify-center"
                     : "justify-start pl-2"
             ]}>
-                <LogoutButton client:load />
                 {links.map((l) => {
                     return <DropdownMenu link={l} />;
                 })}
@@ -195,7 +194,6 @@ const logoVariants = await Promise.all(
                 <Search
                     client:load
                 />
-                <div class="lg:hidden!"><LogoutButton client:load /></div>
                 <button aria-label={i18n(I18nKey.announcement)} class="btn-plain scale-animation rounded-lg h-9 w-9 md:h-11 md:w-11 active:scale-90" id="announcement-switch">
                     <Icon is:inline name="material-symbols:notifications-outline" class="text-[1.25rem]"></Icon>
                 </button>
@@ -211,6 +209,7 @@ const logoVariants = await Promise.all(
                 )}
                 {/* @ts-ignore */}
                 <LightDarkSwitch client:load></LightDarkSwitch>
+                <LogoutButton client:load />
                 <button aria-label="Sidebar" class="btn-plain scale-animation rounded-lg w-9 h-9 md:w-11 md:h-11 active:scale-90 md:hidden!" id="mobile-sidebar-toggle">
                     <Icon is:inline name="material-symbols:left-panel-open-rounded" class="text-[1.25rem]"></Icon>
                 </button>

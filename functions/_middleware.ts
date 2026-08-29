@@ -15,6 +15,11 @@ const PUBLIC_PREFIXES = [
 	"/robots.txt",
 	"/site.webmanifest",
 	"/manifest",
+	// 文章图片等公开静态媒体：必须绕过会话中间件。
+	// 否则①每张图都做会话校验（边缘缓存过期后并发冲击 editor-worker），
+	// ②被强制加 private,no-store 逐张回源、浏览器不缓存——
+	// 多图文章（如 DBeaver 25 张图）会把页面 load 事件拖到 80s+。
+	"/uploads/",
 ];
 
 // 会话校验结果边缘缓存：命中后跳过对 editor-worker 的往返请求。

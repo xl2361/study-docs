@@ -147,6 +147,7 @@ const hideSidebarOnPostPage =
 </style>
 
 <script>
+  import { onIdle } from '../../utils/idle-scheduler';
   import { TOCManager, isPostPage } from "@/utils/toc-utils";
 
   // 从 data 属性读取配置
@@ -324,14 +325,15 @@ const hideSidebarOnPostPage =
   if (typeof window !== "undefined" && !window.floatingTOCListenersInitialized) {
     window.floatingTOCListenersInitialized = true;
 
-    // Swup 路由切换
+    // Swup 路由切换：目录初始化要遍历正文全部标题（长文 4000+ 节点），
+    // 同步跑会阻塞首屏，改为浏览器空闲时执行。
     document.addEventListener("swup:contentReplaced", () => {
-      setTimeout(initFloatingTOC, 100);
+      onIdle(initFloatingTOC);
     });
     
     // Astro 页面切换事件
     document.addEventListener("astro:page-load", () => {
-      setTimeout(initFloatingTOC, 100);
+      onIdle(initFloatingTOC);
     });
     
     // 浏览器导航事件

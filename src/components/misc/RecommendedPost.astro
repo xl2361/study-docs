@@ -216,5 +216,5 @@ function renderRandomPosts() {
 }
 
 renderRandomPosts();
-document.addEventListener('swup:contentReplaced', renderRandomPosts);
+document.addEventListener('swup:contentReplaced', () => onIdle(renderRandomPosts));
 </script>

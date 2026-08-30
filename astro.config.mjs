@@ -122,6 +122,10 @@ export default defineConfig({
 			animationClass: "transition-swup-", // see https://swup.js.org/options/#animationselector
 			// the default value `transition-` cause transition delay
 			// when the Tailwind class `transition-all` is used
+			// 动画计时只按主容器：默认会等所有 [class*="transition-swup-"] 元素
+			// （banner 遮罩/明暗层/左右侧栏/浮动目录共 5 个）跑完过渡，
+			// 出场阶段实测被拖到 1.19s（单元素 CSS 只有 120ms）。
+			animationSelector: "#swup-container",
 			containers: [
 				"#banner-overlay-container",
 				"#banner-dim-container",
@@ -132,7 +136,9 @@ export default defineConfig({
 			],
 			smoothScrolling: false,
 			cache: true,
-			preload: true,
+			// hover：鼠标悬停/触屏按下即预取；visible：视口内文章卡片也预取。
+			// 只开 hover 时，触屏和"直接点"都没有预取，切页仍要等整份 HTML。
+			preload: { hover: true, visible: true },
 			accessibility: true,
 			updateHead: true,
 			updateBodyClass: false,

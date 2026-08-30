@@ -929,7 +929,14 @@ const widgetId =
     } else {
         // First widget to mount – show loading and trigger init
         setLoading(true);
-        mgr.init();
+        // 延后到空闲：Meting API 每页都要网络往返（偶发 CORS/超时时近 2s），
+        // 同步初始化会挡住首屏渲染，切页后文章标题/目录会一起"卡顿"。
+        const startInit = function () { mgr.init(); };
+        if (typeof window.requestIdleCallback === 'function') {
+            window.requestIdleCallback(startInit, { timeout: 3000 });
+        } else {
+            setTimeout(startInit, 0);
+        }
     }
 })();
 </script>

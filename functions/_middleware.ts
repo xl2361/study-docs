@@ -23,9 +23,11 @@ const PUBLIC_PREFIXES = [
 ];
 
 // 会话校验结果边缘缓存：命中后跳过对 editor-worker 的往返请求。
-// 以 token 的 SHA-256 前 16 字节为键（不缓存原始 token），TTL 5 分钟。
-// 登出仅清除浏览器 cookie，缓存条目最多滞后 5 分钟失效，个人站点可接受。
-const SESSION_CACHE_TTL_SECONDS = 300;
+// 以 token 的 SHA-256 前 16 字节为键（不缓存原始 token）。
+// 5 分钟太短：浏览一页文章超过 5 分钟后，下一次切页就会冷回源（实测 TTFB 3.5s），
+// 表现为"点进文章后整页空白好几秒"。延长到 30 分钟。
+// 登出仅清除浏览器 cookie，缓存条目最多滞后 30 分钟失效，个人站点可接受。
+const SESSION_CACHE_TTL_SECONDS = 1800;
 const encoder = new TextEncoder();
 
 interface EdgeCacheLike {
@@ -98,10 +100,20 @@ export const onRequest: PagesFunction<PagesEnv> = async (context) => {
 	const authenticated = token
 		? await isValidSessionCached(context.request, token)
 		: false;
+	// 页面级浏览器缓存时长：HTML 仍每次过门禁（见上方 authenticated 分支），
+	// 但校验通过后允许当前浏览器短时复用，避免切页时重新下载整份 HTML。
+	// private = 只进当前用户浏览器缓存，不进任何共享/CDN 缓存，未登录者不可能拿到。
 	if (authenticated) {
 		const response = await context.next();
 		const headers = new Headers(response.headers);
-		headers.set("Cache-Control", "private, no-store");
+		const isHtml = (response.headers.get("content-type") || "").includes(
+			"text/html",
+		);
+		// 正文页面（含文章）允许浏览器缓存 30 秒；非 HTML 资源不在这里久留。
+		headers.set(
+			"Cache-Control",
+			isHtml ? "private, max-age=30, must-revalidate" : "private, no-store",
+		);
 		if (renewSession && token) {
 			headers.append("Set-Cookie", sessionCookie(token, SESSION_MAX_AGE));
 		}

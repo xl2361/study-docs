@@ -5,6 +5,7 @@ import "@/styles/fancybox-custom.css";
 ---
 
 <script>
+  import { onIdle } from '../../utils/idle-scheduler';
   let Fancybox: any;
   const IMG_SELECTOR = ".custom-md img:not(.tiptap-host img):not(.card-wiki-link img), #post-cover img, .moment-images img";
   const LINK_SELECTOR = ".moment-images a[data-fancybox], [data-fancybox]:not(.moment-images a)";
@@ -195,7 +196,7 @@ import "@/styles/fancybox-custom.css";
   setup();
 
   // Swup 生命周期整合
-  document.addEventListener("swup:content:replace", setup);
+  document.addEventListener("swup:content:replace", () => onIdle(setup));
   document.addEventListener("dynamic-gallery:ready", setup);
   document.addEventListener("swup:visit:start", cleanupFancybox);
 

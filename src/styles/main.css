@@ -64,9 +64,18 @@ html {
   }
 }
 
-/* 确保平滑滚动 */
+/* 平滑滚动：默认交由 JS 在需要时显式指定（目录点击、锚点跳转）。
+   此前全局 html{scroll-behavior:smooth} 会让"用户滚轮滚动"也走插值动画，
+   与滚动恢复的 scrollTo、目录跳转叠加时持续掉帧（表现为滚动一跳一跳）。
+   这里仅在用户开启"减少动效"时强制关闭，其余交给 JS 控制。 */
 html {
-    scroll-behavior: smooth;
+    scroll-behavior: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto !important;
+    }
 }
 
 /* 全局图片自适应：防止图片在移动端溢出容器（背景图、装饰图等绝对定位元素除外） */

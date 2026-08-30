@@ -138,7 +138,10 @@ export default defineConfig({
 			cache: true,
 			// hover：鼠标悬停/触屏按下即预取；visible：视口内文章卡片也预取。
 			// 只开 hover 时，触屏和"直接点"都没有预取，切页仍要等整份 HTML。
-			preload: { hover: true, visible: true },
+			// 只在悬停时预取：visible 预取会在滚动中把进入视口的链接页面
+			// （单页 ~367KB HTML）全部拉取并解析进 swup 缓存，堆内存随滚动增长，
+			// GC 暂停造成"越滑越卡"，刷新后归零。悬停预取已足够加速点击。
+			preload: { hover: true, visible: false },
 			accessibility: true,
 			updateHead: true,
 			updateBodyClass: false,

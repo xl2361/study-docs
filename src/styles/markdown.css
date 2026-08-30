@@ -177,7 +177,6 @@
        will-change:scroll-position 让表格滚动走独立合成层，
        不与主文档图层争抢（视觉无变化）。 */
     contain: layout paint;
-    will-change: scroll-position;
   }
 
   .horizontal-scroll-container > table {

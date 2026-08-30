@@ -172,6 +172,12 @@
   .horizontal-scroll-container {
     @apply my-4;
     border-radius: calc(var(--radius-large) - 0.5rem);
+    /* 横向滚动性能：实测拖表格滚动条时页面级合成被壁纸透明混合+
+       常驻波浪动画拖慢。contain 隔离重排/重绘范围；
+       will-change:scroll-position 让表格滚动走独立合成层，
+       不与主文档图层争抢（视觉无变化）。 */
+    contain: layout paint;
+    will-change: scroll-position;
   }
 
   .horizontal-scroll-container > table {

@@ -32,34 +32,52 @@ import FloatingButton from "@/components/common/FloatingButton.astro";
       }
 
       setupScrollListener() {
-        const updateVisibility = () => {
+        // rAF 节流：滚动事件每帧最多处理一次，避免高频回调里反复读取布局属性
+        let ticking = false;
+        const apply = () => {
+          ticking = false;
+          // 惰性解析按钮：swup 换页可能替换节点，避免持有失效引用
+          const btn =
+            this.button && this.button.isConnected
+              ? this.button
+              : document.getElementById("back-to-top-btn");
+          if (!btn) return;
+          this.button = btn;
           const scrollTop =
             window.pageYOffset || document.documentElement.scrollTop;
 
           // 当滚动超过200px时显示按钮
           if (scrollTop > 200) {
-            this.button.classList.remove("hide");
+            btn.classList.remove("hide");
           } else {
-            this.button.classList.add("hide");
+            btn.classList.add("hide");
           }
+        };
+        const updateVisibility = () => {
+          if (ticking) return;
+          ticking = true;
+          requestAnimationFrame(apply);
         };
 
         window.addEventListener("scroll", updateVisibility, { passive: true });
       }
     };
   }
-  // ... existing initialization logic ...
-  // 页面加载完成后初始化
-  document.addEventListener("DOMContentLoaded", () => {
-    new BackToTopManager();
-  });
-
-  // 如果页面已经加载完成，立即初始化
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => {
+  // 只实例化一次：swup 的 SwupScriptsPlugin 每次换页都会重跑本脚本，
+  // 无守卫时会反复 new，每个实例各自注册 window scroll 监听且无法移除
+  // （匿名闭包），换 N 次页后每次滚动触发 N 次回调 → 越用越卡。
+  if (!window.__backToTopInit) {
+    window.__backToTopInit = true;
+    if (document.readyState === "loading") {
+      document.addEventListener(
+        "DOMContentLoaded",
+        () => {
+          new BackToTopManager();
+        },
+        { once: true },
+      );
+    } else {
       new BackToTopManager();
-    });
-  } else {
-    new BackToTopManager();
+    }
   }
 </script>

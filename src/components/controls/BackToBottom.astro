@@ -41,12 +41,19 @@ import FloatingButton from "@/components/common/FloatingButton.astro";
       }
 
       setupListeners() {
-        window.addEventListener("scroll", this.updateVisibility, {
-          passive: true,
-        });
-        window.addEventListener("resize", this.updateVisibility, {
-          passive: true,
-        });
+        // rAF 节流：updateVisibility 读 scrollHeight/scrollTop 会强制同步布局，
+        // 不节流时每个滚动事件都触发一次 reflow。
+        let ticking = false;
+        const onScroll = () => {
+          if (ticking) return;
+          ticking = true;
+          requestAnimationFrame(() => {
+            ticking = false;
+            this.updateVisibility();
+          });
+        };
+        window.addEventListener("scroll", onScroll, { passive: true });
+        window.addEventListener("resize", onScroll, { passive: true });
         // swup 页面切换后重新判断（文章页 <-> 首页）
         document.addEventListener("swup:page:view", this.updateVisibility);
       }
@@ -69,16 +76,21 @@ import FloatingButton from "@/components/common/FloatingButton.astro";
     };
   }
 
-  // 页面加载完成后初始化
-  document.addEventListener("DOMContentLoaded", () => {
-    new BackToBottomManager();
-  });
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => {
+  // 只实例化一次：swup 换页会重跑本 script（reloadScripts），无守卫时每次都 new
+  // 一个新实例并再注册一组 scroll/resize 监听，旧的匿名闭包无法移除 →
+  // 监听器线性累积，浏览一段时间后每次滚动触发 N 次强制布局，页面越滑越卡。
+  if (!window.__backToBottomInit) {
+    window.__backToBottomInit = true;
+    if (document.readyState === "loading") {
+      document.addEventListener(
+        "DOMContentLoaded",
+        () => {
+          new BackToBottomManager();
+        },
+        { once: true },
+      );
+    } else {
       new BackToBottomManager();
-    });
-  } else {
-    new BackToBottomManager();
+    }
   }
 </script>

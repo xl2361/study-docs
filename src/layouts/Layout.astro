@@ -632,28 +632,34 @@ if (!buildCommit) {
 
         // ---- 保存：无条件注册（关键修复：此前注册在 savedY 判空 return 之后，
         // 首次访问永远存不上位置，形成"没存过→不注册→存不上"死锁）----
-        var suppressUntil = 0;
-        document.addEventListener('swup:contentReplaced', function () {
-          // swup 换页会先把滚动归零/滚到 #main-grid，1.5 秒内不保存防止覆盖正确位置
-          suppressUntil = Date.now() + 1500;
-        });
-        function saveY() {
-          if (Date.now() < suppressUntil) return;
-          var y = window.scrollY || 0;
-          try { sessionStorage.setItem(curKey(), String(y)); } catch (e) {}
-          try { localStorage.setItem(curLsKey(), JSON.stringify({ y: y, t: Date.now() })); } catch (e) {}
-          var last = { p: window.location.pathname, y: y, t: Date.now() };
-          try { sessionStorage.setItem('ff_lastSave', JSON.stringify(last)); } catch (e) {}
-          try { localStorage.setItem('ff_lastSaveLS', JSON.stringify(last)); } catch (e) {}
+        // 但只允许绑定一次：swup 换页会重跑本 script（reloadScripts），无守卫时
+        // 每次都叠加一组 scroll/pagehide/visibilitychange/freeze 监听，且每次
+        // saveY 有 4 次同步 storage 写入 —— 累积后滚动会越来越卡。
+        if (!window.__ffScrollSaveBound) {
+          window.__ffScrollSaveBound = true;
+          var suppressUntil = 0;
+          document.addEventListener('swup:contentReplaced', function () {
+            // swup 换页会先把滚动归零/滚到 #main-grid，1.5 秒内不保存防止覆盖正确位置
+            suppressUntil = Date.now() + 1500;
+          });
+          var saveY = function () {
+            if (Date.now() < suppressUntil) return;
+            var y = window.scrollY || 0;
+            try { sessionStorage.setItem(curKey(), String(y)); } catch (e) {}
+            try { localStorage.setItem(curLsKey(), JSON.stringify({ y: y, t: Date.now() })); } catch (e) {}
+            var last = { p: window.location.pathname, y: y, t: Date.now() };
+            try { sessionStorage.setItem('ff_lastSave', JSON.stringify(last)); } catch (e) {}
+            try { localStorage.setItem('ff_lastSaveLS', JSON.stringify(last)); } catch (e) {}
+          };
+          var saveTimer = null;
+          window.addEventListener('scroll', function () {
+            if (saveTimer) return;
+            saveTimer = setTimeout(function () { saveTimer = null; saveY(); }, 400);
+          }, { passive: true });
+          window.addEventListener('pagehide', saveY);
+          window.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') saveY(); });
+          window.addEventListener('freeze', saveY);
         }
-        var saveTimer = null;
-        window.addEventListener('scroll', function () {
-          if (saveTimer) return;
-          saveTimer = setTimeout(function () { saveTimer = null; saveY(); }, 400);
-        }, { passive: true });
-        window.addEventListener('pagehide', saveY);
-        window.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') saveY(); });
-        window.addEventListener('freeze', saveY);
 
         // ---- 读取：sessionStorage 优先，localStorage 兜底（24h 内有效，防 360 清 SS）----
         var savedY = null;

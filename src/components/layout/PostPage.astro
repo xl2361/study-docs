@@ -300,17 +300,28 @@ const initialLayoutClass =
   });
 
   // -- 热度排序：读取热搜榜，按热度重排卡片，跨页候选卡按热度上浮显示 --
-  function heatScoreOrder(slugs: string[]) {
-    const order = new Map(slugs.map((s: string, i: number) => [s, i]));
+  /**
+   * 按"打开次数"降序：次数越多越靠前。
+   * 之前用的是"榜单里的名次索引"，未上榜文章一律 MAX_SAFE_INTEGER，
+   * 导致跨页上浮的候选卡（可能只有 1~2 次）会插在高热度文章之间。
+   * 改为直接比较 count 数值，无热度的文章按原有相对顺序沉底（稳定排序）。
+   */
+  function heatScoreOrder(counts: Map<string, number>) {
     return (a: Element, b: Element) => {
       const aPinned = a.classList.contains("pinned");
       const bPinned = b.classList.contains("pinned");
       if (aPinned !== bPinned) return aPinned ? -1 : 1;
       const as = a.getAttribute("data-post-slug") || "";
       const bs = b.getAttribute("data-post-slug") || "";
-      const ai = order.has(as) ? order.get(as) as number : Number.MAX_SAFE_INTEGER;
-      const bi = order.has(bs) ? order.get(bs) as number : Number.MAX_SAFE_INTEGER;
-      return ai - bi;
+      const ac = counts.get(as);
+      const bc = counts.get(bs);
+      // 都有热度：按次数降序
+      if (typeof ac === "number" && typeof bc === "number") return bc - ac;
+      // 只有一方有热度：有热度的在前
+      if (typeof ac === "number") return -1;
+      if (typeof bc === "number") return 1;
+      // 都无热度：保持原相对顺序
+      return 0;
     };
   }
 
@@ -341,9 +352,15 @@ const initialLayoutClass =
           }
         });
 
-        // 排序：置顶 → 热度榜（含上浮候选）→ 未上榜保持原相对顺序
+        // 排序：置顶 → 打开次数降序（含上浮候选）→ 未上榜保持原相对顺序
+        const counts = new Map<string, number>();
+        for (const r of rows) {
+          if (r && typeof r.slug === "string") {
+            counts.set(r.slug, typeof r.count === "number" ? r.count : 0);
+          }
+        }
         const visible = allItems.filter((item) => !item.classList.contains("hidden"));
-        const visibleSorted = visible.sort(heatScoreOrder(rows.map((r) => r.slug)));
+        const visibleSorted = visible.sort(heatScoreOrder(counts));
         const hiddenItems = allItems.filter((item) => item.classList.contains("hidden"));
         for (const item of visibleSorted) container.appendChild(item);
         for (const item of hiddenItems) container.appendChild(item);

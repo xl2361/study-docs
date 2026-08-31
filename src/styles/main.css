@@ -224,8 +224,8 @@ img {
     .is-theme-transitioning:not(.use-view-transition) body.wallpaper-transparent #navbar[data-transparent-mode].scrolled > div,
     .is-theme-transitioning:not(.use-view-transition) #wallpaper-wrapper ~ * #navbar > div,
     .is-theme-transitioning:not(.use-view-transition) #wallpaper-wrapper ~ * #navbar[data-transparent-mode] > div,
-    .is-theme-transitioning:not(.use-view-transition) body:has(#wallpaper-wrapper) #navbar > div,
-    .is-theme-transitioning:not(.use-view-transition) body:has(#wallpaper-wrapper) #navbar[data-transparent-mode] > div {
+    .is-theme-transitioning:not(.use-view-transition) body.has-wallpaper #navbar > div,
+    .is-theme-transitioning:not(.use-view-transition) body.has-wallpaper #navbar[data-transparent-mode] > div {
         transition: none !important;
         backdrop-filter: none !important;
     }
@@ -631,8 +631,10 @@ html.study-editor-active #category-bar-wrapper {
   display: none !important;
 }
 
-/* 编辑顶栏包含向外展开的格式菜单：编辑态既不能创建滚动容器，也不能裁剪浮层。 */
-html.study-editor-active div:has(> #editor-topbar:not([hidden])) {
+/* 编辑顶栏包含向外展开的格式菜单：编辑态既不能创建滚动容器，也不能裁剪浮层。
+   原先写作 div:has(> #editor-topbar:not([hidden]))，:has() 的祖先反查在数千节点
+   的页面上代价很高（任何 DOM 变动都要重新验证所有 div），改为直接命中带 id 的容器。 */
+html.study-editor-active #main-content-bar {
   overflow: visible;
 }
 

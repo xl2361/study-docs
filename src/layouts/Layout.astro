@@ -66,6 +66,17 @@ const shouldShowTopHighlight =
 
 const enableBanner = backgroundWallpaper.mode === "banner";
 
+// 壁纸层是否渲染（与 MainGridLayout 中 #wallpaper-wrapper 的条件保持一致）。
+// 原先 navbar.css 用 body:has(#wallpaper-wrapper) 判断，:has() 是"祖先反查"，
+// 任何 DOM 变动都要重新验证 body 的整棵子树 —— 21 条这样的规则让单次样式重算
+// 高达 244ms，是滚动掉帧与"越用越卡"的主因。
+// 改为服务端渲染时直接输出 class，选择器退化成普通 class 匹配，成本近乎为零。
+const isWallpaperSwitchable = displaySettingsConfig.wallpaperModeSwitchable;
+const isFullscreenMode = backgroundWallpaper.mode === "fullscreen";
+const isOverlayMode = backgroundWallpaper.mode === "overlay";
+const hasWallpaper =
+	isWallpaperSwitchable || enableBanner || isFullscreenMode || isOverlayMode;
+
 let pageTitle: string;
 if (title) {
 	pageTitle = `${title} - ${siteConfig.title}`;
@@ -417,6 +428,14 @@ if (!buildCommit) {
             if (document.body) {
               document.body.classList.remove("wallpaper-transparent");
             }
+          }
+
+          // 同步 has-wallpaper：替代 navbar.css 里 21 条 body:has(#wallpaper-wrapper)
+          // 的祖先反查（:has() 失效传播让样式重算高达 244ms/次，是滚动掉帧主因）。
+          // 用元素存在性判定，与原 :has() 语义完全一致；仅在壁纸初始化与换页时各算一次。
+          if (document.body) {
+            const hasWrapper = !!document.getElementById("wallpaper-wrapper");
+            document.body.classList.toggle("has-wallpaper", hasWrapper);
           }
 
           // 处理wallpaper-wrapper的显示
@@ -822,6 +841,8 @@ if (!buildCommit) {
         "enable-banner": enableBanner,
         "sticky-navbar": siteConfig.navbar.stickyNavbar ?? false,
         "post-page": isPostPage,
+        // 替代 body:has(#wallpaper-wrapper)，见上方 hasWallpaper 注释
+        "has-wallpaper": hasWallpaper,
       },
     ]}
   >

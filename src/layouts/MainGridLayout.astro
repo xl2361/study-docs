@@ -874,7 +874,9 @@ const hasMultipleImages =
             )}
                     
             {/* 主内容区包装器 - 包含静态栏位和swup容器，作为单个grid item */}
-            <div class={staticBarClass}>
+            {/* 带 id 以便 CSS 精确定位：原先靠 div:has(> #editor-topbar) 反查，
+                在数千节点的页面上反查成本很高（:has() 失效传播），故改为直接命中。 */}
+            <div id="main-content-bar" class={staticBarClass}>
                 {/* 编辑时由 ArticleEditor 将状态行和工具条挂载到这里。 */}
                 <div id="editor-topbar" class="card-base p-2" aria-label="文章编辑工具" hidden></div>
                 {/* 分类导航栏 - 全站渲染并显示 */}

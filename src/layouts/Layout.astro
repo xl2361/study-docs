@@ -395,24 +395,27 @@ if (!buildCommit) {
         wallpaperMode
       );
 
-      // 立即同步 has-wallpaper（不等 rAF，避免首帧样式跳变）：
-      // 与原 body:has(#wallpaper-wrapper) 语义一致，按元素存在性判定。
-      if (document.body) {
+      // has-wallpaper 同步：替代 navbar.css 里 21 条 body:has(#wallpaper-wrapper)
+      // 的祖先反查（:has() 失效传播让样式重算高达 244ms/次，是滚动掉帧主因）。
+      //
+      // 关键：本脚本位于 <head>，此处 document.body 仍为 null，且 #wallpaper-wrapper
+      // 尚未解析 —— 直接判定会误判为"不存在"。必须等到 DOM 解析完成（DOMContentLoaded）
+      // 再同步；swup 换页后壁纸层会被替换，同样需要重新同步。
+      function syncHasWallpaper() {
+        if (!document.body) return;
         document.body.classList.toggle(
           "has-wallpaper",
           !!document.getElementById("wallpaper-wrapper"),
         );
       }
-      // 换页后壁纸层可能被替换，重新同步一次
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", syncHasWallpaper);
+      } else {
+        syncHasWallpaper();
+      }
       if (!window.__hasWallpaperSyncBound) {
         window.__hasWallpaperSyncBound = true;
-        document.addEventListener("swup:contentReplaced", function () {
-          if (!document.body) return;
-          document.body.classList.toggle(
-            "has-wallpaper",
-            !!document.getElementById("wallpaper-wrapper"),
-          );
-        });
+        document.addEventListener("swup:contentReplaced", syncHasWallpaper);
       }
 
       // 立即执行函数来处理DOM

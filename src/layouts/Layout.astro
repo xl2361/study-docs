@@ -70,12 +70,10 @@ const enableBanner = backgroundWallpaper.mode === "banner";
 // 原先 navbar.css 用 body:has(#wallpaper-wrapper) 判断，:has() 是"祖先反查"，
 // 任何 DOM 变动都要重新验证 body 的整棵子树 —— 21 条这样的规则让单次样式重算
 // 高达 244ms，是滚动掉帧与"越用越卡"的主因。
-// 改为服务端渲染时直接输出 class，选择器退化成普通 class 匹配，成本近乎为零。
-const isWallpaperSwitchable = displaySettingsConfig.wallpaperModeSwitchable;
-const isFullscreenMode = backgroundWallpaper.mode === "fullscreen";
-const isOverlayMode = backgroundWallpaper.mode === "overlay";
-const hasWallpaper =
-	isWallpaperSwitchable || enableBanner || isFullscreenMode || isOverlayMode;
+// 改为由运行时按"#wallpaper-wrapper 是否存在"维护 body.has-wallpaper
+// （与原 :has() 语义一致），选择器退化成普通 class 匹配，成本近乎为零。
+// 注意：不在服务端按配置条件预输出该 class —— 配置条件与元素实际存在性
+// 可能不一致（实测出现过 wrapper 存在但条件为 false），两套判定会打架。
 
 let pageTitle: string;
 if (title) {
@@ -396,6 +394,26 @@ if (!buildCommit) {
         "data-wallpaper-mode",
         wallpaperMode
       );
+
+      // 立即同步 has-wallpaper（不等 rAF，避免首帧样式跳变）：
+      // 与原 body:has(#wallpaper-wrapper) 语义一致，按元素存在性判定。
+      if (document.body) {
+        document.body.classList.toggle(
+          "has-wallpaper",
+          !!document.getElementById("wallpaper-wrapper"),
+        );
+      }
+      // 换页后壁纸层可能被替换，重新同步一次
+      if (!window.__hasWallpaperSyncBound) {
+        window.__hasWallpaperSyncBound = true;
+        document.addEventListener("swup:contentReplaced", function () {
+          if (!document.body) return;
+          document.body.classList.toggle(
+            "has-wallpaper",
+            !!document.getElementById("wallpaper-wrapper"),
+          );
+        });
+      }
 
       // 立即执行函数来处理DOM
       (function applyWallpaperMode() {
@@ -841,8 +859,9 @@ if (!buildCommit) {
         "enable-banner": enableBanner,
         "sticky-navbar": siteConfig.navbar.stickyNavbar ?? false,
         "post-page": isPostPage,
-        // 替代 body:has(#wallpaper-wrapper)，见上方 hasWallpaper 注释
-        "has-wallpaper": hasWallpaper,
+        // 注意：此处**不要**输出 has-wallpaper。该 class 统一由运行时按
+        // "#wallpaper-wrapper 是否存在"维护（与原 body:has(...) 语义完全一致）。
+        // 服务端按配置条件输出会与之形成两套判定，互相打架导致样式跳变。
       },
     ]}
   >

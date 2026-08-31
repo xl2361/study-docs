@@ -872,6 +872,15 @@ if (!buildCommit) {
 >
   @reference "../styles/main.css";
 
+  /* 关闭全局平滑滚动（性能修复）：
+     构建产物 Layout.*.css 里存在 html{scroll-behavior:smooth}，会让"用户滚轮滚动"
+     也走插值动画，与滚动恢复的 scrollTo、目录跳转叠加时持续掉帧（表现为滚动一跳一跳）。
+     放在 is:global 块内确保作用于 html 元素；目录点击/回到顶部等交互由 JS 显式传
+     behavior:'smooth'，不受影响。 */
+  html {
+    scroll-behavior: auto;
+  }
+
   @layer components {
     .enable-banner #wallpaper-wrapper {
       height: var(--banner-height-home);
@@ -1138,6 +1147,7 @@ if (!buildCommit) {
     body.post-page #mobile-sidebar-toggle { display: none !important; }
     body.post-page #desktop-sidebar-toggle { display: flex !important; }
   }
+
 </style>
 
 <script>

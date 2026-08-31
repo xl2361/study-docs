@@ -651,23 +651,29 @@ if (!buildCommit) {
             // swup 换页会先把滚动归零/滚到 #main-grid，1.5 秒内不保存防止覆盖正确位置
             suppressUntil = Date.now() + 1500;
           });
-          var saveY = function () {
+          // 滚动中只写 sessionStorage（内存级，快）；localStorage 是同步磁盘 IO，
+          // 会阻塞主线程造成掉帧，且键随浏览页面累积、越写越慢 ——
+          // 只在页面离开/隐藏时落盘（此时卡顿不可见）。
+          var saveY = function (persist) {
             if (Date.now() < suppressUntil) return;
             var y = window.scrollY || 0;
+            var now = Date.now();
             try { sessionStorage.setItem(curKey(), String(y)); } catch (e) {}
-            try { localStorage.setItem(curLsKey(), JSON.stringify({ y: y, t: Date.now() })); } catch (e) {}
-            var last = { p: window.location.pathname, y: y, t: Date.now() };
+            var last = { p: window.location.pathname, y: y, t: now };
             try { sessionStorage.setItem('ff_lastSave', JSON.stringify(last)); } catch (e) {}
-            try { localStorage.setItem('ff_lastSaveLS', JSON.stringify(last)); } catch (e) {}
+            if (persist) {
+              try { localStorage.setItem(curLsKey(), JSON.stringify({ y: y, t: now })); } catch (e) {}
+              try { localStorage.setItem('ff_lastSaveLS', JSON.stringify(last)); } catch (e) {}
+            }
           };
           var saveTimer = null;
           window.addEventListener('scroll', function () {
             if (saveTimer) return;
-            saveTimer = setTimeout(function () { saveTimer = null; saveY(); }, 400);
+            saveTimer = setTimeout(function () { saveTimer = null; saveY(false); }, 400);
           }, { passive: true });
-          window.addEventListener('pagehide', saveY);
-          window.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') saveY(); });
-          window.addEventListener('freeze', saveY);
+          window.addEventListener('pagehide', function () { saveY(true); });
+          window.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') saveY(true); });
+          window.addEventListener('freeze', function () { saveY(true); });
         }
 
         // ---- 读取：sessionStorage 优先，localStorage 兜底（24h 内有效，防 360 清 SS）----

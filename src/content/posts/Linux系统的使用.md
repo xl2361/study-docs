@@ -4,7 +4,7 @@ published: 2026-08-01
 description: "Linux系统的使用"
 category: "开发工具"
 draft: false
-updated: 2026-09-08
+updated: 2026-09-09
 tags: []
 ---
 
@@ -54,11 +54,9 @@ XShell 是一个强大的安全终端模拟软件，支持SSH1、SSH2、SFTP、T
 
 1. 点击左侧「用户身份验证」
 2. 输入用户名（如：root）
-
   ![1](/uploads/images/2026-03-26/7cd79f71-a4a6-4fd0-a634-47baf7ee317c.png)
 3. 输入密码
 4. 点击「确定」连接
-
   ![1](/uploads/images/2026-03-26/f80fd206-14c3-4fc9-a8d4-1191b03c6309.png)
 
 ### 1.4 保存会话技巧
@@ -101,7 +99,6 @@ XShell 会话管理
 **问题4：中文乱码**
 
 - 将编码设置为 UTF-8
-
   ![1](/uploads/images/2026-03-26/197ee8cb-d59b-438b-8667-8d8696102450.png)
 
 ---
@@ -372,8 +369,7 @@ vi和vim用来在Linux中创建、查看或者编辑文本文件，vim增加了�
 | 命令                              | 说明                      |
 | ------------------------------- | ----------------------- |
 | `cat file.txt`                  | 查看文件全部内容，一次性显示          |
-| `more file.txt`                 | 分页查看文件内容，空格翻页，q退出       |
-| `less file.txt`                 | 分页查看文件内容，支持上下翻页，q退出     |
+| `more / less file.txt`          | 分页查看文件内容，空格 / 上下 翻页，q退出 |
 | `head -n 50 file.log`           | 查看文件前50行                |
 | `tail -n 50 file.log`           | 查看文件后50行                |
 | `tail -f file.log`              | **实时监控**文件末尾内容（查看日志常用）  |

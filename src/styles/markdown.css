@@ -121,6 +121,14 @@
     }
   }
 
+  /* 删除线：工具栏 Strike 按钮产生 <s>/<del>，Markdown 的 ~~text~~ 也解析为 <del> */
+  del,
+  s,
+  strike {
+    @apply line-through;
+    text-decoration-thickness: from-font;
+  }
+
   .katex-display-container {
     max-width: 100%;
     overflow-x: auto;
@@ -155,8 +163,15 @@
       }
     }
   }
+
 }
 
+/* 编辑器内删除线所见即所得：ProseMirror 里的 <s>/<del> */
+.ProseMirror s,
+.ProseMirror del,
+.ProseMirror strike {
+  text-decoration: line-through;
+}
 
 .custom-md {
   table {

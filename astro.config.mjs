@@ -24,6 +24,7 @@ import rehypeKatex from "rehype-katex";
 import rehypeSlug from "rehype-slug";
 import remarkAdmonitionToBlockquoteCallout from "remark-admonition-to-blockquote-callout";
 import remarkDirective from "remark-directive"; /* Handle directives */
+import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import remarkSectionize from "remark-sectionize";
 import {
@@ -279,6 +280,7 @@ export default defineConfig({
 				false
 					? [remarkAdmonitionToBlockquoteCallout]
 					: []),
+				remarkGfm,
 				remarkMath,
 				remarkReadingTime,
 				remarkWikiLink,

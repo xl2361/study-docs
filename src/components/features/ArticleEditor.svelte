@@ -124,6 +124,7 @@ type EditorChain = {
 	clearNodes: () => EditorChain;
 	deleteSelection: () => EditorChain;
 	setMark: (name: string, attributes: Record<string, unknown>) => EditorChain;
+	unsetMark: (name: string) => EditorChain;
 	addRowBefore: () => EditorChain;
 	addRowAfter: () => EditorChain;
 	addColumnBefore: () => EditorChain;
@@ -2345,7 +2346,14 @@ function format(action: string, payload?: unknown) {
 		redo: () => chain.redo(),
 		bold: () => chain.toggleBold(),
 		italic: () => chain.toggleItalic(),
-		strike: () => chain.toggleStrike(),
+		strike: () => {
+			// 删除线在代码块内按规范永不渲染（`~~x~~` 原样输出）：
+			// 若选区落在 code 标记内，先去掉该范围的 code 再加 strike，
+			// 序列化即为 `code`~~struck~~`code`，前后端一致可渲染。
+			// 编辑器里看不见反引号，用户无法手动放对位置，故此处自动处理。
+			if (editor.isActive("code")) chain.unsetMark("code");
+			return chain.toggleStrike();
+		},
 		underline: () => chain.toggleUnderline(),
 		sub: () => chain.toggleSubscript(),
 		sup: () => chain.toggleSuperscript(),

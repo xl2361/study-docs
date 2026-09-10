@@ -144,6 +144,26 @@
     margin-left: -2px;
   }
 
+  /* 夹在代码块之间的删除线继承代码外观：实测 del 默认是等比字体(system-ui)，
+     两侧 code 是等宽(JetBrains Mono)，字体切换+删除线穿过导致 t/l 难辨认；
+     且 del 无底色、两侧 code 有底色形成"蓝底夹白字"的丑断裂。
+     统一为同一字体/底色/字色后整行读作一条无缝代码块（只影响 code 紧贴 del/s 的情况） */
+  code + del,
+  code + s {
+    font-family:
+      var(--font-jetbrains-mono),
+      ui-monospace,
+      SFMono-Regular,
+      Menlo,
+      Monaco,
+      Consolas,
+      "Liberation Mono",
+      "Courier New",
+      monospace;
+    background: var(--inline-code-bg);
+    color: var(--inline-code-color);
+  }
+
   .katex-display-container {
     max-width: 100%;
     overflow-x: auto;
@@ -194,6 +214,22 @@
 .ProseMirror code + del,
 .ProseMirror code + s {
   margin-left: -2px;
+}
+
+/* 编辑器内：夹在代码之间的删除线统一为等宽字体（只改字体不动底色，
+   避免在编辑器里制造新的底色反差） */
+.ProseMirror code + del,
+.ProseMirror code + s {
+  font-family:
+    var(--font-jetbrains-mono),
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    "Courier New",
+    monospace;
 }
 .ProseMirror del + code,
 .ProseMirror s + code {

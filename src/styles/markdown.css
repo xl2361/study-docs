@@ -126,7 +126,19 @@
   s,
   strike {
     @apply line-through;
-    text-decoration-thickness: from-font;
+    text-decoration-thickness: 2px;
+  }
+
+  /* 删除线单词紧贴相邻代码块：code 自带左右内边距(px-1)，夹在 code 之间的
+     删除线两边会各顶出一块底色空白。用相邻选择器把间隙各收 2px
+     （只影响 del/s 紧贴 code 的情况，不影响其他 code 样式） */
+  code + del,
+  code + s {
+    margin-left: -2px;
+  }
+  del + code,
+  s + code {
+    margin-left: -2px;
   }
 
   .katex-display-container {
@@ -166,11 +178,22 @@
 
 }
 
-/* 编辑器内删除线所见即所得：ProseMirror 里的 <s>/<del> */
+/* 编辑器内删除线所见即所得：ProseMirror 里的 <s>/<del>（与前台同为 2px） */
 .ProseMirror s,
 .ProseMirror del,
 .ProseMirror strike {
   text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
+
+/* 编辑器内同样收窄删除线两边的代码内边距 */
+.ProseMirror code + del,
+.ProseMirror code + s {
+  margin-left: -2px;
+}
+.ProseMirror del + code,
+.ProseMirror s + code {
+  margin-left: -2px;
 }
 
 .custom-md {

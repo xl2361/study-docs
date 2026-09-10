@@ -59,6 +59,7 @@ const ICONS: Record<string, string> = {
 	painter: `<path d="m14.6 17.9-10.7-2.9M18.4 2.6a1 1 0 0 1 3 3l-4 4a.5.5 0 0 0 0 .7l.9.9a2.4 2.4 0 0 1 0 3.4l-.9.9a.5.5 0 0 1-.7 0L8.4 7.3a.5.5 0 0 1 0-.7l.9-.9a2.4 2.4 0 0 1 3.4 0l.9.9a.5.5 0 0 0 .7 0zM9 8c-1.8 2.7-4 3.5-6.6 4a.5.5 0 0 0-.3.8l7.3 8.9a1 1 0 0 0 1.2.2C12.7 20.4 16 16.8 16 15"/>`,
 	superscript: `<path d="m4 19 8-8m0 8-8-8m12-4a2 2 0 1 1 4 0c0 1.4-2 2-4 5h4"/>`,
 	subscript: `<path d="m4 5 8 8m0-8-8 8m12 3a2 2 0 1 1 4 0c0 1.4-2 2-4 5h4"/>`,
+	strikethrough: `<path d="M16 4H9a3 3 0 0 0-2.83 4"/><path d="M14 12a4 4 0 0 1 0 8H6"/><path d="M4 12h16"/>`,
 	colorText: `<path d="M6 19 12 5l6 14M8 15h8"/>`,
 	highlighter: `<path d="m9 11-6 6v3h9l3-3M22 12l-4.6 4.6a2 2 0 0 1-2.8 0L9.4 11.4a2 2 0 0 1 0-2.8L14 4"/>`,
 	alignLeft: `<path d="M15 12H3m14 6H3M21 6H3"/>`,
@@ -282,7 +283,7 @@ const currentAlign = () =>
 			<i class="tb-char tb-italic">I</i>
 		</button>
 		<button class="tb-btn" disabled={disabled} class:tb-on={active.strike} type="button" title="删除线 (Ctrl+Shift+X)" aria-label="删除线" aria-pressed={active.strike} onclick={() => act("strike")}>
-			<s class="tb-char">S</s>
+			{@html SVG("strikethrough")}
 		</button>
 		<button class="tb-btn" disabled={disabled} class:tb-on={active.underline} type="button" title="下划线 (Ctrl+U)" aria-label="下划线" aria-pressed={active.underline} onclick={() => act("underline")}>
 			<u class="tb-char">U</u>

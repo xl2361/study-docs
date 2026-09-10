@@ -132,16 +132,18 @@
     text-decoration-skip-ink: none;
   }
 
-  /* 删除线单词紧贴相邻代码块：code 自带左右内边距(px-1)，夹在 code 之间的
-     删除线两边会各顶出一块底色空白。用相邻选择器把间隙各收 2px
-     （只影响 del/s 紧贴 code 的情况，不影响其他 code 样式） */
+  /* 删除线单词紧贴相邻代码块：实测阅读页 code 左右内边距各 4px(px-1)，
+     夹在 code 之间的删除线两边会各顶出一块底色空白；包围盒实测接缝 2px，
+     而正常等宽字符间距为 0。用相邻选择器把间隙收满 4px，与自然字距齐平
+     （只影响 del/s 紧贴 code 的情况，不影响其他 code 样式；
+     注意编辑器内 code 无内边距，那边用 0，见下方 ProseMirror 段） */
   code + del,
   code + s {
-    margin-left: -2px;
+    margin-left: -4px;
   }
   del + code,
   s + code {
-    margin-left: -2px;
+    margin-left: -4px;
   }
 
   /* 夹在代码块之间的删除线继承代码外观：实测 del 默认是等比字体(system-ui)，
@@ -210,10 +212,12 @@
   text-decoration-skip-ink: none;
 }
 
-/* 编辑器内同样收窄删除线两边的代码内边距 */
+/* 编辑器内：行内 code 无左右内边距（只有 font-size 规则），之前误用 -2px
+   导致删除线与相邻代码重叠 2px、盖住字形（t 被看成 l 的真凶）。
+   改为 0：自然贴合，不重叠不留缝 */
 .ProseMirror code + del,
 .ProseMirror code + s {
-  margin-left: -2px;
+  margin-left: 0;
 }
 
 /* 编辑器内：夹在代码之间的删除线统一为等宽字体（只改字体不动底色，
@@ -233,7 +237,7 @@
 }
 .ProseMirror del + code,
 .ProseMirror s + code {
-  margin-left: -2px;
+  margin-left: 0;
 }
 
 .custom-md {

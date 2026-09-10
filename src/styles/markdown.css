@@ -126,7 +126,7 @@
   s,
   strike {
     @apply line-through;
-    text-decoration-thickness: 2px;
+    text-decoration-thickness: 1.5px;
   }
 
   /* 删除线单词紧贴相邻代码块：code 自带左右内边距(px-1)，夹在 code 之间的
@@ -183,7 +183,7 @@
 .ProseMirror del,
 .ProseMirror strike {
   text-decoration: line-through;
-  text-decoration-thickness: 2px;
+  text-decoration-thickness: 1.5px;
 }
 
 /* 编辑器内同样收窄删除线两边的代码内边距 */

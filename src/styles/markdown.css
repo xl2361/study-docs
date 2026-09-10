@@ -127,6 +127,9 @@
   strike {
     @apply line-through;
     text-decoration-thickness: 1.5px;
+    /* 实线不断开：浏览器默认 skip-ink 会让删除线遇到字形就断开，
+       小字号下看起来发虚、边缘不清；none 让它成为一条连续实线 */
+    text-decoration-skip-ink: none;
   }
 
   /* 删除线单词紧贴相邻代码块：code 自带左右内边距(px-1)，夹在 code 之间的
@@ -184,6 +187,7 @@
 .ProseMirror strike {
   text-decoration: line-through;
   text-decoration-thickness: 1.5px;
+  text-decoration-skip-ink: none;
 }
 
 /* 编辑器内同样收窄删除线两边的代码内边距 */

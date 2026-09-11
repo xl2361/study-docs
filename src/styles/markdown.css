@@ -212,12 +212,12 @@
   text-decoration-skip-ink: none;
 }
 
-/* 编辑器内：行内 code 无左右内边距（只有 font-size 规则），之前误用 -2px
-   导致删除线与相邻代码重叠 2px、盖住字形（t 被看成 l 的真凶）。
-   改为 0：自然贴合，不重叠不留缝 */
+/* 编辑器内：编辑器容器带 custom-md 类（见 ArticleEditor.svelte 的 .tiptap-host ... custom-md），
+   所以行内 code 同样有 px-1 的 4px 内边距；之前误判为"无内边距"设 0，导致删除线两侧各留 4px 空隙。
+   与阅读页一致用 -4px 抵消 code 的 padding：不重叠、不留缝，正好贴合。 */
 .ProseMirror code + del,
 .ProseMirror code + s {
-  margin-left: 0;
+  margin-left: -4px;
 }
 
 /* 编辑器内：夹在代码之间的删除线统一为等宽字体（只改字体不动底色，
@@ -240,7 +240,7 @@
 }
 .ProseMirror del + code,
 .ProseMirror s + code {
-  margin-left: 0;
+  margin-left: -4px;
 }
 
 .custom-md {

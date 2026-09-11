@@ -221,7 +221,9 @@
 }
 
 /* 编辑器内：夹在代码之间的删除线统一为等宽字体（只改字体不动底色，
-   避免在编辑器里制造新的底色反差） */
+   避免在编辑器里制造新的底色反差）；
+   字号也要与行内 code 对齐（.85rem）：否则被划的词比两边代码大一号，
+   视觉断裂且更难辨认 */
 .ProseMirror code + del,
 .ProseMirror code + s {
   font-family:
@@ -234,6 +236,7 @@
     "Liberation Mono",
     "Courier New",
     monospace;
+  font-size: 0.85rem;
 }
 .ProseMirror del + code,
 .ProseMirror s + code {

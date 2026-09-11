@@ -29,6 +29,7 @@ export type SiteConfig = {
 	title: string;
 	subtitle: string;
 	site_url: string;
+	version: string; // 站点代码版本（如 "1.0.0"），显示在导航栏标题旁；每次更新网站代码时递增，内容更新不递增
 	description?: string; // 网站描述，用于生成 <meta name="description">
 	keywords?: string[]; // 站点关键词，用于生成 <meta name="keywords">
 

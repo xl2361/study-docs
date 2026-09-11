@@ -176,6 +176,7 @@ const logoVariants = await Promise.all(
                                         <Icon is:inline name="material-symbols:home-pin-outline" class="navbar-logo text-[1.75rem] mb-1 mr-2 shrink-0" />
                                     )}
                     {navbarTitle && <span class="truncate min-w-0 whitespace-nowrap">{navbarTitle}</span>}
+                    {siteConfig.version && <span class="ml-1.5 shrink-0 rounded border border-(--line-divider) px-1 text-[10px] font-normal leading-4 text-(--content-meta)" title={`站点版本 v${siteConfig.version}（仅代码更新时递增）`}>v{siteConfig.version}</span>}
                 </div>
             </a>
             <div class:list={[

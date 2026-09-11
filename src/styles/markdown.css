@@ -132,18 +132,22 @@
     text-decoration-skip-ink: none;
   }
 
-  /* 删除线单词紧贴相邻代码块：实测阅读页 code 左右内边距各 4px(px-1)，
-     夹在 code 之间的删除线两边会各顶出一块底色空白；包围盒实测接缝 2px，
-     而正常等宽字符间距为 0。用相邻选择器把间隙收满 4px，与自然字距齐平
-     （只影响 del/s 紧贴 code 的情况，不影响其他 code 样式；
-     注意编辑器内 code 无内边距，那边用 0，见下方 ProseMirror 段） */
+  /* 删除线单词紧贴相邻代码块：code 自带左右内边距(px-1)。接缝正确做法：**让接缝侧的 padding 归零**
+     （不是给单词负 margin）。实测负 margin 会让 gap=-4px（背景重叠压住字形，看起来像空隙）；
+     padding 归零后 gap≈0（无缝且无重叠）。
+     :has() 选中"后面紧跟删除线"的 code，把它的 padding-right 归零；后续 code 的 padding-left 归零（紧贴单词）。 */
+  code:has(+ del),
+  code:has(+ s) {
+    padding-right: 0;
+  }
   code + del,
   code + s {
-    margin-left: -4px;
+    margin-left: 0;
   }
   del + code,
   s + code {
-    margin-left: -4px;
+    margin-left: 0;
+    padding-left: 0;
   }
 
   /* 夹在代码块之间的删除线继承代码外观：实测 del 默认是等比字体(system-ui)，
@@ -213,11 +217,11 @@
 }
 
 /* 编辑器内：编辑器容器带 custom-md 类（见 ArticleEditor.svelte 的 .tiptap-host ... custom-md），
-   所以行内 code 同样有 px-1 的 4px 内边距；之前误判为"无内边距"设 0，导致删除线两侧各留 4px 空隙。
-   与阅读页一致用 -4px 抵消 code 的 padding：不重叠、不留缝，正好贴合。 */
+   所以行内 code 同样有 px-1 的 4px 内边距。接缝由上方 .custom-md 的规则处理（padding 归零）。
+   这里只确保删除线单词的 margin-left 为 0（负 margin 会重叠压住字形）。 */
 .ProseMirror code + del,
 .ProseMirror code + s {
-  margin-left: -4px;
+  margin-left: 0;
 }
 
 /* 编辑器内：夹在代码之间的删除线统一为等宽字体（只改字体不动底色，
@@ -240,7 +244,7 @@
 }
 .ProseMirror del + code,
 .ProseMirror s + code {
-  margin-left: -4px;
+  margin-left: 0;
 }
 
 .custom-md {

@@ -52,11 +52,20 @@ type EditorLike = {
 	getAttributes: (name: string) => Record<string, unknown>;
 	state: {
 		selection: {
+			empty: boolean;
 			$from: {
 				marks: () => Array<{
 					type: { name: string };
 					attrs: Record<string, unknown>;
 				}>;
+				nodeBefore: {
+					marks: Array<{ type: { name: string } }>;
+				} | null;
+			};
+			$to: {
+				nodeAfter: {
+					marks: Array<{ type: { name: string } }>;
+				} | null;
 			};
 		};
 	};
@@ -2351,8 +2360,33 @@ function format(action: string, payload?: unknown) {
 			// 若选区落在 code 标记内，先去掉该范围的 code 再加 strike，
 			// 序列化即为 `code`~~struck~~`code`，前后端一致可渲染。
 			// 编辑器里看不见反引号，用户无法手动放对位置，故此处自动处理。
-			if (editor.isActive("code")) chain.unsetMark("code");
-			return chain.toggleStrike();
+			const hadStrike = editor.isActive("strike");
+			if (!hadStrike && editor.isActive("code")) {
+				chain.unsetMark("code");
+			}
+			chain.toggleStrike();
+			if (hadStrike) {
+				// 对称恢复：取消删除线时，若选区两端紧贴着 code，
+				// 说明它原本就是代码块里被拆出来的一段，把 code 补回去，
+				// 否则单词永久丢失底色。普通文本两侧不是 code，不受影响。
+				try {
+					const { $from, $to, empty } = editor.state.selection;
+					if (!empty) {
+						const hasCode = (
+							n: { marks?: Array<{ type: { name: string } }> } | null,
+						) =>
+							!!n &&
+							Array.isArray(n.marks) &&
+							n.marks.some((m) => m?.type?.name === "code");
+						if (hasCode($from.nodeBefore) && hasCode($to.nodeAfter)) {
+							chain.setMark("code", {});
+						}
+					}
+				} catch {
+					// 检测失败就保持原样，不影响取消删除线本身
+				}
+			}
+			return chain;
 		},
 		underline: () => chain.toggleUnderline(),
 		sub: () => chain.toggleSubscript(),

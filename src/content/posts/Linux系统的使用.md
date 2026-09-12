@@ -4,7 +4,7 @@ published: 2026-08-01
 description: "Linux系统的使用"
 category: "开发工具"
 draft: false
-updated: 2026-09-11
+updated: 2026-09-12
 tags: []
 ---
 
@@ -54,9 +54,11 @@ XShell 是一个强大的安全终端模拟软件，支持SSH1、SSH2、SFTP、T
 
 1. 点击左侧「用户身份验证」
 2. 输入用户名（如：root）
+
   ![1](/uploads/images/2026-03-26/7cd79f71-a4a6-4fd0-a634-47baf7ee317c.png)
 3. 输入密码
 4. 点击「确定」连接
+
   ![1](/uploads/images/2026-03-26/f80fd206-14c3-4fc9-a8d4-1191b03c6309.png)
 
 ### 1.4 保存会话技巧
@@ -99,6 +101,7 @@ XShell 会话管理
 **问题4：中文乱码**
 
 - 将编码设置为 UTF-8
+
   ![1](/uploads/images/2026-03-26/197ee8cb-d59b-438b-8667-8d8696102450.png)
 
 ---
@@ -674,7 +677,7 @@ java -version
 # 检查端口是否被占用
 lsof -i :8080
 
-# 查看错误日志
+# 查看最后100行含有错误的日志
 tail -100 app.log | grep ERROR
 
 # 检查磁盘空间

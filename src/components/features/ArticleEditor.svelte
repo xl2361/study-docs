@@ -591,6 +591,34 @@ async function createEditor(operation: number) {
 					}),
 			],
 			content: "",
+			editorProps: {
+				// 点击表格同一行外侧空白：PM 在 mouseup 定稿时调用 handleClick
+				//（prosemirror-view MouseSelection.up → handleSingleClick），
+				// 此处把光标放到表格前/后并返回 true，阻止默认的"就近进单元格"。
+				handleClick: (_view: unknown, _pos: unknown, event: Event) => {
+					if (!editor || sourceMode) return false;
+					const mouse = event as MouseEvent;
+					if (
+						mouse.button !== 0 ||
+						mouse.shiftKey ||
+						mouse.ctrlKey ||
+						mouse.metaKey
+					) {
+						return false;
+					}
+					const target = mouse.target as Element | null;
+					if (!target || target.closest("table")) return false;
+					if (
+						target.closest(".table-toolbar") ||
+						target.closest(".table-drag-handle") ||
+						target.closest(".table-row-handle") ||
+						target.closest(".table-col-handle")
+					) {
+						return false;
+					}
+					return placeBesideCursor(mouse);
+				},
+			},
 			onUpdate: () => {
 				markDirty(true);
 				syncHistoryState();
@@ -1151,11 +1179,11 @@ function onTableDocMouseDown(event: Event) {
 			// 表格外按下：注册监听，若拖入表格则接管划选；否则不影响原生文本选择
 			cellDragStartPos = null;
 			cellDragging = false;
-			// 点击表格同一行外侧：PM 会把光标就近映射进第一单元格，
-			// 改为放到表格之后（右侧）/之前（左侧），并以该边界作为
-			// 可能的跨块范围选起点（拖入表格时"文字 + 整表"一起选）
-			const besidePos = placeCursorBesideTable(mouse);
-			outsideDragFrom = besidePos ?? posAtCoordsSafe(mouse);
+			// 点击表格同一行外侧：光标由 editorProps.handleClick 在 mouseup
+			// 定稿时修正（mousedown 时改会被 PM 的 mouseup 定稿覆盖）。
+			// 这里只记录跨块范围选的起点：表格同行外侧用表格边界，否则用文字位置。
+			const beside = computeBesideTablePos(mouse);
+			outsideDragFrom = beside ? beside.pos : posAtCoordsSafe(mouse);
 			if (outsideDragFrom == null) rangeDragActive = false;
 			document.addEventListener("mousemove", onCellDragMove);
 			document.addEventListener("mouseup", onCellDragUp);
@@ -1319,18 +1347,20 @@ function posAtCoordsSafe(mouse: MouseEvent): number | null {
 	}
 }
 
-// 点击表格同一行外侧空白：PM 默认把光标就近映射进第一单元格，
-// 这里改为放到表格之后（右侧）或之前（左侧）的可定位文本位置。
-// 返回放置位置（供跨块范围选作为起点），未命中返回 null。
-function placeCursorBesideTable(mouse: MouseEvent): number | null {
+// 计算表格同一行外侧点击对应的光标落点：右侧→表格之后，左侧→表格之前。
+// 仅当点击坐标在某个表格竖直范围内、且横坐标在表格之外时命中。
+// 纯计算，不派发（派发见 placeBesideCursor）。
+function computeBesideTablePos(mouse: MouseEvent): {
+	pos: number;
+	side: "before" | "after";
+	tablePos: number;
+	tableSize: number;
+} | null {
 	if (!editor) return null;
-	const pmEl = document.querySelector(
-		".article-reading-body-editing .ProseMirror",
-	);
-	if (!pmEl) return null;
+	const view = editor.view;
 	let targetTable: HTMLElement | null = null;
 	let side: "before" | "after" = "after";
-	for (const t of pmEl.querySelectorAll("table")) {
+	for (const t of view.dom.querySelectorAll("table")) {
 		const rect = (t as HTMLElement).getBoundingClientRect();
 		if (mouse.clientY < rect.top || mouse.clientY > rect.bottom) continue;
 		if (mouse.clientX >= rect.left && mouse.clientX <= rect.right) {
@@ -1342,12 +1372,12 @@ function placeCursorBesideTable(mouse: MouseEvent): number | null {
 	}
 	if (!targetTable) return null;
 	try {
-		const inner = editor.view.posAtDOM(targetTable, 0);
-		const $i = editor.state.doc.resolve(inner);
+		const inner = view.posAtDOM(targetTable, 0);
+		const $i = view.state.doc.resolve(inner);
 		let tablePos = -1;
 		let tableSize = 0;
 		for (let d = $i.depth; d >= 0; d--) {
-			const n = d === 0 ? editor.state.doc : $i.node(d);
+			const n = d === 0 ? view.state.doc : $i.node(d);
 			if (n.type.name === "table") {
 				tablePos = $i.before(d);
 				tableSize = n.nodeSize;
@@ -1355,17 +1385,40 @@ function placeCursorBesideTable(mouse: MouseEvent): number | null {
 			}
 		}
 		if (tablePos < 0) return null;
-		const raw = side === "after" ? tablePos + tableSize : tablePos;
-		const sel = TextSelection.near(
-			editor.state.doc.resolve(raw),
-			side === "after" ? 1 : -1,
-		);
-		// 兜底：落在表格内部（如表格是文档最后一个节点）则放弃，保持默认行为
-		if (sel.from > tablePos && sel.from < tablePos + tableSize) return null;
-		editor.view.dispatch(editor.state.tr.setSelection(sel));
-		return sel.from;
+		return {
+			pos: side === "after" ? tablePos + tableSize : tablePos,
+			side,
+			tablePos,
+			tableSize,
+		};
 	} catch {
 		return null;
+	}
+}
+
+// 把光标放到表格同一行外侧对应的前/后位置（不进单元格）。
+// 由 editorProps.handleClick 在 PM mouseup 定稿时调用：返回 true 会
+// 跳过 PM 默认的"就近文本位置"（那会把光标放进第一单元格）。
+function placeBesideCursor(event: MouseEvent): boolean {
+	if (!editor) return false;
+	const beside = computeBesideTablePos(event);
+	if (!beside) return false;
+	try {
+		const sel = TextSelection.near(
+			editor.view.state.doc.resolve(beside.pos),
+			beside.side === "after" ? 1 : -1,
+		);
+		// 兜底：落点在表格内部（如表格是文档最后一个节点）则放弃，保持默认行为
+		if (
+			sel.from > beside.tablePos &&
+			sel.from < beside.tablePos + beside.tableSize
+		) {
+			return false;
+		}
+		editor.view.dispatch(editor.view.state.tr.setSelection(sel));
+		return true;
+	} catch {
+		return false;
 	}
 }
 

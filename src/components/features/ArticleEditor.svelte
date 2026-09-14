@@ -1,4 +1,5 @@
 <script lang="ts">
+import { NodeSelection, TextSelection } from "prosemirror-state";
 import { CellSelection } from "prosemirror-tables";
 import { onMount, tick } from "svelte";
 import { CodeBlockLang } from "@/extensions/CodeBlockLang";
@@ -240,6 +241,10 @@ let cellDragStartPos: number | null = null;
 let cellDragging = false;
 let cellDragClientX = 0;
 let cellDragClientY = 0;
+// 跨块范围选：从表格外文字拖入表格时升级（起点文字 → 整个表格末尾），
+// 剪切/删除时"文字 + 整表"一起走：不留空表格、不落文字
+let outsideDragFrom: number | null = null;
+let rangeDragActive = false;
 let tableToolbarEl: HTMLElement | null = null;
 let dragHandleEl: HTMLDivElement | null = null;
 let rowHandleEl: HTMLDivElement | null = null;
@@ -643,6 +648,7 @@ async function createEditor(operation: number) {
 		document.addEventListener("mousemove", onTableMouseMove);
 		document.addEventListener("mousedown", onTableDocMouseDown);
 		document.addEventListener("mouseup", onTableDocMouseUp, true);
+		document.addEventListener("cut", onEditorCutCapture, true);
 		window.addEventListener("scroll", onWindowScrollOrResize, {
 			passive: true,
 		});
@@ -1145,6 +1151,12 @@ function onTableDocMouseDown(event: Event) {
 			// 表格外按下：注册监听，若拖入表格则接管划选；否则不影响原生文本选择
 			cellDragStartPos = null;
 			cellDragging = false;
+			// 点击表格同一行外侧：PM 会把光标就近映射进第一单元格，
+			// 改为放到表格之后（右侧）/之前（左侧），并以该边界作为
+			// 可能的跨块范围选起点（拖入表格时"文字 + 整表"一起选）
+			const besidePos = placeCursorBesideTable(mouse);
+			outsideDragFrom = besidePos ?? posAtCoordsSafe(mouse);
+			if (outsideDragFrom == null) rangeDragActive = false;
 			document.addEventListener("mousemove", onCellDragMove);
 			document.addEventListener("mouseup", onCellDragUp);
 		}
@@ -1167,6 +1179,18 @@ function onTableDocMouseDown(event: Event) {
 // 高亮由 drawCellSelection 装饰渲染，不依赖原生文本选择。
 function onCellDragMove(event: MouseEvent) {
 	if (!editor || sourceMode) return;
+	// 跨块范围选拖动中（起点在表格外文字）：终点跟随鼠标，
+	// 在表格内时吸附到整表末尾，剪切/删除时"文字 + 整表"一起走
+	if (rangeDragActive && outsideDragFrom != null) {
+		if (event.buttons !== 1) return;
+		event.preventDefault();
+		const rp = editor.view.posAtCoords({
+			left: event.clientX,
+			top: event.clientY,
+		});
+		if (rp) dispatchRangeSelection(outsideDragFrom, rp.pos);
+		return;
+	}
 	// 起点未记录（mousedown 在 cell 外）：拖入 cell 时接管划选
 	if (cellDragStartPos == null) {
 		if (event.buttons !== 1) return;
@@ -1187,6 +1211,17 @@ function onCellDragMove(event: MouseEvent) {
 		if (cellPos == null) return;
 		// 进入表格：接管拖动，清除 mousedown 后可能已开始的原生文本选择。
 		// 同样不预设 tableEditingKey 锚点，避免库在同一格内抢选整格
+		if (outsideDragFrom != null) {
+			// 从表格外文字拖入表格：升级为跨块范围选（起点文字 → 整表末尾），
+			// 剪切/删除时文字与整表一起走，不留空表格、不落文字
+			cellDragging = true;
+			rangeDragActive = true;
+			const sel0 = window.getSelection();
+			if (sel0 && !sel0.isCollapsed) sel0.removeAllRanges();
+			event.preventDefault();
+			dispatchRangeSelection(outsideDragFrom, cellPos);
+			return;
+		}
 		cellDragStartPos = cellPos;
 		cellDragging = true;
 		const sel = window.getSelection();
@@ -1257,6 +1292,8 @@ function onCellDragUp() {
 	const wasDragging = cellDragging;
 	cellDragStartPos = null;
 	cellDragging = false;
+	rangeDragActive = false;
+	outsideDragFrom = null;
 	if (wasDragging) {
 		// 跨单元格拖选结束：清除残留 DOM 选择（正常路径 preventDefault 后
 		// 不会有原生选择），防止 PM 在 selectionchange 时把文本选择写回 state
@@ -1264,6 +1301,150 @@ function onCellDragUp() {
 		if (sel && !sel.isCollapsed) sel.removeAllRanges();
 	}
 	// 未接管的同格划选/单击：原生行为已完整处理，无需额外干预
+}
+
+// 安全取坐标对应的文字位置：仅当落在文本块内才返回（表格内/块边界返回 null）
+function posAtCoordsSafe(mouse: MouseEvent): number | null {
+	if (!editor) return null;
+	try {
+		const p = editor.view.posAtCoords({
+			left: mouse.clientX,
+			top: mouse.clientY,
+		});
+		if (!p) return null;
+		const $p = editor.state.doc.resolve(p.pos);
+		return $p.parent.inlineContent ? p.pos : null;
+	} catch {
+		return null;
+	}
+}
+
+// 点击表格同一行外侧空白：PM 默认把光标就近映射进第一单元格，
+// 这里改为放到表格之后（右侧）或之前（左侧）的可定位文本位置。
+// 返回放置位置（供跨块范围选作为起点），未命中返回 null。
+function placeCursorBesideTable(mouse: MouseEvent): number | null {
+	if (!editor) return null;
+	const pmEl = document.querySelector(
+		".article-reading-body-editing .ProseMirror",
+	);
+	if (!pmEl) return null;
+	let targetTable: HTMLElement | null = null;
+	let side: "before" | "after" = "after";
+	for (const t of pmEl.querySelectorAll("table")) {
+		const rect = (t as HTMLElement).getBoundingClientRect();
+		if (mouse.clientY < rect.top || mouse.clientY > rect.bottom) continue;
+		if (mouse.clientX >= rect.left && mouse.clientX <= rect.right) {
+			return null; // 点在表格上，交回默认逻辑
+		}
+		targetTable = t as HTMLElement;
+		side = mouse.clientX > rect.right ? "after" : "before";
+		break;
+	}
+	if (!targetTable) return null;
+	try {
+		const inner = editor.view.posAtDOM(targetTable, 0);
+		const $i = editor.state.doc.resolve(inner);
+		let tablePos = -1;
+		let tableSize = 0;
+		for (let d = $i.depth; d >= 0; d--) {
+			const n = d === 0 ? editor.state.doc : $i.node(d);
+			if (n.type.name === "table") {
+				tablePos = $i.before(d);
+				tableSize = n.nodeSize;
+				break;
+			}
+		}
+		if (tablePos < 0) return null;
+		const raw = side === "after" ? tablePos + tableSize : tablePos;
+		const sel = TextSelection.near(
+			editor.state.doc.resolve(raw),
+			side === "after" ? 1 : -1,
+		);
+		// 兜底：落在表格内部（如表格是文档最后一个节点）则放弃，保持默认行为
+		if (sel.from > tablePos && sel.from < tablePos + tableSize) return null;
+		editor.view.dispatch(editor.state.tr.setSelection(sel));
+		return sel.from;
+	} catch {
+		return null;
+	}
+}
+
+// 跨块范围选：从表格外起点到 hintPos 所在表格的末尾（鼠标在表格内时吸附整表），
+// 鼠标已离开表格时终点跟随鼠标。TextSelection 覆盖"文字 + 整表"，
+// 剪切/删除按 from/to 整体处理：不留空表格、不落文字
+function dispatchRangeSelection(from: number, hintPos: number) {
+	if (!editor) return;
+	try {
+		const $hint = editor.state.doc.resolve(hintPos);
+		let tablePos = -1;
+		let tableSize = 0;
+		for (let d = $hint.depth; d >= 0; d--) {
+			const n = d === 0 ? editor.state.doc : $hint.node(d);
+			if (n.type.name === "table") {
+				tablePos = $hint.before(d);
+				tableSize = n.nodeSize;
+				break;
+			}
+		}
+		let to = hintPos;
+		if (tablePos >= 0) {
+			// 鼠标在表格内：终点吸附到整个表格之后，整表一起带走
+			to = tablePos + tableSize;
+		}
+		const a = Math.min(from, to);
+		const b = Math.max(from, to);
+		editor.view.dispatch(
+			editor.state.tr.setSelection(
+				TextSelection.create(editor.state.doc, a, b),
+			),
+		);
+	} catch {
+		/* 位置失效等异常忽略，下一次移动会重试 */
+	}
+}
+
+// 整表 CellSelection 剪切：PM 的 CellSelection.replace 只清空选中单元格内容、
+// 保留空表格骨架（剪切后原处留空表格）。整表被全选时在 cut 捕获阶段把选区
+// 升级为整表 NodeSelection，PM 的 cut 处理器随后按新选区序列化并整体删表。
+function onEditorCutCapture() {
+	if (!editor || sourceMode) return;
+	const sel = editor.state.selection;
+	if (!(sel instanceof CellSelection)) return;
+	const pmEl = document.querySelector(
+		".article-reading-body-editing .ProseMirror",
+	);
+	if (!pmEl) return;
+	let tableEl: HTMLElement | null = null;
+	for (const t of pmEl.querySelectorAll("table")) {
+		if (t.querySelector("td.selectedCell, th.selectedCell")) {
+			tableEl = t as HTMLElement;
+			break;
+		}
+	}
+	if (!tableEl) return;
+	const total = tableEl.querySelectorAll("td, th").length;
+	const selected = tableEl.querySelectorAll(
+		"td.selectedCell, th.selectedCell",
+	).length;
+	if (!total || selected !== total) return;
+	try {
+		const { $from } = sel;
+		let tablePos = -1;
+		for (let d = $from.depth; d > 0; d--) {
+			if ($from.node(d).type.name === "table") {
+				tablePos = $from.before(d);
+				break;
+			}
+		}
+		if (tablePos < 0) return;
+		editor.view.dispatch(
+			editor.state.tr.setSelection(
+				NodeSelection.create(editor.state.doc, tablePos),
+			),
+		);
+	} catch {
+		/* 升级失败保持原选区 */
+	}
 }
 
 // 拖拽划选结束后，浏览器若仍有残留原生文本选择，prosemirror 会在
@@ -1792,6 +1973,7 @@ function destroyEditor() {
 	document.removeEventListener("mousemove", onTableMouseMove);
 	document.removeEventListener("mousedown", onTableDocMouseDown);
 	document.removeEventListener("mouseup", onTableDocMouseUp, true);
+	document.removeEventListener("cut", onEditorCutCapture, true);
 	if (editor) editor.destroy();
 	editor = null;
 	editorReady = false;

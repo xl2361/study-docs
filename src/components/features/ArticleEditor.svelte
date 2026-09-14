@@ -603,10 +603,20 @@ async function createEditor(operation: number) {
 			try {
 				const parsed = editor.markdown.parse(candidate);
 				const normalized = finalizeParsedDoc(parsed);
-				editor.commands.setContent(normalized, {
-					emitUpdate: false,
-					errorOnInvalidContent: true,
-				});
+				// 初始装载不进撤销历史：编辑器以 content:"" 创建，若 setContent 的事务进栈，
+				// 第一步撤销会回到空文档（正文全消失）。同链共享 tr 设 addToHistory:false；
+				// chain 执行无 try/catch，errorOnInvalidContent 的抛错语义保持不变。
+				editor
+					.chain()
+					.command(({ tr }) => {
+						tr.setMeta("addToHistory", false);
+						return true;
+					})
+					.setContent(normalized, {
+						emitUpdate: false,
+						errorOnInvalidContent: true,
+					})
+					.run();
 				bodyLoaded = true;
 				if (candidate !== originalBody || imagePlacementAdjusted > 0) {
 					console.warn("[article-editor] 原文需自动调整后才能进入富文本模式");
@@ -2237,11 +2247,19 @@ function restoreEmergencyDraft() {
 	if (sourceMode) sourceValue = backup.body;
 	else {
 		try {
-			editor?.commands.setContent(backup.body, {
-				contentType: "markdown",
-				emitUpdate: false,
-				errorOnInvalidContent: false,
-			});
+			// 恢复紧急草稿同样不进撤销历史，避免撤销一步回到恢复前的空/坏内容
+			editor
+				?.chain()
+				.command(({ tr }) => {
+					tr.setMeta("addToHistory", false);
+					return true;
+				})
+				.setContent(backup.body, {
+					contentType: "markdown",
+					emitUpdate: false,
+					errorOnInvalidContent: false,
+				})
+				.run();
 		} catch {
 			// 编辑器内容同步失败时以源码形式兜底恢复。
 			sourceMode = true;

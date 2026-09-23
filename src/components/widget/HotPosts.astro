@@ -59,9 +59,14 @@ const posts = (await getSortedPostsList()).map((post) => ({
     }
 
     function render(rows) {
+      // 排序键优先用接口返回的 score（与 worker 的降温公式一致）；
+      // 若旧版接口只给 count，则退回按 count 降序，避免排名跳空。
+      // 不能只用 count：那样会丢掉时间衰减，老文章靠累计量霸榜。
+      const sortKey = (r) =>
+        typeof r.score === "number" ? r.score : Number(r.count);
       const ranked = rows
         .filter((r) => r && meta.has(r.slug) && Number(r.count) > 0)
-        .sort((a, b) => Number(b.count) - Number(a.count))
+        .sort((a, b) => sortKey(b) - sortKey(a))
         .slice(0, limit);
       // 无热度数据：保持静默（不显示空榜单）
       if (!ranked.length) return;

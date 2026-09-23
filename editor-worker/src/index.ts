@@ -416,7 +416,6 @@ function hotScore(hit: HitRecord): number {
 	const ageHours = Math.max((Date.now() - hit.lastAt) / HOUR_MS, 0);
 	return votes / Math.pow(ageHours + 2, GRAVITY);
 }
-
 function hitSlug(raw: unknown): string {
 	if (typeof raw !== "string") throw new HttpError(400, "缺少文章标识");
 	const slug = raw.trim();
@@ -453,10 +452,12 @@ async function recordHit(
 
 async function listHits(env: Cloudflare.Env, origin: string): Promise<Response> {
 	const hits = await readHits(env);
+	// 返回体里保留 score：前端「热门文章」榜单必须用同一个排序键，
+	// 否则前端只能拿 count 重排，会丢掉时间衰减（老文章靠累计量霸榜）。
+	// 排序键与显示值分离：score 用于排序，count 仍是对外的"总阅读量"。
 	const rows = Object.entries(hits)
 		.map(([slug, hit]) => ({ slug, ...hit, score: hotScore(hit) }))
-		.sort((a, b) => b.score - a.score || b.lastAt - a.lastAt)
-		.map(({ score: _score, ...row }) => row);
+		.sort((a, b) => b.score - a.score || b.lastAt - a.lastAt);
 	return json({ hits: rows }, 200, origin, env);
 }
 

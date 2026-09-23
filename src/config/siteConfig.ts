@@ -17,7 +17,7 @@ export const siteConfig: SiteConfig = {
 	// 站点代码版本（显示在导航栏 DaLi 标题右侧，如 v1.0.0）。
 	// 规则：每次更新网站代码就递增一位（小改动递增修订号，如 1.0.0→1.0.1）；
 	// 仅编辑文章内容不递增。递增后随代码同步部署，线上徽标即为当前版本。
-	version: "1.0.8",
+	version: "1.0.9",
 
 	// 站点描述
 	description: "个人学习笔记与文档站",
@@ -229,7 +229,7 @@ export const siteConfig: SiteConfig = {
 	// 分页配置
 	pagination: {
 		// 每页显示的文章数量
-		postsPerPage: 6,
+		postsPerPage: 7,
 	},
 
 	// 图像优化及响应式配置

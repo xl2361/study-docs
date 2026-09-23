@@ -261,11 +261,16 @@ const initialLayoutClass =
     // 延迟一点确保DOM完全加载
     setTimeout(initLayout, 50);
 
-    // 监听图片加载以重新计算布局
+    // 监听图片加载以重新计算布局（与 astro:page-load 里的同段逻辑共用
+    // 同一个 dataset 标记，避免两个入口对同一批图片重复绑定）
     const imgs = document.querySelectorAll('#post-list-container img');
     imgs.forEach(img => {
         // @ts-ignore
         if(img.complete) return;
+        // @ts-ignore
+        if (img.dataset.masonryBound === "1") return;
+        // @ts-ignore
+        img.dataset.masonryBound = "1";
         img.addEventListener('load', () => {
             applyMasonryLayout();
         });
@@ -316,10 +321,17 @@ const initialLayoutClass =
     setTimeout(initLayout, 50);
 
     // 监听图片加载
+    // 标记防止重复绑定：本脚本会被 swup 重复执行，且同一批 <img> 节点在
+    // 同一页内跨多次 astro:page-load 复用，无标记时每个事件都会再挂一遍
+    // load 监听器（实测单次事件新增 10 个），导致瀑布流重算被执行多次。
     const imgs = document.querySelectorAll('#post-list-container img');
     imgs.forEach(img => {
         // @ts-ignore
         if(img.complete) return;
+        // @ts-ignore
+        if (img.dataset.masonryBound === "1") return;
+        // @ts-ignore
+        img.dataset.masonryBound = "1";
         img.addEventListener('load', () => {
             applyMasonryLayout();
         });

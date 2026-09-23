@@ -68,7 +68,7 @@ export const sidebarLayoutConfig: SidebarLayoutConfig = {
 			},
 		},
 		{
-			// 组件类型：热门文章组件（按 /api/hits 打开次数降序）
+			// 组件类型：热门文章组件（按 /api/hits 返回的 score 降序，含时间衰减）
 			// 说明：榜单是独立组件，不参与分页，因此不存在跨页重复问题；
 			// 排序不要求实时，故保留在客户端填充，避免为计数重建整站。
 			type: "hotPosts",

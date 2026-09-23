@@ -49,8 +49,12 @@ const posts = (await getSortedPostsList()).map((post) => ({
 
 <script is:inline define:vars={{ postsJson: JSON.stringify(posts), limit }}>
   (function () {
-    const list = document.getElementById("hot-posts-list");
-    if (!list) return;
+    // 幂等保护：is:inline 脚本在每次 swup 站内导航后会重新执行，
+    // 若不拦截，每次导航都会再注册一个永久的 astro:page-load 监听器，
+    // 导致 /api/hits 重复请求（实测导航 2 次后单次事件触发 3 个请求并持续累加）。
+    if (window.__hotPostsBound) return;
+    window.__hotPostsBound = true;
+
     const meta = new Map();
     try {
       for (const p of JSON.parse(postsJson)) meta.set(p.slug, p);
@@ -58,7 +62,7 @@ const posts = (await getSortedPostsList()).map((post) => ({
       return;
     }
 
-    function render(rows) {
+    function render(rows, list) {
       // 排序键优先用接口返回的 score（与 worker 的降温公式一致）；
       // 若旧版接口只给 count，则退回按 count 降序，避免排名跳空。
       // 不能只用 count：那样会丢掉时间衰减，老文章靠累计量霸榜。
@@ -110,6 +114,10 @@ const posts = (await getSortedPostsList()).map((post) => ({
     }
 
     function load() {
+      // 每次重新查询：swup 导航会替换侧栏 DOM，闭包里缓存的旧节点已脱离文档，
+      // 向它写数据不会显示（表现为导航后榜单空白）。
+      const list = document.getElementById("hot-posts-list");
+      if (!list) return;
       fetch("/api/hits", {
         headers: { Accept: "application/json" },
         credentials: "same-origin",
@@ -117,13 +125,14 @@ const posts = (await getSortedPostsList()).map((post) => ({
         .then((res) => (res.ok ? res.json() : Promise.reject()))
         .then((data) => {
           const rows = Array.isArray(data?.hits) ? data.hits : [];
-          if (rows.length) render(rows);
+          if (rows.length) render(rows, list);
         })
         .catch(() => {
           /* 热度接口不可用时保持静默，不影响阅读 */
         });
     }
 
+    // 幂等保护已在 IIFE 顶部完成（见上方说明）。
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", load, { once: true });
     } else {

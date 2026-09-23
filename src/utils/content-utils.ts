@@ -1,23 +1,63 @@
 import { type CollectionEntry, getCollection } from "astro:content";
+import hitsSnapshot from "@constants/hits-snapshot.json";
 import I18nKey from "@i18n/i18nKey";
 import { i18n } from "@i18n/translation";
 import { getCategoryUrl } from "@utils/url-utils";
 
-// // Retrieve posts and sort them by publication date
+/**
+ * 文章 slug（去掉 .md/.mdx/.markdown 扩展名），与 PostCard 的 data-post-slug、
+ * 以及 /api/hits 返回的 slug 保持同一口径。
+ */
+function toSlug(id: string): string {
+	return id.replace(/\.(md|mdx|markdown)$/i, "");
+}
+
+/**
+ * 热度快照：slug -> 累计打开次数。
+ *
+ * 由 `scripts/fetch-hits-snapshot.ts` 在构建前从 /api/hits 拉取并落盘，
+ * 见 package.json 的 build 链。拿不到数据时为空对象，排序会退回标题序，
+ * 构建不会失败。
+ *
+ * 为什么用 count 而不是 score：score 含 HN gravity 时间衰减，用于侧栏
+ * 「热门文章」榜单（体现"近期热度"）；首页希望表达"读得最多的排前面"，
+ * 用纯累计量语义更直白，也避免与任何时间维度再度耦合。
+ */
+const hits: Record<string, number> = (() => {
+	const raw = (hitsSnapshot as { hits?: Record<string, unknown> })?.hits;
+	if (!raw || typeof raw !== "object") return {};
+	const out: Record<string, number> = {};
+	for (const [slug, count] of Object.entries(raw)) {
+		const n = Number(count);
+		if (Number.isFinite(n) && n > 0) out[slug] = n;
+	}
+	return out;
+})();
+
+function heatOf(id: string): number {
+	return hits[toSlug(id)] ?? 0;
+}
+
+/**
+ * 首页/归档等处文章列表的排序：按热度（累计打开次数）降序。
+ *
+ * 设计说明：
+ * - **不参与置顶**：列表顺序完全由热度决定（用户明确不需要置顶）。
+ * - **无热度数据的文章**排在末尾，它们之间按标题稳定排序，避免每次构建
+ *   因排序不稳定而导致顺序抖动。
+ * - 热度为构建期快照，故列表顺序随每次部署刷新。
+ */
 async function getRawSortedPosts() {
 	const allBlogPosts = await getCollection("posts", ({ data }) => {
 		return import.meta.env.PROD ? data.draft !== true : true;
 	});
 
 	const sorted = allBlogPosts.sort((a, b) => {
-		// 首先按置顶状态排序，置顶文章在前
-		if (a.data.pinned && !b.data.pinned) return -1;
-		if (!a.data.pinned && b.data.pinned) return 1;
-
-		// 如果置顶状态相同，则按发布日期排序
-		const dateA = new Date(a.data.published);
-		const dateB = new Date(b.data.published);
-		return dateA > dateB ? -1 : 1;
+		const heatA = heatOf(a.id);
+		const heatB = heatOf(b.id);
+		if (heatA !== heatB) return heatB - heatA;
+		// 同热度（含都为 0）：按标题本地化比较，保证顺序稳定可预期
+		return a.data.title.localeCompare(b.data.title, "zh-CN");
 	});
 	return sorted;
 }

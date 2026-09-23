@@ -718,7 +718,7 @@ function adjustMainContentPosition(
 			if (!isHome) {
 				mainContent.classList.add("mobile-main-no-banner");
 				if (window.innerWidth < 1024) {
-					mainContent.style.setProperty("top", "5.5rem", "important");
+					mainContent.style.setProperty("top", "4.5rem", "important");
 				} else {
 					mainContent.style.setProperty("top", bannerTargetTop, "important");
 				}
@@ -743,7 +743,7 @@ function adjustMainContentPosition(
 				// 移动端非首页：壁纸已隐藏，主内容从导航栏下方开始
 				mainContent.classList.add("mobile-main-no-banner");
 				mainContent.classList.add("no-banner-layout");
-				mainContent.style.setProperty("top", "5.5rem", "important");
+				mainContent.style.setProperty("top", "4.5rem", "important");
 				mainContent.style.setProperty("margin-top", "0", "important");
 				mainContent.style.position = "";
 				mainContent.style.minHeight = "";
@@ -789,7 +789,7 @@ function adjustMainContentPosition(
 		case "overlay":
 			// Overlay模式：使用紧凑布局，主内容从导航栏下方开始
 			mainContent.classList.add("no-banner-layout");
-			mainContent.style.setProperty("top", "5.5rem", "important");
+			mainContent.style.setProperty("top", "4.5rem", "important");
 			mainContent.style.setProperty("margin-top", "0", "important");
 			mainContent.style.position = "";
 			mainContent.style.minHeight = "";
@@ -798,14 +798,14 @@ function adjustMainContentPosition(
 		case "none":
 			// 无壁纸模式：主内容从导航栏下方开始
 			mainContent.classList.add("no-banner-layout");
-			mainContent.style.setProperty("top", "5.5rem", "important");
+			mainContent.style.setProperty("top", "4.5rem", "important");
 			mainContent.style.setProperty("margin-top", "0", "important");
 			mainContent.style.position = "";
 			mainContent.style.minHeight = "";
 			mainContent.style.transition = "";
 			break;
 		default:
-			mainContent.style.setProperty("top", "5.5rem", "important");
+			mainContent.style.setProperty("top", "4.5rem", "important");
 			mainContent.style.position = "";
 			mainContent.style.minHeight = "";
 			mainContent.style.transition = "";

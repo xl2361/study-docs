@@ -181,12 +181,12 @@ const mobileNonHomeBannerClass = !isHomePageCheck ? "mobile-hide-banner" : "";
 const mainPanelTop =
 	isBannerMode && isBackgroundEnabled
 		? `calc(${BANNER_HEIGHT}vh - ${MAIN_PANEL_OVERLAPS_BANNER_HEIGHT}rem)`
-		: "5.5rem";
+		: "4.5rem";
 
 // 当banner模式被禁用时，主内容区域应该始终从顶栏下面开始
-// 非首页在小于1024px时会通过 mobile-main-no-banner CSS类覆盖top值为5.5rem
+// 非首页在小于1024px时会通过 mobile-main-no-banner CSS类覆盖top值
 const finalMainPanelTop =
-	isBannerMode && isBackgroundEnabled ? mainPanelTop : "5.5rem";
+	isBannerMode && isBackgroundEnabled ? mainPanelTop : "4.5rem";
 
 // 获取响应式侧边栏配置
 const sidebarConfig = getResponsiveSidebarConfig();
@@ -316,7 +316,7 @@ const hasMultipleImages =
     id="top-row"
     class="z-50 pointer-events-none relative transition-all duration-700 mx-auto"
     class:list={[
-        stickyNavbar ? "h-18 fixed top-0 left-0 right-0 z-80" : "",
+        stickyNavbar ? "h-14 fixed top-0 left-0 right-0 z-80" : "",
         navbarWidthFull ? "" : "w-full xl:w-[92vw] max-w-(--page-width) px-0 md:px-4",
     ]}
 >

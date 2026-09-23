@@ -271,6 +271,10 @@ export const zh_TW: Translation = {
 	[Key.noRelatedPosts]: "暫無相關文章",
 	[Key.noRandomPosts]: "暫無隨機文章",
 
+	// 熱門文章榜單
+	[Key.hotPosts]: "熱門文章",
+	[Key.hotPostsEmpty]: "暫無數據",
+
 	// 加密
 	[Key.postEncrypted]: "本文已加密",
 

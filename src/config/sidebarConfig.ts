@@ -68,6 +68,25 @@ export const sidebarLayoutConfig: SidebarLayoutConfig = {
 			},
 		},
 		{
+			// 组件类型：热门文章组件（按 /api/hits 打开次数降序）
+			// 说明：榜单是独立组件，不参与分页，因此不存在跨页重复问题；
+			// 排序不要求实时，故保留在客户端填充，避免为计数重建整站。
+			type: "hotPosts",
+			// 是否启用该组件
+			enable: true,
+			// 组件位置
+			position: "sticky",
+			// 是否在文章详情页显示
+			showOnPostPage: false,
+			// 组件专属配置
+			specificConfig: {
+				hotPosts: {
+					// 显示的榜单条数
+					limit: 5,
+				},
+			},
+		},
+		{
 			// 组件类型：分类组件
 			type: "categories",
 			// 是否启用该组件

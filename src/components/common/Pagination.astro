@@ -13,39 +13,52 @@ interface Props {
 
 const { page, style } = Astro.props;
 
-const HIDDEN = -1;
-
 const className = Astro.props.class;
 
-const ADJ_DIST = 2;
-const VISIBLE = ADJ_DIST * 2 + 1;
+// 省略号占位符（等价 Django Paginator.ELLIPSIS）
+const HIDDEN = -1;
 
-// for test
-let count = 1;
-let l = page.currentPage;
-let r = page.currentPage;
-while (0 < l - 1 && r + 1 <= page.lastPage && count + 2 <= VISIBLE) {
-	count += 2;
-	l--;
-	r++;
-}
-while (0 < l - 1 && count < VISIBLE) {
-	count++;
-	l--;
-}
-while (r + 1 <= page.lastPage && count < VISIBLE) {
-	count++;
-	r++;
+// 页码窗口算法：移植 Django `Paginator.get_elided_page_range(number, *, on_each_side=3, on_ends=2)`
+// https://github.com/django/django/blob/main/django/core/paginator.py
+//
+// 原实现自推"总宽固定 5 格、动态扩左右"，卡片数量在 1~5 之间浮动，
+// 翻页时页码条宽度会跳动；Django 这版宽度稳定、行为有权威参照：
+//   当前页两侧各 on_each_side 页 + 首尾各 on_ends 页，中间用省略号折叠。
+// 例：50 页，当前第 10 页 → 1, 2, …, 8, 9, 10, 11, 12, 13, …, 49, 50
+const ON_EACH_SIDE = 3;
+const ON_ENDS = 2;
+
+const numPages = page.lastPage;
+const current = page.currentPage;
+
+const elidedPageRange: number[] = [];
+if (numPages <= (ON_EACH_SIDE + ON_ENDS) * 2) {
+	// 页数太少，无需折叠：全部列出
+	for (let i = 1; i <= numPages; i++) elidedPageRange.push(i);
+} else {
+	if (current > ON_EACH_SIDE + ON_ENDS + 2) {
+		// 左侧折叠：首部 ON_ENDS 页 + 省略号 + 当前页往前 ON_EACH_SIDE 页
+		for (let i = 1; i <= ON_ENDS; i++) elidedPageRange.push(i);
+		elidedPageRange.push(HIDDEN);
+		for (let i = current - ON_EACH_SIDE; i <= current; i++)
+			elidedPageRange.push(i);
+	} else {
+		for (let i = 1; i <= current; i++) elidedPageRange.push(i);
+	}
+
+	if (current < numPages - ON_EACH_SIDE - ON_ENDS - 1) {
+		// 右侧折叠：当前页往后 ON_EACH_SIDE 页 + 省略号 + 尾部 ON_ENDS 页
+		for (let i = current + 1; i <= current + ON_EACH_SIDE; i++)
+			elidedPageRange.push(i);
+		elidedPageRange.push(HIDDEN);
+		for (let i = numPages - ON_ENDS + 1; i <= numPages; i++)
+			elidedPageRange.push(i);
+	} else {
+		for (let i = current + 1; i <= numPages; i++) elidedPageRange.push(i);
+	}
 }
 
-let pages: number[] = [];
-if (l > 1) pages.push(1);
-if (l === 3) pages.push(2);
-if (l > 3) pages.push(HIDDEN);
-for (let i = l; i <= r; i++) pages.push(i);
-if (r < page.lastPage - 2) pages.push(HIDDEN);
-if (r === page.lastPage - 2) pages.push(page.lastPage - 1);
-if (r < page.lastPage) pages.push(page.lastPage);
+const pages = elidedPageRange;
 
 const getPageUrl = (p: number) => {
 	if (p === 1) return "/";

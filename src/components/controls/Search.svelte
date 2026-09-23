@@ -225,9 +225,9 @@ onMount(() => {
 });
 </script>
 
-<div class="contents lg:block lg:relative lg:w-60 lg:mr-2">
+<div class="contents lg:block lg:relative lg:w-52 lg:mr-2">
     <!-- desktop search bar -->
-    <div id="search-bar" class="hidden lg:flex items-center h-11 w-full rounded-lg
+    <div id="search-bar" class="hidden lg:flex items-center h-9 w-full rounded-lg
           bg-black/4 hover:bg-black/6 focus-within:bg-black/6
           dark:bg-white/5 dark:hover:bg-white/10 dark:focus-within:bg-white/10
     ">
@@ -248,7 +248,7 @@ onMount(() => {
 
     <!-- mobile toggle btn -->
     <button on:click={togglePanel} aria-label="Search Panel" id="search-switch"
-            class="btn-plain scale-animation lg:hidden! rounded-lg w-9 h-9 md:w-11 md:h-11 active:scale-90">
+            class="btn-plain scale-animation lg:hidden! rounded-lg w-9 h-9 md:w-9 md:h-9 active:scale-90">
         <Icon icon="material-symbols:search" class="text-[1.25rem]"></Icon>
     </button>
 

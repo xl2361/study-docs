@@ -10,7 +10,8 @@ export type WidgetComponentType =
 	| "calendar"
 	| "music"
 	| "siteInfo"
-	| "dynamic";
+	| "dynamic"
+	| "hotPosts";
 
 export type WidgetComponentConfig = {
 	type: WidgetComponentType; // 组件类型
@@ -41,10 +42,16 @@ export type WidgetSpecificConfig = {
 	ad?: AdConfig; // 广告组件专用配置
 	siteInfo?: SiteInfoConfig; // 站点信息组件专用配置
 	dynamic?: DynamicWidgetConfig; // 最新动态组件专用配置
+	hotPosts?: HotPostsConfig; // 热门文章组件专用配置
 };
 
 export type DynamicWidgetConfig = {
 	limit?: number; // 显示的最新动态数量，默认 3
+};
+
+// 热门文章组件专用配置
+export type HotPostsConfig = {
+	limit?: number; // 显示的榜单条数，默认 5
 };
 
 // 站点信息组件专用配置

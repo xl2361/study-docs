@@ -277,6 +277,10 @@ export const en: Translation = {
 	[Key.noRelatedPosts]: "No related posts",
 	[Key.noRandomPosts]: "No random posts",
 
+	// Hot posts ranking
+	[Key.hotPosts]: "Popular Posts",
+	[Key.hotPostsEmpty]: "No data yet",
+
 	// Encrypted
 	[Key.postEncrypted]: "This post is encrypted",
 

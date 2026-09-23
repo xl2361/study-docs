@@ -263,6 +263,10 @@ enum I18nKey {
 
 	// 相关文章推荐
 	relatedPosts = "relatedPosts",
+
+	// 热门文章榜单
+	hotPosts = "hotPosts",
+	hotPostsEmpty = "hotPostsEmpty",
 	randomPosts = "randomPosts",
 	smartRecommend = "smartRecommend",
 	randomRecommend = "randomRecommend",

@@ -1,0 +1,129 @@
+---
+import WidgetLayout from "@/components/common/WidgetLayout.astro";
+import I18nKey from "@/i18n/i18nKey";
+import { i18n } from "@/i18n/translation";
+import type { WidgetComponentConfig } from "@/types/config";
+import { getPostUrlBySlug } from "@/utils/url-utils";
+import { getSortedPostsList } from "@/utils/content-utils";
+
+interface Props {
+	class?: string;
+	style?: string;
+	widgetConfig?: WidgetComponentConfig;
+}
+
+const { class: className, style, widgetConfig } = Astro.props;
+
+const showTitle = widgetConfig?.showTitle !== false;
+const limit = widgetConfig?.specificConfig?.hotPosts?.limit ?? 5;
+
+// 只把「标题 / 链接 / slug」烧进页面，实际的顺序与浏览量在客户端按
+// /api/hits 填充。这样做的原因：
+// 1) 静态产物不可能包含运行时才产生的计数，构建期无法排序；
+// 2) 榜单是独立组件，不参与分页，因此客户端重排不会造成跨页错位；
+// 3) 构建期数据与运行时计数解耦，文章改名/删除后链接依然有效。
+const posts = (await getSortedPostsList()).map((post) => ({
+	slug: post.id.replace(/\.(md|mdx|markdown)$/i, ""),
+	title: post.data.title,
+	url: getPostUrlBySlug(post.id),
+}));
+---
+
+<WidgetLayout
+  name={i18n(I18nKey.hotPosts)}
+  showTitle={showTitle}
+  id="hot-posts"
+  class={className}
+  style={style}
+>
+  <ol id="hot-posts-list" class="flex flex-col gap-1 pb-2" data-limit={limit}>
+    {
+      posts.length === 0 && (
+        <li class="text-sm text-neutral-500 dark:text-neutral-400 px-2 py-1">
+          {i18n(I18nKey.hotPostsEmpty)}
+        </li>
+      )
+    }
+  </ol>
+</WidgetLayout>
+
+<script is:inline define:vars={{ postsJson: JSON.stringify(posts), limit }}>
+  (function () {
+    const list = document.getElementById("hot-posts-list");
+    if (!list) return;
+    const meta = new Map();
+    try {
+      for (const p of JSON.parse(postsJson)) meta.set(p.slug, p);
+    } catch {
+      return;
+    }
+
+    function render(rows) {
+      const ranked = rows
+        .filter((r) => r && meta.has(r.slug) && Number(r.count) > 0)
+        .sort((a, b) => Number(b.count) - Number(a.count))
+        .slice(0, limit);
+      // 无热度数据：保持静默（不显示空榜单）
+      if (!ranked.length) return;
+
+      const frag = document.createDocumentFragment();
+      ranked.forEach((row, i) => {
+        const p = meta.get(row.slug);
+        const li = document.createElement("li");
+        const a = document.createElement("a");
+        a.href = p.url;
+        a.className =
+          "w-full flex items-center gap-2.5 rounded-lg px-2 py-2 transition-all " +
+          "hover:bg-(--btn-plain-bg-hover) active:bg-(--btn-plain-bg-active) " +
+          "text-neutral-700 hover:text-(--primary) dark:text-neutral-300 dark:hover:text-(--primary)";
+
+        const idx = document.createElement("span");
+        // 前三名高亮，其余弱化
+        idx.className =
+          "shrink-0 w-5 h-5 rounded-md text-xs font-bold flex items-center justify-center " +
+          (i < 3
+            ? "bg-(--primary) text-white dark:text-black/70"
+            : "bg-black/5 dark:bg-white/10 text-neutral-500 dark:text-neutral-400");
+        idx.textContent = String(i + 1);
+
+        const title = document.createElement("span");
+        title.className =
+          "flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-left";
+        title.textContent = p.title;
+
+        const count = document.createElement("span");
+        count.className =
+          "shrink-0 text-xs font-bold text-neutral-400 dark:text-neutral-500 tabular-nums";
+        count.textContent = String(row.count);
+
+        a.append(idx, title, count);
+        li.appendChild(a);
+        frag.appendChild(li);
+      });
+
+      list.replaceChildren(frag);
+    }
+
+    function load() {
+      fetch("/api/hits", {
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+      })
+        .then((res) => (res.ok ? res.json() : Promise.reject()))
+        .then((data) => {
+          const rows = Array.isArray(data?.hits) ? data.hits : [];
+          if (rows.length) render(rows);
+        })
+        .catch(() => {
+          /* 热度接口不可用时保持静默，不影响阅读 */
+        });
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", load, { once: true });
+    } else {
+      load();
+    }
+    document.addEventListener("astro:page-load", load);
+  })();
+</script>

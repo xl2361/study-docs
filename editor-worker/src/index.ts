@@ -389,6 +389,34 @@ async function requireSession(
 
 const HITS_KEY = "hits:v1";
 
+// 热度排序：按"累计量 + 近期活跃"综合加权，避免老文章靠累计量永久霸榜，
+// 同时避免"最后一次阅读时间"完全压过累计量。
+//
+// 采用 Hacker News 的 gravity 形态：
+//   score = max(count - 1, 0) / (ageHours + 2) ^ GRAVITY
+//
+// - ageHours 用 lastAt（最后一次被阅读）而非发布时间：老文章被重新阅读也能复活。
+// - +2 是 HN 的平滑项，防止刚读过的文章出现除零/爆分。
+// - GRAVITY 决定时间衰减强度。**不要照搬 Reddit 的 45000 秒槽位**：
+//   Reddit 那套面向秒级活跃的新闻流，12.5 小时就 +1 分，
+//   而 count 的 log10 量程只有 0~3，套到博客上会让"昨天读过 1 次"压过
+//   "今天读过 1000 次"，票数几乎失效（排序退化成纯按 lastAt 排）。
+//   取 GRAVITY=0.8 使时间差与票数量程匹配：
+//     1 天未读 ≈ 需 4.4 倍票数追平；3 天 ≈ 12 倍；7 天 ≈ 28 倍。
+//   即高票文章仍有分量，但被冷落一周后会被近期活跃文章超越。
+//
+// 参考：http://www.righto.com/2013/11/how-hacker-news-ranking-really-works.html
+// 注意：只影响返回列表的顺序，不改动 KV 里的 count 累计值，
+// 因此前端显示的"总阅读量"语义不变，且本改动可随时回滚。
+const GRAVITY = 0.8;
+const HOUR_MS = 3600000;
+
+function hotScore(hit: HitRecord): number {
+	const votes = Math.max(hit.count - 1, 0);
+	const ageHours = Math.max((Date.now() - hit.lastAt) / HOUR_MS, 0);
+	return votes / Math.pow(ageHours + 2, GRAVITY);
+}
+
 function hitSlug(raw: unknown): string {
 	if (typeof raw !== "string") throw new HttpError(400, "缺少文章标识");
 	const slug = raw.trim();
@@ -426,8 +454,9 @@ async function recordHit(
 async function listHits(env: Cloudflare.Env, origin: string): Promise<Response> {
 	const hits = await readHits(env);
 	const rows = Object.entries(hits)
-		.map(([slug, hit]) => ({ slug, ...hit }))
-		.sort((a, b) => b.count - a.count || b.lastAt - a.lastAt);
+		.map(([slug, hit]) => ({ slug, ...hit, score: hotScore(hit) }))
+		.sort((a, b) => b.score - a.score || b.lastAt - a.lastAt)
+		.map(({ score: _score, ...row }) => row);
 	return json({ hits: rows }, 200, origin, env);
 }
 

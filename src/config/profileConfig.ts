@@ -11,10 +11,7 @@ export const profileConfig: ProfileConfig = {
 	// 名字
 	name: "我的学习小铺",
 
-	// 个人签名
-	bio: "学而时习之",
-
-	// 链接配置
+	// 链接配置（当前 Profile 组件不渲染，保留配置以兼容类型定义）
 	// 已经预装的图标集：fa7-brands，fa7-regular，fa7-solid，material-symbols，simple-icons
 	// 访问https://icones.js.org/ 获取图标代码，
 	// 如果想使用尚未包含相应的图标集，则需要安装它

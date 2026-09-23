@@ -5,7 +5,6 @@ import PostCard from "@/components/layout/PostCard.astro";
 import { siteConfig } from "@/config";
 
 const { page } = Astro.props;
-const candidates: PostEntry[] = Astro.props.candidates ?? [];
 
 let delay = 0;
 const interval = 50;
@@ -54,32 +53,6 @@ const initialLayoutClass =
         style={`animation-delay: calc(var(--content-delay) + ${delay++ * interval}ms);`}
       />
     ))
-  }
-  {
-    // 隐藏的热度候选卡：用于客户端将高热度文章上浮显示
-    candidates
-      .filter(
-        (candidate) =>
-          !page.data.some((entry: PostEntry) => entry.id === candidate.id),
-      )
-      .map((candidate) => (
-        <PostCard
-          entry={candidate as PostEntry}
-          title={candidate.data.title}
-          tags={candidate.data.tags}
-          category={candidate.data.category}
-          published={candidate.data.published}
-          updated={candidate.data.updated}
-          url={getPostUrlBySlug(candidate.id)}
-          image={candidate.data.image}
-          description={candidate.data.description}
-          draft={candidate.data.draft}
-          pinned={false}
-          password={!!candidate.data.password}
-          class:list="post-card-item heat-candidate hidden"
-          style=""
-        />
-      ))
   }
 </div>
 
@@ -299,86 +272,18 @@ const initialLayoutClass =
     });
   });
 
-  // -- 热度排序：读取热搜榜，按热度重排卡片，跨页候选卡按热度上浮显示 --
-  /**
-   * 按"打开次数"降序：次数越多越靠前。
-   * 之前用的是"榜单里的名次索引"，未上榜文章一律 MAX_SAFE_INTEGER，
-   * 导致跨页上浮的候选卡（可能只有 1~2 次）会插在高热度文章之间。
-   * 改为直接比较 count 数值，无热度的文章按原有相对顺序沉底（稳定排序）。
-   */
-  function heatScoreOrder(counts: Map<string, number>) {
-    return (a: Element, b: Element) => {
-      const aPinned = a.classList.contains("pinned");
-      const bPinned = b.classList.contains("pinned");
-      if (aPinned !== bPinned) return aPinned ? -1 : 1;
-      const as = a.getAttribute("data-post-slug") || "";
-      const bs = b.getAttribute("data-post-slug") || "";
-      const ac = counts.get(as);
-      const bc = counts.get(bs);
-      // 都有热度：按次数降序
-      if (typeof ac === "number" && typeof bc === "number") return bc - ac;
-      // 只有一方有热度：有热度的在前
-      if (typeof ac === "number") return -1;
-      if (typeof bc === "number") return 1;
-      // 都无热度：保持原相对顺序
-      return 0;
-    };
-  }
+  // 说明：首页文章顺序完全由构建期决定（置顶 → 发布日期），
+  // 客户端不再对列表做任何重排。热度只用于侧边栏独立的「热门文章」组件，
+  // 不参与分页，从根本上避免"同一篇文章同时出现在两页"这类跨页不一致问题。
+  // 历史教训见 AAAA/文档/稳定版归档.md v1.0.6 / v1.0.7。
 
-  function initHeatSort() {
-    const container = document.getElementById("post-list-container");
-    if (!container) return;
-    void fetch("/api/hits", {
-      headers: { Accept: "application/json" },
-      credentials: "same-origin",
-    })
-      .then((response) => (response.ok ? response.json() : Promise.reject()))
-      .then((data) => {
-        const rows: { slug: string; count?: number }[] = Array.isArray(data?.hits) ? data.hits : [];
-        if (!rows.length) return;
-        const allItems = Array.from(container.querySelectorAll(".post-card-item"));
-        if (allItems.length < 2) return;
-
-        // 热度 > 0 的候选卡：移除 hidden 参与显示；其余候选保持隐藏并沉底
-        const heated = new Set(rows.map((r) => r.slug));
-        allItems.forEach((item) => {
-          const slug = item.getAttribute("data-post-slug") || "";
-          if (item.classList.contains("heat-candidate")) {
-            if (heated.has(slug)) {
-              item.classList.remove("hidden");
-            } else {
-              item.classList.add("hidden");
-            }
-          }
-        });
-
-        // 排序：置顶 → 打开次数降序（含上浮候选）→ 未上榜保持原相对顺序
-        const counts = new Map<string, number>();
-        for (const r of rows) {
-          if (r && typeof r.slug === "string") {
-            counts.set(r.slug, typeof r.count === "number" ? r.count : 0);
-          }
-        }
-        const visible = allItems.filter((item) => !item.classList.contains("hidden"));
-        const visibleSorted = visible.sort(heatScoreOrder(counts));
-        const hiddenItems = allItems.filter((item) => item.classList.contains("hidden"));
-        for (const item of visibleSorted) container.appendChild(item);
-        for (const item of hiddenItems) container.appendChild(item);
-        // 置顶卡片顺序可能变化，暴露到布局脚本重新布局
-        window.dispatchEvent(new CustomEvent("post-heat-sorted"));
-      })
-      .catch(() => {});
-  }
-
-  // 页面加载与导航后排序一次
-  document.addEventListener("DOMContentLoaded", () => setTimeout(initHeatSort, 120));
-  document.addEventListener("astro:page-load", () => setTimeout(initHeatSort, 120));
-  document.addEventListener("swup:contentReplaced", () => setTimeout(initHeatSort, 120));
-  // 热度重排后重新计算瀑布流高度
-  window.addEventListener("post-heat-sorted", () => {
-    const container = document.getElementById("post-list-container");
-    if (container?.classList.contains("grid-mode")) applyMasonryLayout();
+  // 页面显示时也初始化布局（处理页面切换）
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) {
+      setTimeout(initLayout, 100);
+    }
   });
+
 
   // 页面显示时也初始化布局（处理页面切换）
   document.addEventListener("visibilitychange", function () {

@@ -276,6 +276,10 @@ export const ko: Translation = {
 	[Key.noRelatedPosts]: "관련 게시글이 없습니다",
 	[Key.noRandomPosts]: "무작위 게시글이 없습니다",
 
+	// 인기 게시글 순위
+	[Key.hotPosts]: "인기 게시글",
+	[Key.hotPostsEmpty]: "데이터가 없습니다",
+
 	// Encrypted
 	[Key.postEncrypted]: "이 게시글은 암호화되어 있습니다",
 

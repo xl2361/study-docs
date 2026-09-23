@@ -279,6 +279,10 @@ export const ru: Translation = {
 	[Key.noRelatedPosts]: "Нет похожих статей",
 	[Key.noRandomPosts]: "Нет случайных статей",
 
+	// Рейтинг популярных статей
+	[Key.hotPosts]: "Популярные статьи",
+	[Key.hotPostsEmpty]: "Пока нет данных",
+
 	// Зашифровано
 	[Key.postEncrypted]: "Эта статья зашифрована",
 

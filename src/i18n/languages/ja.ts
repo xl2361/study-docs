@@ -276,6 +276,10 @@ export const ja: Translation = {
 	[Key.noRelatedPosts]: "関連記事がありません",
 	[Key.noRandomPosts]: "ランダム記事がありません",
 
+	// 人気記事ランキング
+	[Key.hotPosts]: "人気記事",
+	[Key.hotPostsEmpty]: "データがありません",
+
 	// 暗号化
 	[Key.postEncrypted]: "この記事は暗号化されています",
 

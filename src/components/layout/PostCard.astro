@@ -20,15 +20,12 @@ interface Props {
 	password?: boolean;
 	style: string;
 }
-const { entry, title, url, published, tags, pinned, password, style } =
-	Astro.props;
+const { entry, title, url, tags, pinned, password, style } = Astro.props;
 const className = Astro.props.class;
-const { remarkPluginFrontmatter } = await render(entry);
-const minutes = remarkPluginFrontmatter.minutes;
-const dateStr = published.toLocaleDateString("zh-CN", {
-	month: "2-digit",
-	day: "2-digit",
-});
+// 说明：卡片不再显示发布日期与阅读时长，故不再从 remarkPluginFrontmatter 取 minutes。
+// render() 保留：它负责执行 remark 插件链（阅读时长等 frontmatter 由插件注入），
+// 移除会改变构建期行为，非本次需求所需。
+await render(entry);
 ---
 
 <div
@@ -66,10 +63,7 @@ const dateStr = published.toLocaleDateString("zh-CN", {
     </div>
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-black/30 dark:text-white/30">
       {pinned && <span class="text-(--primary) font-medium">置顶</span>}
-      {pinned && <span>·</span>}
-      <span class="whitespace-nowrap">{dateStr}</span>
-      <span>·</span>
-      <span class="whitespace-nowrap">{minutes}分钟</span>
+      {pinned && tags && tags.length > 0 && <span>·</span>}
       {tags && tags.length > 0 && tags.slice(0, 3).map((tag) => (
         <a href={getTagUrl(tag)} class="transition hover:text-(--primary) whitespace-nowrap">#{tag.trim()}</a>
       ))}

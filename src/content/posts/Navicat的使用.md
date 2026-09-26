@@ -31,7 +31,6 @@ tags: []
 
 1. 点击左上角 **「连接」** 按钮
 2. 选择数据库类型（如 **MySQL**）
-
   ![新建数据库连接-1](/uploads/images/2026-03-26/c010e768-0776-47bf-9d32-aa4f8bb9f052.png)
 3. 填写连接信息：
   - **连接名**：自定义名称，方便识别，最好包含IP信息，方便通过连接名就可以知道对应的服务器的IP是什么（如：本地测试库-127.0.0.1、生产环境库-10.3.8.221）
@@ -135,10 +134,8 @@ tags: []
 
 
 3. 设置索引
-
   ![设置索引](/uploads/images/2026-03-26/a6a1ffb9-584d-4868-b7fc-95e7349fc4a5.png)
 4. 点击 **「保存」**（或 Ctrl+S），填写表名。
-
   ![填写表名](/uploads/images/2026-03-26/83414cdf-4491-4fd8-9b69-04501510a570.png)
 
 **常用字段类型参考：**
@@ -233,7 +230,6 @@ TINYINT(1)        -- 布尔值（0或1）
 2. 选择导出格式：**Excel 文件**
   ![导出excel-2](/uploads/images/2026-03-26/856a8e66-7c91-47e2-aec2-bf62c0447fe6.png)
 3. 选择要导出的表以及要导出的目录。默认就是第一步你选中的那个表，不需要重新设置要导出的表或者也不需要添加其他要导出的表，就直接下一步即可。
-
   ![导出excel-3](/uploads/images/2026-03-26/0e9787c6-0ec0-4a27-b3c5-4b8f00c7d7f4.png)
 4. 选择要导出的字段（可全选或部分选择），点击 **「下一步」**
   ![导出excel-4](/uploads/images/2026-03-26/0ce74fad-8e88-40d0-8d9e-bfbda6f7ea5a.png)
@@ -263,16 +259,12 @@ TINYINT(1)        -- 布尔值（0或1）
 2. 选择导入格式：**Excel 文件**
   ![导入excel-2](/uploads/images/2026-03-26/7ffec7e5-8ee4-462c-bb97-044008d69abc.png)
 3. 选择要导入的Excel文件
-
   ![导入excel-3](/uploads/images/2026-03-26/91a36154-c044-44cb-9291-b58dde01ffbb.png)
 4. 设置开始导入行、时间格式等信息
-
   ![导入excel-4](/uploads/images/2026-03-26/bc4c38a8-c7b9-4bcf-9b63-ab3dc9696e7b.png)
 5. 下一步到如下界面，配置字段映射（Excel列 ↔ 表字段）
-
   ![导入excel-5](/uploads/images/2026-03-26/bf853bd2-96e3-4ce4-b021-c2cfc8dd7602.png)
 6. 设置导入模式
-
   ![导入excel-6](/uploads/images/2026-03-26/a4b42d27-404c-431b-ae37-ff280d5f98fc.png)
 7. 点击 **「开始」** 执行完成点击 **「关闭」**
   ![导入excel-7](/uploads/images/2026-03-26/8cbf6db3-cfb2-4290-9492-c58b943a93ca.png)
@@ -348,6 +340,8 @@ DELETE FROM t_user WHERE create_time < '2024-01-01';
 
 1. 进入表中，选中你要操作的记录 → **「右键」**
 2. 根据你的需求选择 **Insert语句** 或者 **Update语句**
+
+![](/uploads/images/2026-09-26/4778edd7-3bcd-465e-9c00-9e6a56caad04.png)
 
 ![](blob:https://dayu-study.pages.dev/d4d735fc-2e93-40ea-b494-60c4f6679a51)
 

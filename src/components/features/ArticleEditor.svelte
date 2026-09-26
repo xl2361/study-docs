@@ -571,6 +571,13 @@ async function createEditor(operation: number) {
 				// 扩展 Image：开启右下角拖拽缩放；并重写 markdown 序列化，
 				// 让调整后的尺寸（width × height）写入 title 字段
 				// （格式 "WxH"），保存后重新打开编辑器仍保留尺寸。
+				//
+				// 另一处关键扩展：新增 data-real-src 属性。
+				// 上传后的图片在「保存文章」之前只暂存在服务端 KV，正式路径
+				// 取不到内容，因此编辑器里用本地 blob URL 预览（src），
+				// 正式路径存放在 data-real-src。序列化 markdown 时优先取
+				// data-real-src，避免把只在当前浏览器会话有效的 blob:
+				// 地址写进文章（否则保存后重新打开就是死链，图片"消失"）。
 				image.default
 					.configure({
 						resize: {
@@ -582,6 +589,12 @@ async function createEditor(operation: number) {
 						},
 					})
 					.extend({
+						addAttributes() {
+							return {
+								...this.parent?.(),
+								"data-real-src": { default: null },
+							};
+						},
 						renderMarkdown: (node: {
 							attrs?: {
 								src?: string;
@@ -589,9 +602,15 @@ async function createEditor(operation: number) {
 								title?: string;
 								width?: number | null;
 								height?: number | null;
+								"data-real-src"?: string | null;
 							};
 						}) => {
-							const src = node.attrs?.src ?? "";
+							// blob: 地址只在当前会话有效，序列化时必须换成正式路径
+							const raw = node.attrs?.src ?? "";
+							const src =
+								raw.startsWith("blob:") && node.attrs?.["data-real-src"]
+									? (node.attrs["data-real-src"] as string)
+									: raw;
 							const alt = node.attrs?.alt ?? "";
 							const w = node.attrs?.width;
 							const h = node.attrs?.height;
@@ -2289,12 +2308,18 @@ function insertImages(files: File[]): boolean {
 		let uploaded = 0;
 		try {
 			for (const file of files) {
-				await uploadImageFile(file);
-				// 图片已暂存在服务端，但尚未提交到仓库，此刻正式路径取不到内容；
-				// 先用本地 object URL 预览，避免损坏图。保存文章时位图会随
-				// 同一次 commit 落库，届时正文里的正式路径才真正可用。
+				const realSrc = await uploadImageFile(file);
+				// 图片暂存在服务端 KV，「保存文章」之前正式路径取不到内容。
+				// src 用本地 blob URL 做即时预览（避免 404 损坏图），
+				// 正式路径存进 data-real-src；序列化 markdown 时
+				// renderMarkdown 会优先取 data-real-src（见扩展定义），
+				// 保证保存的文章里是可长期访问的正式路径。
 				const localSrc = previewSrcFor(file);
-				current.chain().focus().setImage({ src: localSrc }).run();
+				current
+					.chain()
+					.focus()
+					.setImage({ src: localSrc, "data-real-src": realSrc })
+					.run();
 				uploaded++;
 				uploadNotice = `正在上传图片…（${uploaded}/${files.length}）`;
 			}

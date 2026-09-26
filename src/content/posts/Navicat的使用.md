@@ -343,7 +343,6 @@ DELETE FROM t_user WHERE create_time < '2024-01-01';
 
 ![](/uploads/images/2026-09-26/4778edd7-3bcd-465e-9c00-9e6a56caad04.png)
 
-![](blob:https://dayu-study.pages.dev/d4d735fc-2e93-40ea-b494-60c4f6679a51)
 
 **推荐命名规范**
 

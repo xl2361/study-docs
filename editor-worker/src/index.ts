@@ -700,6 +700,14 @@ function validateMarkdown(content: string): void {
 		throw new HttpError(400, "Frontmatter 格式不正确");
 	if (!/^title\s*:/m.test(normalized.slice(4, end)))
 		throw new HttpError(400, "Frontmatter 缺少 title");
+	// 兜底：blob: 地址只在单个浏览器会话内有效，写进文章即成死链
+	// （历史上曾因此导致"粘贴图片保存后消失"）。服务端最终防线，
+	// 防止任何前端漏网路径把 blob: 带进仓库。
+	if (/!\[[^\]]*\]\(blob:/m.test(normalized))
+		throw new HttpError(
+			400,
+			"文章中包含 blob: 临时图片地址（本会话预览用，无法长期访问）。请刷新编辑器后重新粘贴图片再保存。",
+		);
 }
 
 function updateFrontmatterDate(content: string): string {

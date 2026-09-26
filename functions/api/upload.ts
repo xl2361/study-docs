@@ -1,5 +1,5 @@
-import type { PagesEnv } from "../../_lib/auth";
-import { fetchEditor } from "../../_lib/auth";
+import type { PagesEnv } from "../_lib/auth";
+import { fetchEditor } from "../_lib/auth";
 
 // 图片上传的同域代理：前端 POST JSON { dataUrl } 到这里，
 // 由本函数带上会话 Cookie 转发给 editor-worker 的 /api/upload。

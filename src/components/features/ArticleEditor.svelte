@@ -568,8 +568,14 @@ async function createEditor(operation: number) {
 				PermissiveCode,
 				markdown.Markdown,
 				table.TableKit,
-				// 扩展 Image：开启右下角拖拽缩放；并重写 markdown 序列化，
-				// 让调整后的尺寸（width × height）写入 title 字段
+				// 扩展 Image：开启拖拽缩放 + 重写 markdown 序列化。
+				//
+				// 缩放方向：四个角（top-left / top-right / bottom-right /
+				// bottom-left）。注意 TipTap 的方向枚举是这些全名，
+				// 早期误写成 "se" 是无效值（不会渲染手柄）。
+				// 手柄样式见 .tiptap-host 下的 CSS（蓝色边框 + 四角蓝色圆点）。
+				//
+				// 尺寸持久化：调整后的 width × height 写入 title 字段
 				// （格式 "WxH"），保存后重新打开编辑器仍保留尺寸。
 				//
 				// 另一处关键扩展：新增 data-real-src 属性。
@@ -582,7 +588,12 @@ async function createEditor(operation: number) {
 					.configure({
 						resize: {
 							enabled: true,
-							directions: ["se"],
+							directions: [
+								"top-left",
+								"top-right",
+								"bottom-right",
+								"bottom-left",
+							],
 							minWidth: 80,
 							minHeight: 60,
 							alwaysPreserveAspectRatio: true,
@@ -3110,5 +3121,39 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   .tiptap-host :global(.ProseMirror pre code) { padding-left: .7rem !important; }
   .tiptap-host :global(.ec-line-gutter) { width: 1.55rem; padding-left: .4rem; }
   .tiptap-host :global(.ec-line-gutter) { border-right: 1px solid color-mix(in srgb, currentColor 22%, transparent); }
+
+  /* —— 图片缩放 UI：点击图片 → 蓝色边框 + 四角蓝色圆点，拖拽改尺寸 —— */
+  /* 容器：未选中时无边框 */
+  .tiptap-host :global([data-resize-container]) { display: inline-block; position: relative; max-width: 100%; }
+  /* 选中态（ProseMirror 给选中的图片节点加 selectednode 类）：蓝色实线边框 */
+  .tiptap-host :global(.ProseMirror img.ProseMirror-selectednode),
+  .tiptap-host :global(.ProseMirror img[data-resize-selected]) {
+    outline: 1px solid #3b82f6 !important;
+    outline-offset: 0;
+  }
+  /* 四角圆点：默认隐藏，选中/悬停时显示 */
+  .tiptap-host :global([data-resize-handle]) {
+    width: 10px !important;
+    height: 10px !important;
+    background: #3b82f6 !important;
+    border: 1.5px solid #fff !important;
+    border-radius: 999px !important;
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, .5) !important;
+    box-sizing: border-box !important;
+    opacity: 0 !important;
+    transition: opacity .12s ease !important;
+    z-index: 5 !important;
+  }
+  /* 悬停图片容器 或 正在拖拽(data-resize-state) 时显示手柄 */
+  .tiptap-host :global([data-resize-container]:hover [data-resize-handle]),
+  .tiptap-host :global([data-resize-container][data-resize-state="true"] [data-resize-handle]) {
+    opacity: 1 !important;
+  }
+  /* 四个角的位置微调：让圆点压在边框交点上（TipTap 已按方向定位，这里只做居中偏移） */
+  .tiptap-host :global([data-resize-handle="top-left"]) { transform: translate(-50%, -50%) !important; }
+  .tiptap-host :global([data-resize-handle="top-right"]) { transform: translate(50%, -50%) !important; }
+  .tiptap-host :global([data-resize-handle="bottom-right"]) { transform: translate(50%, 50%) !important; }
+  .tiptap-host :global([data-resize-handle="bottom-left"]) { transform: translate(-50%, 50%) !important; }
+
   @media (max-width: 760px) { .toolbar { top: 3.6rem; } }
 </style>

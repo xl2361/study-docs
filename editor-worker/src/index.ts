@@ -248,6 +248,11 @@ async function updateArticles(
 	if (pending.size > 100 || totalBytes > 5 * 1024 * 1024)
 		throw new HttpError(413, "本轮修改内容过多，请分批更新");
 
+	// 取出暂存图片，与文章改动并入同一次 commit：
+	// 这样"图片可见"和"文章可见"落在同一个构建周期，
+	// 避免上传后立刻引用却 404（渲染成损坏图）的问题。
+	const staged = await readStagedImages(env);
+
 	const parent = await githubRequest<{ tree?: { sha?: string } }>(
 		env,
 		`/repos/${repoPath(env)}/git/commits/${headSha}`,
@@ -260,16 +265,24 @@ async function updateArticles(
 			method: "POST",
 			body: JSON.stringify({
 				base_tree: parent.tree.sha,
-				tree: [...pending].map(([path, article]) =>
-					article.kind === "delete"
-						? { path, mode: "100644", type: "blob", sha: null }
-						: {
-								path,
-								mode: "100644",
-								type: "blob",
-								content: article.content,
-							},
-				),
+				tree: [
+					...[...pending].map(([path, article]) =>
+						article.kind === "delete"
+							? { path, mode: "100644", type: "blob", sha: null }
+							: {
+									path,
+									mode: "100644",
+									type: "blob",
+									content: article.content,
+								},
+					),
+					...staged.map(({ image }) => ({
+						path: image.path,
+						mode: "100644",
+						type: "blob",
+						content: image.base64,
+					})),
+				],
 			}),
 		},
 	);
@@ -280,7 +293,9 @@ async function updateArticles(
 		{
 			method: "POST",
 			body: JSON.stringify({
-				message: `docs: 在线批量更新 ${pending.size} 个文件`,
+				message: `docs: 在线批量更新 ${pending.size} 个文件${
+					staged.length ? `（含 ${staged.length} 张图片）` : ""
+				}`,
 				tree: tree.sha,
 				parents: [headSha],
 			}),
@@ -299,27 +314,49 @@ async function updateArticles(
 
 	const commit = commitResult.sha;
 	const changed = pending.size;
+	// 提交成功后再清理暂存，避免提交失败导致图片丢失。
+	// 清理失败不影响本次保存结果（TTL 到期也会自动回收）。
+	for (const { key } of staged) {
+		try {
+			await env.HITS_KV.delete(key);
+		} catch {
+			/* 忽略：TTL 会兜底回收 */
+		}
+	}
 	console.log(
-		JSON.stringify({ event: "articles_saved", files: changed, commit }),
+		JSON.stringify({
+			event: "articles_saved",
+			files: changed,
+			images: staged.length,
+			commit,
+		}),
 	);
-	return json({ changed, updated: changed, commit }, 200, origin, env);
+	return json(
+		{ changed, updated: changed, images: staged.length, commit },
+		200,
+		origin,
+		env,
+	);
 }
 
-// 图片上传：与文章保存复用同一套 Git Data API 提交链路。
+// 图片上传：先暂存到 KV，等保存文章时并进同一次 commit。
 //
-// 前端把图片读成 data URL 后 POST 过来，这里解码成二进制、按日期分目录
-// 写到 public/uploads/images/<yyyy-mm-dd>/<uuid>.<ext>，然后走
-// blob → tree → commit → 更新 ref，与 updateArticles 的提交方式一致。
+// 为什么不在上传时直接提交 GitHub：
+//   1) 每次上传都会产生一次 commit，并触发一次 Cloudflare Pages 构建；
+//   2) 构建完成前该文件对外是 404，而编辑器此时已把 <img> 插进正文，
+//      浏览器请求到 404 会渲染成"损坏图"且不会自动重试；
+//   3) 上传越频繁，仓库历史噪音越大。
 //
-// 为什么放 public/：该目录由 Cloudflare Pages 直接静态托管（/uploads/ 已在
-// Pages Functions 的公开前缀白名单里），无需额外存储服务；也与仓库里已有的
-// 293 张图片路径保持同一约定。
+// 改为暂存后：图片随「保存文章」这一次 commit 一起落库，
+// "图片可见"与"文章可见"对齐到同一个构建周期，上面的问题自然消失。
 //
-// 注意：每次上传会产生一次独立 commit（与文章保存的批量提交分开）。
-// 这是"最轻量"的实现取舍——若要合并进文章保存的同一次提交，需要改保存流程
-// 与前端暂存逻辑，复杂度明显上升，暂不做。
+// KV 键：staged:<uuid>  →  { path, bytes(base64), type, at }
+// 写入即返回最终公开路径，前端可直接写进 markdown。
 const UPLOAD_ROOT = "public/uploads/images/";
+const STAGED_PREFIX = "staged:";
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+// 暂存有效期：超过则视为已放弃（避免 KV 里堆孤儿数据）
+const STAGED_TTL_SECONDS = 60 * 60 * 24;
 // 只允许位图；不含 svg（可含脚本，作为静态资源直出有 XSS 风险）
 const IMAGE_MIME_EXT: Record<string, string> = {
 	"image/png": "png",
@@ -329,17 +366,26 @@ const IMAGE_MIME_EXT: Record<string, string> = {
 	"image/avif": "avif",
 };
 
+interface StagedImage {
+	path: string;
+	base64: string;
+	type: string;
+	at: number;
+}
+
 function dataUrlToImage(value: unknown): {
 	bytes: Uint8Array;
 	ext: string;
 	base64: string;
+	type: string;
 } {
 	if (typeof value !== "string")
 		throw new HttpError(400, "图片数据格式不正确");
 	const match = /^data:([a-z0-9.+/-]+);base64,([\s\S]+)$/i.exec(value.trim());
 	if (!match)
 		throw new HttpError(400, "仅支持 base64 编码的 data URL 图片");
-	const ext = IMAGE_MIME_EXT[match[1].toLowerCase()];
+	const type = match[1].toLowerCase();
+	const ext = IMAGE_MIME_EXT[type];
 	if (!ext)
 		throw new HttpError(
 			400,
@@ -359,7 +405,7 @@ function dataUrlToImage(value: unknown): {
 	if (bytes.byteLength === 0) throw new HttpError(400, "图片内容为空");
 	if (bytes.byteLength > MAX_IMAGE_BYTES)
 		throw new HttpError(413, "单张图片不能超过 8 MB");
-	return { bytes, ext, base64 };
+	return { bytes, ext, base64, type };
 }
 
 async function uploadImage(
@@ -368,75 +414,16 @@ async function uploadImage(
 	origin: string,
 ): Promise<Response> {
 	const body = await readJson<{ dataUrl?: unknown }>(request);
-	const { bytes, ext, base64 } = dataUrlToImage(body.dataUrl);
+	const { bytes, ext, base64, type } = dataUrlToImage(body.dataUrl);
 
 	const day = new Date().toISOString().slice(0, 10);
-	// crypto.randomUUID() 避免覆盖；路径全部由服务端生成，不含用户输入，
-	// 因此不存在路径穿越问题（原始文件名被丢弃）。
+	// 路径全部由服务端生成，不含用户输入，因此不存在路径穿越问题
 	const path = `${UPLOAD_ROOT}${day}/${crypto.randomUUID()}.${ext}`;
 
-	const head = await githubRequest<{ object?: { sha?: string } }>(
-		env,
-		`/repos/${repoPath(env)}/git/ref/heads/${encodeURIComponent(env.GITHUB_BRANCH)}`,
-	);
-	const headSha = head.object?.sha;
-	if (!headSha) throw new HttpError(502, "GitHub 分支缺少版本信息");
-
-	// 用 Git Data API 建 blob（content 需 base64；此处直接复用原始 base64 片段）
-	const blob = await githubRequest<{ sha?: string }>(
-		env,
-		`/repos/${repoPath(env)}/git/blobs`,
-		{
-			method: "POST",
-			body: JSON.stringify({
-				content: base64,
-				encoding: "base64",
-			}),
-		},
-	);
-	if (!blob.sha) throw new HttpError(502, "GitHub 创建 Blob 失败");
-
-	const parent = await githubRequest<{ tree?: { sha?: string } }>(
-		env,
-		`/repos/${repoPath(env)}/git/commits/${headSha}`,
-	);
-	if (!parent.tree?.sha) throw new HttpError(502, "GitHub 提交缺少 Tree 信息");
-
-	const tree = await githubRequest<{ sha?: string }>(
-		env,
-		`/repos/${repoPath(env)}/git/trees`,
-		{
-			method: "POST",
-			body: JSON.stringify({
-				base_tree: parent.tree.sha,
-				tree: [{ path, mode: "100644", type: "blob", sha: blob.sha }],
-			}),
-		},
-	);
-	if (!tree.sha) throw new HttpError(502, "GitHub 创建 Tree 失败");
-
-	const commit = await githubRequest<{ sha?: string }>(
-		env,
-		`/repos/${repoPath(env)}/git/commits`,
-		{
-			method: "POST",
-			body: JSON.stringify({
-				message: `chore: 上传图片 ${path.slice(UPLOAD_ROOT.length)}`,
-				tree: tree.sha,
-				parents: [headSha],
-			}),
-		},
-	);
-	if (!commit.sha) throw new HttpError(502, "GitHub 创建 Commit 失败");
-
-	await githubRequest(
-		env,
-		`/repos/${repoPath(env)}/git/refs/heads/${encodeURIComponent(env.GITHUB_BRANCH)}`,
-		{
-			method: "PATCH",
-			body: JSON.stringify({ sha: commit.sha, force: false }),
-		},
-		409,
+	await env.HITS_KV.put(
+		`${STAGED_PREFIX}${crypto.randomUUID()}`,
+		JSON.stringify({ path, base64, type, at: Date.now() } satisfies StagedImage),
+		{ expirationTtl: STAGED_TTL_SECONDS },
 	);
 
 	// 对外暴露的是站点路径（去掉 public/ 前缀），与既有 markdown 里的
@@ -444,13 +431,40 @@ async function uploadImage(
 	const publicPath = `/${path.replace(/^public\//, "")}`;
 	console.log(
 		JSON.stringify({
-			event: "image_uploaded",
+			event: "image_staged",
 			path,
 			bytes: bytes.byteLength,
-			commit: commit.sha,
 		}),
 	);
 	return json({ url: publicPath, bytes: bytes.byteLength }, 200, origin, env);
+}
+
+/**
+ * 取出所有暂存图片（供保存文章时并入同一次 commit）。
+ * 只返回 KV 中带 staged: 前缀的键；读取失败的单条跳过，不阻塞保存。
+ * KV list 默认每页上限 1000 条，这里按 cursor 翻页取全，避免漏图。
+ */
+async function readStagedImages(
+	env: Cloudflare.Env,
+): Promise<Array<{ key: string; image: StagedImage }>> {
+	const out: Array<{ key: string; image: StagedImage }> = [];
+	let cursor: string | undefined;
+	do {
+		const list = await env.HITS_KV.list({
+			prefix: STAGED_PREFIX,
+			cursor,
+		});
+		for (const entry of list.keys) {
+			try {
+				const raw = await env.HITS_KV.get<StagedImage>(entry.name, "json");
+				if (raw?.path && raw?.base64) out.push({ key: entry.name, image: raw });
+			} catch {
+				/* 单条读取失败：跳过，不影响文章保存 */
+			}
+		}
+		cursor = list.list_complete ? undefined : list.cursor;
+	} while (cursor);
+	return out;
 }
 
 function parseCategoryRenames(value: unknown): Map<string, string> {

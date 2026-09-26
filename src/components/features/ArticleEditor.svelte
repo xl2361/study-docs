@@ -2190,6 +2190,19 @@ async function uploadImageFile(file: File): Promise<string> {
 }
 
 /**
+ * 上传后的图片只暂存在服务端（KV），尚未提交到仓库，
+ * 因此此刻该路径还取不到内容。这里用本地 blob 预览，
+ * 等保存文章时图片会随同一次 commit 落库，届时路径才真正可用。
+ *
+ * 之所以不再"上传即引用正式路径"：那样浏览器会请求到 404 并渲染成
+ * 损坏图，而且该 <img> 节点不会自动重试。改为暂存后，图片可见性与
+ * 文章可见性对齐到同一个构建周期，问题不再存在。
+ */
+function previewSrcFor(file: File): string {
+	return URL.createObjectURL(file);
+}
+
+/**
  * 从剪贴板/拖拽数据里挑出图片文件。
  * 返回空数组表示"不是图片操作"，调用方应放行默认行为。
  */
@@ -2213,8 +2226,12 @@ function insertImages(files: File[]): boolean {
 		let uploaded = 0;
 		try {
 			for (const file of files) {
-				const url = await uploadImageFile(file);
-				current.chain().focus().setImage({ src: url }).run();
+				await uploadImageFile(file);
+				// 图片已暂存在服务端，但尚未提交到仓库，此刻正式路径取不到内容；
+				// 先用本地 object URL 预览，避免损坏图。保存文章时位图会随
+				// 同一次 commit 落库，届时正文里的正式路径才真正可用。
+				const localSrc = previewSrcFor(file);
+				current.chain().focus().setImage({ src: localSrc }).run();
 				uploaded++;
 				uploadNotice = `正在上传图片…（${uploaded}/${files.length}）`;
 			}

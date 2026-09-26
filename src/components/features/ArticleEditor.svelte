@@ -568,7 +568,70 @@ async function createEditor(operation: number) {
 				PermissiveCode,
 				markdown.Markdown,
 				table.TableKit,
-				image.default,
+				// 扩展 Image：开启右下角拖拽缩放；并重写 markdown 序列化，
+				// 让调整后的尺寸（width × height）写入 title 字段
+				// （格式 "WxH"），保存后重新打开编辑器仍保留尺寸。
+				image.default
+					.configure({
+						resize: {
+							enabled: true,
+							directions: ["se"],
+							minWidth: 80,
+							minHeight: 60,
+							alwaysPreserveAspectRatio: true,
+						},
+					})
+					.extend({
+						renderMarkdown: (node: {
+							attrs?: {
+								src?: string;
+								alt?: string;
+								title?: string;
+								width?: number | null;
+								height?: number | null;
+							};
+						}) => {
+							const src = node.attrs?.src ?? "";
+							const alt = node.attrs?.alt ?? "";
+							const w = node.attrs?.width;
+							const h = node.attrs?.height;
+							// 尺寸以 "WxH" 追加到 title 尾部（markdown title 是双引号内的任意文本）
+							const sizeTag = w && h ? `${w}x${h}` : "";
+							const titleParts = [node.attrs?.title ?? "", sizeTag].filter(
+								Boolean,
+							);
+							const title = titleParts.length
+								? ` "${titleParts.join(" ")}"`
+								: "";
+							return `![${alt}](${src}${title})`;
+						},
+						parseMarkdown: (
+							token: {
+								href?: string;
+								title?: string;
+								text?: string;
+							},
+							helpers: {
+								createNode: (
+									type: string,
+									attrs: Record<string, unknown>,
+								) => unknown;
+							},
+						) => {
+							// 从 title 里提取尺寸 "WxH"（可能与其他 title 文本用空格分隔）
+							const titleRaw = token.title ?? "";
+							const sizeMatch = titleRaw.match(/(\d+)x(\d+)/);
+							// 去掉尺寸部分，保留真正的 title 文本
+							const realTitle = titleRaw.replace(/\s*\d+x\d+\s*/, "").trim();
+							return helpers.createNode("image", {
+								src: token.href,
+								alt: token.text,
+								title: realTitle || undefined,
+								width: sizeMatch ? Number(sizeMatch[1]) : null,
+								height: sizeMatch ? Number(sizeMatch[2]) : null,
+							});
+						},
+					}),
 				sub.default,
 				sup.default,
 				textStyle.TextStyle,

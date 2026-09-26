@@ -59,6 +59,10 @@ export default {
 				await requireSession(request, env);
 				return await updateArticles(request, env, origin);
 			}
+			if (url.pathname === "/api/upload" && request.method === "POST") {
+				await requireSession(request, env);
+				return await uploadImage(request, env, origin);
+			}
 			if (url.pathname === "/api/hits" && request.method === "GET") {
 				return await listHits(env, origin);
 			}
@@ -299,6 +303,154 @@ async function updateArticles(
 		JSON.stringify({ event: "articles_saved", files: changed, commit }),
 	);
 	return json({ changed, updated: changed, commit }, 200, origin, env);
+}
+
+// 图片上传：与文章保存复用同一套 Git Data API 提交链路。
+//
+// 前端把图片读成 data URL 后 POST 过来，这里解码成二进制、按日期分目录
+// 写到 public/uploads/images/<yyyy-mm-dd>/<uuid>.<ext>，然后走
+// blob → tree → commit → 更新 ref，与 updateArticles 的提交方式一致。
+//
+// 为什么放 public/：该目录由 Cloudflare Pages 直接静态托管（/uploads/ 已在
+// Pages Functions 的公开前缀白名单里），无需额外存储服务；也与仓库里已有的
+// 293 张图片路径保持同一约定。
+//
+// 注意：每次上传会产生一次独立 commit（与文章保存的批量提交分开）。
+// 这是"最轻量"的实现取舍——若要合并进文章保存的同一次提交，需要改保存流程
+// 与前端暂存逻辑，复杂度明显上升，暂不做。
+const UPLOAD_ROOT = "public/uploads/images/";
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+// 只允许位图；不含 svg（可含脚本，作为静态资源直出有 XSS 风险）
+const IMAGE_MIME_EXT: Record<string, string> = {
+	"image/png": "png",
+	"image/jpeg": "jpg",
+	"image/gif": "gif",
+	"image/webp": "webp",
+	"image/avif": "avif",
+};
+
+function dataUrlToImage(value: unknown): {
+	bytes: Uint8Array;
+	ext: string;
+	base64: string;
+} {
+	if (typeof value !== "string")
+		throw new HttpError(400, "图片数据格式不正确");
+	const match = /^data:([a-z0-9.+/-]+);base64,([\s\S]+)$/i.exec(value.trim());
+	if (!match)
+		throw new HttpError(400, "仅支持 base64 编码的 data URL 图片");
+	const ext = IMAGE_MIME_EXT[match[1].toLowerCase()];
+	if (!ext)
+		throw new HttpError(
+			400,
+			"仅支持 png / jpg / gif / webp / avif 格式的图片",
+		);
+
+	const base64 = match[2].replace(/\s/g, "");
+	let binary: string;
+	try {
+		binary = atob(base64);
+	} catch {
+		throw new HttpError(400, "图片 base64 解码失败");
+	}
+	const bytes = Uint8Array.from(binary, (character) =>
+		character.charCodeAt(0),
+	);
+	if (bytes.byteLength === 0) throw new HttpError(400, "图片内容为空");
+	if (bytes.byteLength > MAX_IMAGE_BYTES)
+		throw new HttpError(413, "单张图片不能超过 8 MB");
+	return { bytes, ext, base64 };
+}
+
+async function uploadImage(
+	request: Request,
+	env: Cloudflare.Env,
+	origin: string,
+): Promise<Response> {
+	const body = await readJson<{ dataUrl?: unknown }>(request);
+	const { bytes, ext, base64 } = dataUrlToImage(body.dataUrl);
+
+	const day = new Date().toISOString().slice(0, 10);
+	// crypto.randomUUID() 避免覆盖；路径全部由服务端生成，不含用户输入，
+	// 因此不存在路径穿越问题（原始文件名被丢弃）。
+	const path = `${UPLOAD_ROOT}${day}/${crypto.randomUUID()}.${ext}`;
+
+	const head = await githubRequest<{ object?: { sha?: string } }>(
+		env,
+		`/repos/${repoPath(env)}/git/ref/heads/${encodeURIComponent(env.GITHUB_BRANCH)}`,
+	);
+	const headSha = head.object?.sha;
+	if (!headSha) throw new HttpError(502, "GitHub 分支缺少版本信息");
+
+	// 用 Git Data API 建 blob（content 需 base64；此处直接复用原始 base64 片段）
+	const blob = await githubRequest<{ sha?: string }>(
+		env,
+		`/repos/${repoPath(env)}/git/blobs`,
+		{
+			method: "POST",
+			body: JSON.stringify({
+				content: base64,
+				encoding: "base64",
+			}),
+		},
+	);
+	if (!blob.sha) throw new HttpError(502, "GitHub 创建 Blob 失败");
+
+	const parent = await githubRequest<{ tree?: { sha?: string } }>(
+		env,
+		`/repos/${repoPath(env)}/git/commits/${headSha}`,
+	);
+	if (!parent.tree?.sha) throw new HttpError(502, "GitHub 提交缺少 Tree 信息");
+
+	const tree = await githubRequest<{ sha?: string }>(
+		env,
+		`/repos/${repoPath(env)}/git/trees`,
+		{
+			method: "POST",
+			body: JSON.stringify({
+				base_tree: parent.tree.sha,
+				tree: [{ path, mode: "100644", type: "blob", sha: blob.sha }],
+			}),
+		},
+	);
+	if (!tree.sha) throw new HttpError(502, "GitHub 创建 Tree 失败");
+
+	const commit = await githubRequest<{ sha?: string }>(
+		env,
+		`/repos/${repoPath(env)}/git/commits`,
+		{
+			method: "POST",
+			body: JSON.stringify({
+				message: `chore: 上传图片 ${path.slice(UPLOAD_ROOT.length)}`,
+				tree: tree.sha,
+				parents: [headSha],
+			}),
+		},
+	);
+	if (!commit.sha) throw new HttpError(502, "GitHub 创建 Commit 失败");
+
+	await githubRequest(
+		env,
+		`/repos/${repoPath(env)}/git/refs/heads/${encodeURIComponent(env.GITHUB_BRANCH)}`,
+		{
+			method: "PATCH",
+			body: JSON.stringify({ sha: commit.sha, force: false }),
+		},
+		409,
+	);
+
+	// 对外暴露的是站点路径（去掉 public/ 前缀），与既有 markdown 里的
+	// /uploads/images/... 引用形式一致
+	const publicPath = `/${path.replace(/^public\//, "")}`;
+	console.log(
+		JSON.stringify({
+			event: "image_uploaded",
+			path,
+			bytes: bytes.byteLength,
+			commit: commit.sha,
+		}),
+	);
+	return json({ url: publicPath, bytes: bytes.byteLength }, 200, origin, env);
 }
 
 function parseCategoryRenames(value: unknown): Map<string, string> {

@@ -74,6 +74,7 @@ const ICONS: Record<string, string> = {
 	indentIncrease: `<path d="M21 6H11m10 6H11m10 6H11M3 8l4 4-4 4"/>`,
 	table: `<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M12 3v18"/>`,
 	link: `<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.8 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.8-1.7"/>`,
+	image: `<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.5-4.5L7 20"/>`,
 	quote: `<path d="M9 11H4a2 2 0 0 1-2-2V7a4 4 0 0 1 4-4h1M22 11h-5a2 2 0 0 1-2-2V7a4 4 0 0 1 4-4h1M6 11v2a5 5 0 0 1-5 5M19 11v2a5 5 0 0 1-5 5"/>`,
 	hr: `<path d="M5 12h14"/>`,
 	code: `<path d="m8 9-3 3 3 3m8-6 3 3-3 3m-3-8-2 10"/>`,
@@ -534,6 +535,9 @@ const currentAlign = () =>
 			<div class="tb-panel tb-panel-more" role="menu" aria-label="更多格式">
 				<button class="tb-btn tb-more-btn" class:tb-on={active.link} disabled={disabled} type="button" title="插入链接" aria-label="插入链接" aria-pressed={active.link} onclick={() => act("link", undefined, false)}>
 					{@html SVG("link")}
+				</button>
+				<button class="tb-btn tb-more-btn" disabled={disabled} type="button" title="插入图片（也可直接粘贴或拖入）" aria-label="插入图片" onclick={() => act("image", undefined, false)}>
+					{@html SVG("image")}
 				</button>
 				<button class="tb-btn tb-more-btn" class:tb-on={active.blockquote} disabled={disabled} type="button" title="引用" aria-label="引用" aria-pressed={active.blockquote} onclick={() => act("quote", undefined, false)}>
 					{@html SVG("quote")}

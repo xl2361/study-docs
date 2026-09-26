@@ -165,6 +165,8 @@ let loading = false;
 let loaded = false;
 let error = "";
 let savedMessage = "";
+// 图片上传进行中的提示（空串表示未在传）
+let uploadNotice = "";
 let articleTitle = title;
 let published = "";
 let category = "";
@@ -617,6 +619,25 @@ async function createEditor(operation: number) {
 						return false;
 					}
 					return placeBesideCursor(mouse);
+				},
+				// 粘贴图片：从剪贴板取出图片文件上传并插入；
+				// 非图片（纯文本/HTML）返回 false，交回默认粘贴逻辑。
+				handlePaste: (_view: unknown, event: ClipboardEvent) => {
+					if (!editor || sourceMode) return false;
+					return insertImages(pickImageFiles(event.clipboardData));
+				},
+				// 拖入图片文件：moved 为 true 表示是编辑器内部的节点拖动，
+				// 必须放行（否则会破坏原有的块拖动/表格拖动）。
+				handleDrop: (
+					_view: unknown,
+					event: DragEvent,
+					_slice: unknown,
+					moved: boolean,
+				) => {
+					if (!editor || sourceMode || moved) return false;
+					if (!insertImages(pickImageFiles(event.dataTransfer))) return false;
+					event.preventDefault();
+					return true;
 				},
 			},
 			onUpdate: () => {
@@ -2114,6 +2135,98 @@ async function loadArticle(operation: number) {
 	}
 }
 
+// —— 图片上传（粘贴 / 拖拽 / 工具栏按钮共用） ——
+//
+// 背景：编辑器原本只有 Image 扩展的节点定义，没有任何"把本地图片变成
+// 可引用 URL"的入口，所以粘贴/拖拽图片没有反应。
+//
+// 实现要点：
+// - 前端把图片读成 data URL，POST 到同域 /api/upload（Pages Function 代理
+//   到 editor-worker），worker 用 GitHub Git Data API 写进
+//   public/uploads/images/<date>/<uuid>.<ext>，返回站内路径。
+// - 逐张上传 + 立即插入，保证多图时顺序稳定、每张成功即可见。
+// - 非图片类型一律返回 false，交回 ProseMirror 默认处理（否则会破坏
+//   纯文本/HTML 的正常粘贴）。
+
+const IMAGE_UPLOAD_ENDPOINT = "/api/upload";
+const IMAGE_MIME_EXT: Record<string, string> = {
+	"image/png": "png",
+	"image/jpeg": "jpg",
+	"image/gif": "gif",
+	"image/webp": "webp",
+	"image/avif": "avif",
+};
+// 与 worker 侧 MAX_IMAGE_BYTES 对齐，前端先拦一次，避免白传
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+
+function readImageAsDataUrl(file: File): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => resolve(String(reader.result || ""));
+		reader.onerror = () => reject(new Error("图片读取失败"));
+		reader.readAsDataURL(file);
+	});
+}
+
+async function uploadImageFile(file: File): Promise<string> {
+	if (file.size > MAX_IMAGE_BYTES) throw new Error("图片不能超过 8 MB");
+	const dataUrl = await readImageAsDataUrl(file);
+	const response = await fetch(IMAGE_UPLOAD_ENDPOINT, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ dataUrl }),
+	});
+	if (response.status === 401) {
+		location.href = `/login/?next=${encodeURIComponent(location.pathname + location.search)}`;
+		throw new Error("登录已失效");
+	}
+	const payload = (await response.json().catch(() => ({}))) as {
+		url?: string;
+		message?: string;
+	};
+	if (!response.ok || !payload.url)
+		throw new Error(payload.message || "图片上传失败");
+	return payload.url;
+}
+
+/**
+ * 从剪贴板/拖拽数据里挑出图片文件。
+ * 返回空数组表示"不是图片操作"，调用方应放行默认行为。
+ */
+function pickImageFiles(source: DataTransfer | null): File[] {
+	if (!source) return [];
+	return Array.from(source.files || []).filter(
+		(file) => IMAGE_MIME_EXT[file.type] !== undefined,
+	);
+}
+
+/**
+ * 上传并插入图片。返回 true 表示已处理（调用方应 preventDefault）。
+ * 插入位置取当前选区，逐张 append：`setImage` 之后光标落到图片后，
+ * 因此多图会按选择顺序依次排开。
+ */
+function insertImages(files: File[]): boolean {
+	if (!files.length || !editor) return false;
+	const current = editor;
+	uploadNotice = `正在上传 ${files.length} 张图片…`;
+	void (async () => {
+		let uploaded = 0;
+		try {
+			for (const file of files) {
+				const url = await uploadImageFile(file);
+				current.chain().focus().setImage({ src: url }).run();
+				uploaded++;
+				uploadNotice = `正在上传图片…（${uploaded}/${files.length}）`;
+			}
+			uploadNotice = "";
+		} catch (reason) {
+			uploadNotice = "";
+			error = reason instanceof Error ? reason.message : "图片上传失败";
+		}
+	})();
+	return true;
+}
+
 function setupInPlace() {
 	const titleNodes = Array.from(
 		document.querySelectorAll<HTMLElement>("[data-article-title]"),
@@ -2585,7 +2698,25 @@ function onToolbarAction(
 		insertTable();
 		return;
 	}
+	if (action === "image") {
+		pickImagesViaDialog();
+		return;
+	}
 	format(action, payload);
+}
+
+// 工具栏「插入图片」：借一个临时 file input 走与粘贴/拖拽相同的上传路径。
+// 浏览器不允许自建编辑区右键菜单，故不提供"右键上传"。
+function pickImagesViaDialog() {
+	const input = document.createElement("input");
+	input.type = "file";
+	input.accept = "image/png,image/jpeg,image/gif,image/webp,image/avif";
+	input.multiple = true;
+	input.addEventListener("change", () => {
+		const files = Array.from(input.files || []);
+		if (files.length) insertImages(files);
+	});
+	input.click();
 }
 
 function format(action: string, payload?: unknown) {
@@ -2799,6 +2930,7 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   </div>
   <nav class="toolbar" bind:this={toolbarEl} aria-label="正文格式"><EditorToolbar {canUndo} {canRedo} {painterActive} active={activeState} disabled={!editorReady || sourceMode} on:action={onToolbarAction} /></nav>
   {#if error}<p class="error" role="alert">{error}</p>{/if}
+  {#if uploadNotice}<p class="success" role="status">{uploadNotice}</p>{/if}
   {#if savedMessage}<p class="success">{savedMessage}</p>{/if}
   {#if sourceMode}<p class="source-note">源码模式：当前 Markdown 含有富文本编辑器无法解析的原始内容。</p><textarea class="source-editor" bind:this={sourceEditEl} bind:value={sourceValue} oninput={() => markDirty(true)} aria-label="Markdown 正文源码编辑器" spellcheck="false" disabled={!loaded}></textarea>{:else}<div class="tiptap-host prose dark:prose-invert prose-base max-w-none custom-md" bind:this={editorMount}></div>{/if}
  </section>

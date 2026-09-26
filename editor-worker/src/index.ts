@@ -281,6 +281,11 @@ async function updateArticles(
 						mode: "100644",
 						type: "blob",
 						content: image.base64,
+						// 必须显式声明 base64：Git API 默认把 content 当原始文本，
+						// 漏掉 encoding 会把 base64 字符串本身当成文件内容写进仓库
+						// （文件仍是 .png 扩展名、CDN 按扩展名返回 image/png，
+						//  但内容是 base64 文本，浏览器解不出 → 图片"丢失"）。
+						encoding: "base64",
 					})),
 				],
 			}),

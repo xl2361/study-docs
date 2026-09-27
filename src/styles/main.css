@@ -495,6 +495,16 @@ img {
     @apply cursor-zoom-in
 }
 
+/* 正文分割线（markdown 的 `* * *` → <hr>）上下间距减半。
+   Tailwind prose 默认 my-12（上下各 3rem = 48px），显得段落被拉得很开；
+   改为上下各 1.5rem（24px）。
+   同时作用于阅读页与编辑器（.tiptap-host 也带 custom-md 类），
+   保证所见即所得一致。 */
+.custom-md hr {
+    margin-top: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
 ::selection {
     background-color: var(--selection-bg)
 }

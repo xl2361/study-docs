@@ -1,4 +1,4 @@
-﻿import type { SiteConfig } from "@/types/siteConfig";
+import type { SiteConfig } from "@/types/siteConfig";
 
 // 定义站点语言
 // 语言代码，例如：'zh_CN', 'zh_TW', 'en', 'ja', 'ru', 'ko'。
@@ -17,7 +17,7 @@ export const siteConfig: SiteConfig = {
 	// 站点代码版本（显示在导航栏 DaLi 标题右侧，如 v1.0.0）。
 	// 规则：每次更新网站代码就递增一位（小改动递增修订号，如 1.0.0→1.0.1）；
 	// 仅编辑文章内容不递增。递增后随代码同步部署，线上徽标即为当前版本。
-	version: "1.0.27",
+	version: "1.0.28",
 
 	// 站点描述
 	description: "个人学习笔记与文档站",

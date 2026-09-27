@@ -3310,14 +3310,31 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   .tiptap-host :global(.ec-line-gutter) { border-right: 1px solid color-mix(in srgb, currentColor 22%, transparent); }
 
   /* —— 图片缩放 UI：点击图片 → 蓝色边框 + 四角蓝色圆点，拖拽改尺寸 —— */
-  /* 容器 */
-  .tiptap-host :global([data-resize-container]) { display: inline-block; position: relative; max-width: 100%; }
-  /* 关键：清零 nodeView 内图片的垂直外边距。
-     站点给正文图片加了 margin（Tailwind prose 的 my-8 ≈ 32px/边），
-     而缩放容器包着 img，若不清零则容器比图片高 64px ——
-     边框和四角圆点会画在图片之外，看起来"固定一个比图片大的框"。 */
+  /* 容器：display:flex（TipTap 默认），宽度取节点 width 属性、由拖拽更新。
+     图片受 max-width:100% 与自身比例约束，可能填不满容器（实测
+     container 879 vs img 851，右侧空 28px），蓝框就会比图片宽。
+     修法（不能给 img 加 width:100%!important，那会覆盖拖拽写入的内联
+     style.width）：用 max-width:none 让图片不再被父宽度二次限制，
+     尺寸完全跟容器走，两者严格相等。 */
+  .tiptap-host :global([data-resize-container]) {
+    position: relative;
+    max-width: 100%;
+  }
   .tiptap-host :global([data-resize-container] img) {
+    /* 清零站点给正文图片加的垂直外边距（prose 的 my-8），
+       否则容器比图片高 64px，蓝框上下偏大 */
     margin: 0 !important;
+    /* 不再被父级 max-width 二次压缩，宽度完全由容器决定 */
+    max-width: none !important;
+    max-height: none !important;
+    display: block !important;
+  }
+  .tiptap-host :global([data-resize-wrapper]) {
+    max-width: 100%;
+  }
+  .tiptap-host :global([data-resize-wrapper] img) {
+    max-width: none !important;
+    max-height: none !important;
   }
   /* 编辑器内的图片不显示放大镜光标（zoom-in 是给阅读页灯箱用的，
      编辑态点击是选中图片，放大镜会误导用户）。 */

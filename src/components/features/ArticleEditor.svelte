@@ -661,6 +661,147 @@ async function createEditor(operation: number) {
 								height: sizeMatch ? Number(sizeMatch[2]) : null,
 							});
 						},
+						// 自定义 addNodeView：复刻 @tiptap/extension-image 的实现，
+						// 但 onCommit 改用 nodeView 工厂参数里的 editor（闭包引用，
+						// 可靠），而非 this.editor —— 原实现经 configure().extend()
+						// 链式调用后 this.editor 的上下文在运行期不可靠，导致
+						// updateAttributes 未写入节点，缩放尺寸无法持久化
+						//（编辑器内 style 变了但保存后回到原始大小）。
+						addNodeView() {
+							if (
+								!this.options.resize?.enabled ||
+								typeof document === "undefined"
+							) {
+								return null;
+							}
+							const {
+								directions,
+								minWidth,
+								minHeight,
+								alwaysPreserveAspectRatio,
+							} = this.options.resize;
+							const resizeManagedAttributes = new Set([
+								"src",
+								"width",
+								"height",
+							]);
+
+							return ({
+								node,
+								getPos,
+								HTMLAttributes,
+								editor,
+							}: {
+								node: { type: { name: string } };
+								getPos: () => number | undefined;
+								HTMLAttributes: Record<string, unknown>;
+								editor: {
+									chain: () => {
+										setNodeSelection: (pos: number) => {
+											updateAttributes: (
+												name: string,
+												attrs: Record<string, unknown>,
+											) => { run: () => void };
+										};
+									};
+								};
+							}) => {
+								const el = document.createElement("img");
+								el.draggable = false;
+
+								const mergedAttributes = core.mergeAttributes(
+									this.options.HTMLAttributes,
+									HTMLAttributes,
+								);
+
+								Object.entries(mergedAttributes).forEach(([key, value]) => {
+									if (value == null) return;
+									if (key === "src" || key === "width" || key === "height")
+										return;
+									el.setAttribute(key, value as string);
+								});
+
+								if (mergedAttributes.src != null) {
+									el.src = mergedAttributes.src as string;
+								}
+
+								let previousHTMLAttributes = { ...HTMLAttributes };
+								const syncImageSource = (src: unknown) => {
+									if (typeof src === "string" && src !== "") {
+										if (el.getAttribute("src") !== src) el.src = src;
+										return;
+									}
+									if (el.hasAttribute("src")) el.removeAttribute("src");
+									if (el.src !== "") el.src = "";
+								};
+
+								syncImageSource(HTMLAttributes.src);
+
+								const onUpdate = (updatedNode: { type: { name: string } }) => {
+									if (updatedNode.type !== node.type) return false;
+									const extensionAttributes =
+										editor.extensionManager?.attributes?.filter?.(
+											(a: { type: string }) => a.type === updatedNode.type.name,
+										) ?? [];
+									const newHTMLAttributes = core.getRenderedAttributes(
+										updatedNode,
+										extensionAttributes,
+									);
+									Object.keys(previousHTMLAttributes).forEach((key) => {
+										if (
+											!resizeManagedAttributes.has(key) &&
+											!(key in newHTMLAttributes)
+										) {
+											el.removeAttribute(key);
+										}
+									});
+									Object.entries(newHTMLAttributes).forEach(([key, value]) => {
+										if (resizeManagedAttributes.has(key)) return;
+										if (value != null) el.setAttribute(key, value as string);
+										else el.removeAttribute(key);
+									});
+									syncImageSource(newHTMLAttributes.src);
+									previousHTMLAttributes = newHTMLAttributes;
+									return true;
+								};
+
+								const nodeView = new core.ResizableNodeView({
+									element: el,
+									editor,
+									node,
+									getPos,
+									onResize: (width: number, height: number) => {
+										el.style.width = `${width}px`;
+										el.style.height = `${height}px`;
+									},
+									onCommit: (width: number, height: number) => {
+										const pos = getPos();
+										if (pos === undefined) return;
+										editor
+											.chain()
+											.setNodeSelection(pos)
+											.updateAttributes("image", { width, height })
+											.run();
+									},
+									onUpdate,
+									options: {
+										directions,
+										min: { width: minWidth, height: minHeight },
+										preserveAspectRatio: alwaysPreserveAspectRatio === true,
+									},
+								});
+
+								const dom = nodeView.dom as HTMLElement;
+								dom.style.visibility = "hidden";
+								dom.style.pointerEvents = "none";
+								el.onload = () => {
+									dom.style.visibility = "";
+									dom.style.pointerEvents = "";
+								};
+
+								return nodeView;
+							};
+						},
 					}),
 				sub.default,
 				sup.default,

@@ -3303,9 +3303,19 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   /* —— 图片缩放 UI：点击图片 → 蓝色边框 + 四角蓝色圆点，拖拽改尺寸 —— */
   /* 容器 */
   .tiptap-host :global([data-resize-container]) { display: inline-block; position: relative; max-width: 100%; }
-  /* 选中图片：用自定义类 .img-resize-active（由 nodeView 在点击时添加），
-     不依赖 ProseMirror 的 ProseMirror-selectednode —— 实测 leaf/atom 节点的
-     自定义 nodeView 点击时不会自动获得该类的可靠行为。 */
+  /* 关键：清零 nodeView 内图片的垂直外边距。
+     站点给正文图片加了 margin（Tailwind prose 的 my-8 ≈ 32px/边），
+     而缩放容器包着 img，若不清零则容器比图片高 64px ——
+     边框和四角圆点会画在图片之外，看起来"固定一个比图片大的框"。 */
+  .tiptap-host :global([data-resize-container] img) {
+    margin: 0 !important;
+  }
+  /* 编辑器内的图片不显示放大镜光标（zoom-in 是给阅读页灯箱用的，
+     编辑态点击是选中图片，放大镜会误导用户）。 */
+  .tiptap-host :global(.ProseMirror img) {
+    cursor: default !important;
+  }
+  /* 选中图片：用自定义类 .img-resize-active（由 nodeView 在点击时添加） */
   .tiptap-host :global([data-resize-container].img-resize-active) {
     outline: 1px solid #3b82f6 !important;
     outline-offset: 0;

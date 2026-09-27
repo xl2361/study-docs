@@ -600,6 +600,11 @@ async function createEditor(operation: number) {
 						},
 					})
 					.extend({
+						// 让图片节点可被点击选中（NodeSelection）。
+						// 默认 selectable=false，配合自定义 nodeView 时点击图片
+						// 不会进入选中态，ProseMirror 也就不会给 nodeView 的根
+						// 元素加 ProseMirror-selectednode，四角手柄便永远不显示。
+						selectable: true,
 						addAttributes() {
 							return {
 								...this.parent?.(),
@@ -3266,12 +3271,14 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   /* —— 图片缩放 UI：点击图片 → 蓝色边框 + 四角蓝色圆点，拖拽改尺寸 —— */
   /* 容器 */
   .tiptap-host :global([data-resize-container]) { display: inline-block; position: relative; max-width: 100%; }
-  /* 选中图片节点时：蓝色实线边框（仅点击选中才显示，非悬停） */
-  .tiptap-host :global(.ProseMirror img.ProseMirror-selectednode) {
+  /* 选中图片：ProseMirror 把 ProseMirror-selectednode 加在 nodeView 的根元素
+     （ResizableNodeView 的 get dom() 返回 container），不是内层 <img>。
+     因此选中态判断要落在 [data-resize-container] 上。 */
+  .tiptap-host :global([data-resize-container].ProseMirror-selectednode) {
     outline: 1px solid #3b82f6 !important;
     outline-offset: 0;
   }
-  /* 四角圆点：默认隐藏；仅当图片被「点击选中」或正在拖拽时显示 */
+  /* 四角圆点：默认隐藏；仅当图片被点击选中或正在拖拽时显示 */
   .tiptap-host :global([data-resize-handle]) {
     width: 10px !important;
     height: 10px !important;
@@ -3285,8 +3292,7 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
     transition: opacity .1s ease !important;
     z-index: 5 !important;
   }
-  /* 选中（selectednode 的容器同级判断不可行，改用 :has）：选中或拖拽时显示并可交互 */
-  .tiptap-host :global([data-resize-container]:has(img.ProseMirror-selectednode) [data-resize-handle]),
+  .tiptap-host :global([data-resize-container].ProseMirror-selectednode [data-resize-handle]),
   .tiptap-host :global([data-resize-container][data-resize-state="true"] [data-resize-handle]) {
     opacity: 1 !important;
     pointer-events: auto !important;

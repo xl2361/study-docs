@@ -505,6 +505,19 @@ img {
     margin-bottom: 1.5rem;
 }
 
+/* 正文标题上间距减半 —— prose 默认 h2 2em(48px)、h3 1.6em(32px)、h4 1.5em(24px)，
+   标题上方留白过大，改为 24 / 16 / 12px。下间距保持原值（24 / 12 / 8px，已合适）。
+   同样作用于阅读页与编辑器。 */
+.custom-md h2 {
+    margin-top: 1.5rem;   /* 24px，原 48px */
+}
+.custom-md h3 {
+    margin-top: 1rem;     /* 16px，原 32px */
+}
+.custom-md h4 {
+    margin-top: 0.75rem;  /* 12px，原 24px */
+}
+
 ::selection {
     background-color: var(--selection-bg)
 }

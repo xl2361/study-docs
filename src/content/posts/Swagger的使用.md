@@ -6,9 +6,9 @@ category: "开发工具"
 draft: false
 ---
 
-### 一、Swagger是什么？为什么需要Swagger？
+### Swagger是什么？为什么需要Swagger？
 
-#### 1、Swagger是什么
+#### Swagger是什么
 
 Swagger是一款**RESTful API文档自动生成和测试工具**，在Java后端开发中主要用于自动生成API接口文档，并提供在线测试接口的功能。
 
@@ -16,7 +16,7 @@ Swagger是一款**RESTful API文档自动生成和测试工具**，在Java后端
 
 **官方网站**：[https://swagger.io/](https://swagger.io/)
 
-#### 2、为什么需要Swagger
+#### 为什么需要Swagger
 
 对个人开发：
 
@@ -30,9 +30,9 @@ Swagger是一款**RESTful API文档自动生成和测试工具**，在Java后端
 -   **提高沟通效率**：不用反复问"这个接口什么参数？"、"这个接口返回什么？"
 -   **便于接口交接**：新入职的同事可以通过Swagger文档快速了解项目接口
 
-### 二、Swagger的基本使用
+### Swagger的基本使用
 
-#### 1、Swagger版本区分（了解）
+#### Swagger版本区分（了解）
 
 工作中常见的是以下几种情况：
 
@@ -72,7 +72,7 @@ Knife4j 本质上是 Swagger 的皮肤增强，底层还是 Swagger，只是界�
 
 这样写的好处：可以继续用熟悉的 Swagger 2 注解，享受 Swagger 3 的新特性。
 
-#### 2、引入Swagger依赖（了解）
+#### 引入Swagger依赖（了解）
 
 **使用Swagger 3（兼容模式，推荐用于Spring Boot 2.x）**
 
@@ -132,7 +132,7 @@ Springdoc OpenAPI（用于Spring Boot 3.x）：
 </dependency>
 ```
 
-#### 3、配置Swagger(了解)
+#### 配置Swagger(了解)
 
 创建配置类，配置Swagger的基本信息。
 
@@ -259,7 +259,7 @@ swagger:
   pathMapping: /dev-api
 ```
 
-#### 4、访问Swagger UI
+#### 访问Swagger UI
 
 只需要启动后端项目，无需启动前端项目，就可以在浏览器中访问Swagger UI界面。
 
@@ -295,7 +295,7 @@ http://[域名或IP]:[端口][项目前缀][Swagger路径]
 
 当然，有时候，Swagger路径也可以改的！正常情况，如果更改的话就是在项目配置文件里面去配置这个路径！如果默认路径都无法访问的话，就去配置文件里面去看，有没有自定义swagger路径。
 
-#### 5、常用注解（了解）
+#### 常用注解（了解）
 
 Swagger 3（兼容模式）使用 Swagger 2 的注解风格。了解就行，不同版本注解可能有差异，需要使用的时候对应看别人代码用的什么注解就行！
 
@@ -308,9 +308,9 @@ Swagger 3（兼容模式）使用 Swagger 2 的注解风格。了解就行，不
 | @ApiModel | 实体类 | 描述实体类的信息 |
 | @ApiModelProperty | 字段 | 描述字段的信息 |
 
-### 三、Swagger的高级配置（了解）
+### Swagger的高级配置（了解）
 
-#### 1、环境控制
+#### 环境控制
 
 通常只在开发环境和测试环境启用Swagger，生产环境需要禁用。
 
@@ -335,7 +335,7 @@ swagger:
   enabled: false
 ```
 
-#### 2、Token认证配置
+#### Token认证配置
 
 通过Authorization请求头传递token。
 
@@ -359,9 +359,9 @@ private List<SecurityScheme> securitySchemes() {
 3.  输入：`Bearer {token}` 或直接输入 `{token}`
 4.  之后所有接口请求都会自动带上这个请求头
 
-### 四、在Swagger中测试接口
+### 在Swagger中测试接口
 
-#### 1、测试GET请求
+#### 测试GET请求
 
 **步骤：**
 
@@ -373,7 +373,7 @@ private List<SecurityScheme> securitySchemes() {
 
 ![get请求](/uploads/images/2026-03-26/42442029-f034-449a-9001-95203e956a43.png)
 
-#### 2、测试POST请求
+#### 测试POST请求
 
 **步骤：**
 
@@ -385,7 +385,7 @@ private List<SecurityScheme> securitySchemes() {
 
 ![post请求](/uploads/images/2026-03-26/6c795821-4f0d-4f3e-b601-e50779333c47.png)
 
-#### 3、设置Token认证
+#### 设置Token认证
 
 **步骤：**
 

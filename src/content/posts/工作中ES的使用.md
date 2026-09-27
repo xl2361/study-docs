@@ -8,9 +8,9 @@ updated: 2026-08-07
 tags: []
 ---
 
-## 一、ES到底是什么？
+## ES到底是什么？
 
-### 1、什么是ES（Elasticsearch）？
+### 什么是ES（Elasticsearch）？
 
 > **简单说：ES是一个搜索引擎，擅长在海量数据中快速搜索。**
 
@@ -29,7 +29,7 @@ tags: []
 
 **结论：搜索功能、大量数据的查询，用ES。**
 
-### 2、ES和MySQL概念对比
+### ES和MySQL概念对比
 
 
 | MySQL | ES           | 说明                |
@@ -41,7 +41,7 @@ tags: []
 | 表结构   | 映射（Mapping）  | 字段定义              |
 
 
-### 3、什么时候用ES？
+### 什么时候用ES？
 
 
 | 场景      | 是否用ES    |
@@ -53,9 +53,9 @@ tags: []
 | 事务操作    | 否，用MySQL |
 
 
-## 二、核心概念
+## 核心概念
 
-### 1、索引（Index）
+### 索引（Index）
 
 就是数据库，存放数据的地方。
 
@@ -65,7 +65,7 @@ tags: []
 订单索引：order_index
 ```
 
-### 2、文档（Document）
+### 文档（Document）
 
 就是一条数据，JSON格式。
 
@@ -78,7 +78,7 @@ tags: []
 }
 ```
 
-### 3、映射（Mapping）
+### 映射（Mapping）
 
 就是表结构，定义字段类型。
 
@@ -108,7 +108,7 @@ tags: []
 | boolean      | 布尔     | 是否上架  |
 
 
-### 4、倒排索引
+### 倒排索引
 
 **原理：** 把内容分词，建立 词→文档ID 的映射。
 
@@ -126,7 +126,7 @@ tags: []
 搜索"手机"，直接找到文档1和文档2
 ```
 
-## 三、SpringBoot整合ES
+## SpringBoot整合ES
 
 ### 方案选择
 
@@ -140,7 +140,7 @@ tags: []
 
 **新人建议：先学Spring Data Elasticsearch，最简单。**
 
-## 四、Spring Data Elasticsearch（推荐）
+## Spring Data Elasticsearch（推荐）
 
 ### 第一步：引入依赖
 
@@ -257,7 +257,7 @@ public class ProductService {
 }
 ```
 
-## 五、复杂查询
+## 复杂查询
 
 ### 使用ElasticsearchRestTemplate
 
@@ -337,7 +337,7 @@ public class ProductSearchService {
 }
 ```
 
-## 六、常用查询类型
+## 常用查询类型
 
 
 | 查询类型     | 说明   | 示例                 |
@@ -365,7 +365,7 @@ boolQuery.must(QueryBuilders.matchQuery("name", "手机"));
 boolQuery.filter(QueryBuilders.termQuery("category", "手机"));
 ```
 
-## 七、ES和MySQL数据同步
+## ES和MySQL数据同步
 
 > **实际工作中，数据存MySQL，搜索用ES，需要保持同步。**
 
@@ -427,7 +427,7 @@ public class ProductServiceImpl implements ProductService {
 }
 ```
 
-## 八、新人避坑指南
+## 新人避坑指南
 
 
 | 坑        | 正确做法                 |
@@ -440,7 +440,7 @@ public class ProductServiceImpl implements ProductService {
 | 没建索引就存数据 | 先创建索引和映射             |
 
 
-## 九、问同事的问题
+## 问同事的问题
 
 刚入职用ES时，可以问同事：
 
@@ -454,7 +454,7 @@ public class ProductServiceImpl implements ProductService {
 | "数据怎么同步的？"    | 了解同步方案 |
 
 
-## 十、注意事项
+## 注意事项
 
 1. **ES不是数据库**：主要用来搜索，不是用来存数据
 2. **分词器很重要**：中文要用IK分词器
@@ -462,7 +462,7 @@ public class ProductServiceImpl implements ProductService {
 4. **数据要同步**：MySQL和ES数据要一致
 5. **不要深度分页**：from+size不要超过10000
 
-## 十一、ES 8.x 新客户端（了解）
+## ES 8.x 新客户端（了解）
 
 如果项目用的是ES 8.x，要用新的Java Client：
 
@@ -476,7 +476,7 @@ public class ProductServiceImpl implements ProductService {
 
 用法类似，只是API略有不同。
 
-## 十二、终极建议
+## 终极建议
 
 > **ES不难，关键是理解它和MySQL的区别，知道什么时候用ES。**
 

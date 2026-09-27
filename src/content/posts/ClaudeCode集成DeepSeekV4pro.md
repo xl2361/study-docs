@@ -12,7 +12,7 @@ draft: false
 
 ![1](/uploads/images/2026-05-24/c7ca71d7-1044-4123-b9e7-b3ace0c7a9fc.png)
 
-## 一、直接修改配置文件
+## 直接修改配置文件
 
 Claude Code 的核心配置存储在用户目录下的 `settings.json` 中：
 
@@ -34,7 +34,7 @@ Claude Code 的核心配置存储在用户目录下的 `settings.json` 中：
 }
 ```
 
-## 二、使用 cc-switch（多模型切换工具）
+## 使用 cc-switch（多模型切换工具）
 
 如果你需要在 Claude Code 中集成多个模型并频繁切换，每次都手动修改配置文件会非常繁琐。cc-switch 正是为了解决这个问题而生的。当然，如果你只固定使用一个模型，可以跳过这一步。
 
@@ -81,7 +81,7 @@ Claude Code 的核心配置存储在用户目录下的 `settings.json` 中：
 
 ![6](/uploads/images/2026-05-24/393988f3-87a9-4d01-8cb0-871cd24c69d5.png)
 
-## 三、启动与使用
+## 启动与使用
 
 配置完成后，在项目目录下执行以下命令启动 Claude Code（底层已自动切换为 DeepSeek）：
 

@@ -6,9 +6,9 @@ category: "技术篇"
 draft: false
 ---
 
-## 一、基础概述
+## 基础概述
 
-### 1、什么是动态SQL？
+### 什么是动态SQL？
 
 > **简单说：动态SQL就是根据条件自动拼接SQL语句。**
 
@@ -31,7 +31,7 @@ List<User> listByNameAndPhone(String userName, String phone); // 按用户名和
 List<User> list(UserQueryDto query);
 ```
 
-### 2、动态SQL能解决什么问题？
+### 动态SQL能解决什么问题？
 
 | 问题 | 动态SQL解决方案 |
 | --- | --- |
@@ -39,9 +39,9 @@ List<User> list(UserQueryDto query);
 | SQL拼接繁琐 | 自动处理AND、OR、逗号等 |
 | 代码冗余 | 一个SQL搞定多种情况 |
 
-## 二、常用动态SQL标签
+## 常用动态SQL标签
 
-### 1、if标签 - 条件判断
+### if标签 - 条件判断
 
 **最常用的标签！** 用于判断参数是否满足条件。
 
@@ -99,7 +99,7 @@ List<User> list(UserQueryDto query);
 </if>
 ```
 
-### 2、where标签 - 智能处理WHERE
+### where标签 - 智能处理WHERE
 
 **where标签的作用：**
 
@@ -132,7 +132,7 @@ List<User> list(UserQueryDto query);
 
 > **注意：** where标签会自动去掉第一个AND，所以if里面的AND写在前面没问题。
 
-### 3、set标签 - 智能处理UPDATE
+### set标签 - 智能处理UPDATE
 
 **set标签的作用：**
 
@@ -161,7 +161,7 @@ List<User> list(UserQueryDto query);
 
 **效果：** 只更新传入的字段，没传的不更新。
 
-### 4、choose/when/otherwise - 多选一
+### choose/when/otherwise - 多选一
 
 **类似Java的switch-case，只执行第一个满足条件的分支。**
 
@@ -190,7 +190,7 @@ List<User> list(UserQueryDto query);
 -   如果userName没值但phone有值，只按phone查
 -   如果都没有，就查status=1的数据
 
-### 5、foreach标签 - 遍历集合
+### foreach标签 - 遍历集合
 
 **用于批量操作：批量插入、批量更新、IN查询等。**
 
@@ -255,7 +255,7 @@ List<User> list(UserQueryDto query);
 </update>
 ```
 
-### 6、trim标签 - 自定义处理
+### trim标签 - 自定义处理
 
 **更灵活地处理前缀后缀。**
 
@@ -283,9 +283,9 @@ List<User> list(UserQueryDto query);
 </trim>
 ```
 
-## 三、实际工作中的使用场景
+## 实际工作中的使用场景
 
-### 1、查询列表（最常用）
+### 查询列表（最常用）
 
 ```xml
 <select id="list" resultType="UserVo">
@@ -311,7 +311,7 @@ List<User> list(UserQueryDto query);
 </select>
 ```
 
-### 2、动态更新
+### 动态更新
 
 ```xml
 <update id="updateSelective">
@@ -332,7 +332,7 @@ List<User> list(UserQueryDto query);
 </update>
 ```
 
-### 3、动态插入
+### 动态插入
 
 ```xml
 <insert id="insertSelective">
@@ -364,9 +364,9 @@ List<User> list(UserQueryDto query);
 </insert>
 ```
 
-## 四、新人常见错误
+## 新人常见错误
 
-### 1、Integer类型判断错误
+### Integer类型判断错误
 
 ```xml
 <!-- 错误：Integer类型加了空字符串判断 -->
@@ -380,7 +380,7 @@ List<User> list(UserQueryDto query);
 </if>
 ```
 
-### 2、忘记加AND或逗号
+### 忘记加AND或逗号
 
 ```xml
 <!-- 错误：忘记加AND -->
@@ -404,7 +404,7 @@ List<User> list(UserQueryDto query);
 </where>
 ```
 
-### 3、批量操作没处理好
+### 批量操作没处理好
 
 ```xml
 <!-- 错误：批量插入格式不对 -->
@@ -424,7 +424,7 @@ List<User> list(UserQueryDto query);
 </insert>
 ```
 
-### 4、foreach没有判空
+### foreach没有判空
 
 > **新人常见错误！如果list为空，`<foreach>` 不会生成任何内容，SQL就会变成不合法的语法，直接报错。**
 
@@ -466,7 +466,7 @@ public void insertBatch(List<UserDto> userList) {
 
 > **总结：`<foreach>` 一定要配合判空使用。建议在Service层判断，集合为空直接return或抛异常，不要让空集合传到Mapper里。**
 
-## 五、新人避坑指南
+## 新人避坑指南
 
 | 坑 | 正确做法 |
 | --- | --- |
@@ -478,9 +478,9 @@ public void insertBatch(List<UserDto> userList) {
 | foreach没有判空 | 在Service层判空，集合为空时不调用Mapper，避免SQL语法错误 |
 | 复制粘贴不改参数名 | 仔细检查参数名是否正确 |
 
-## 六、调试技巧
+## 调试技巧
 
-### 1、开启SQL日志
+### 开启SQL日志
 
 **MyBatis项目：**
 
@@ -504,7 +504,7 @@ mybatis-plus:
 
 开启日志后，控制台会打印实际执行的SQL，检查是否符合预期。
 
-### 2、使用MyBatis Log Free插件（推荐）
+### 使用MyBatis Log Free插件（推荐）
 
 > 在IDEA中安装 **MyBatis Log Free** 插件，可以把MyBatis日志中带`?`占位符的SQL直接还原成**完整的、可执行的SQL**，复制到Navicat里直接运行排查问题。
 
@@ -546,7 +546,7 @@ mybatis-plus:
 
 > **新人必装！** 不装这个插件的话，你需要手动把`?`和参数一一对应替换，参数多了很容易搞错。有了这个插件一键还原，效率提升很多。
 
-## 七、终极建议
+## 终极建议
 
 > **工作中90%的动态SQL就是if + where的组合，把这个练熟就够了。**
 

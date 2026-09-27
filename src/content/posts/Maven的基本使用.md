@@ -6,7 +6,7 @@ category: "开发工具"
 draft: false
 ---
 
-## 一、什么是maven
+## 什么是maven
 
 Maven的主要作用是简化了Java项目的构建过程。它通过一个名为`pom.xml`的核心配置文件来管理项目的依赖关系、编译设置、打包和部署等操作。使用Maven，开发者不需要手动下载和管理依赖的jar包，只需在`pom.xml`文件中声明所需的依赖项及其版本，Maven会自动从仓库中下载并添加到项目中。
 
@@ -18,15 +18,15 @@ Maven的主要作用是简化了Java项目的构建过程。它通过一个名�
 
 中央仓库的地址：[https://mvnrepository.com/](https://mvnrepository.com/)
 
-## 二、maven的基本操作
+## maven的基本操作
 
-#### 1、idea配置maven
+#### idea配置maven
 
 ![设置maven](/uploads/images/2026-03-26/c267bae0-9527-4636-a421-5583a562538e.png)
 
 需要注意的是，如果公司有使用私仓的话，settings.xml配置文件一定要使用包含私仓信息的，可以直接问同事要一份！
 
-#### 2、引入新的依赖
+#### 引入新的依赖
 
 ##### 2.1、依赖在远程仓库中
 
@@ -101,11 +101,11 @@ mvn install:install-file -Dfile=alicrypto-java-aliyun-1.0.4.jar -DgroupId=com.al
 
 ![命令安装本地jar包-2](/uploads/images/2026-03-26/6782ad6b-1399-4f9a-bb18-10769444a43a.png)
 
-#### 3、maven打包等功能说明
+#### maven打包等功能说明
 
 ![maven工具栏](/uploads/images/2026-03-26/7b6b2de0-38e7-42f8-b889-251c02afe4f2.png)
 
-#### 4、maven的多环境管理
+#### maven的多环境管理
 
 Maven 多环境管理能够实现多环境配置文件之间的灵活切换，以及对配置文件中不同环境变量值的精准替换。在一些公司的实际项目中会运用到这一功能，了解并知晓其存在即可，当所在公司采用这种方式时，能及时想到即可。当使用maven多环境管理功能的时候，在maven工具栏会出现Profiles项，如下图所示：
 
@@ -160,7 +160,7 @@ logging:
     org.springframework: ${log.level}
 ```
 
-#### 5、maven的私服
+#### maven的私服
 
 ##### 5.1 maven私服的介绍
 
@@ -190,9 +190,9 @@ maven私服对于我们来说主要就是有以下两个常见的使用
 
 ![maven私仓2](/uploads/images/2026-03-26/68a6a11a-74da-46d3-b23d-77b5e9e5ed3a.png)
 
-## 三、常见问题
+## 常见问题
 
-#### 1、依赖冲突
+#### 依赖冲突
 
 当两条依赖路径把同一个坐标的 jar 引了进来，但版本不同，JVM 只能选一个，于是“选错”的那个就把代码搞炸，这也就是依赖冲突。
 
@@ -257,7 +257,7 @@ maven私服对于我们来说主要就是有以下两个常见的使用
 
 当同一个Java程序 里必须同时加载两份不兼容的 jar包的时候，这个时候只能把其中一方单独拆成一个RPC服务，主应用通过 Feign/Dubbo/gRPC等进行远程调用！
 
-#### 2、maven的pom文件未被正确识别
+#### maven的pom文件未被正确识别
 
 pom文件为蓝色的m标识的时候，为正确识别。
 
@@ -267,7 +267,7 @@ pom文件为蓝色的m标识的时候，为正确识别。
 
 ![pom文件识别2](/uploads/images/2026-03-26/3a8a7f70-19c3-4208-8d7a-4537d1c9b169.png)
 
-#### 3、maven工具栏消失
+#### maven工具栏消失
 
 -   未启用maven插件
 
@@ -278,6 +278,6 @@ pom文件为蓝色的m标识的时候，为正确识别。
     ![maven工具栏消失2](/uploads/images/2026-03-26/69f40d96-498b-47f9-ac2b-8ecea16c205f.png)
     
 
-#### 4、依赖未正确加载
+#### 依赖未正确加载
 
 ![依赖未正确加载](/uploads/images/2026-03-26/db232f4a-8b07-46b1-8899-fea2fc01a853.png)

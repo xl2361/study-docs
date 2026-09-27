@@ -6,11 +6,11 @@ category: "技术篇"
 draft: false
 ---
 
-## 一、基础概述
+## 基础概述
 
 ![分布式定时任务鼻祖Quartz架构图](/uploads/images/2026-04-18/51e15cdb-c084-4373-9c81-c4bd9abd672e.png)
 
-### 1、什么是Quartz？
+### 什么是Quartz？
 
 > **简单说：Quartz是一个强大的企业级定时任务框架，用来在指定时间、按照复杂规则自动执行代码。**
 
@@ -20,7 +20,7 @@ draft: false
 -   每小时同步一次上游系统数据
 -   每月最后一天晚上23点生成对账报表
 
-### 2、为什么学Quartz？
+### 为什么学Quartz？
 
 你可能会问：Spring的`@Scheduled`不是也能做定时任务吗？
 
@@ -34,7 +34,7 @@ draft: false
 
 **结论：简单且固定的场景用 `@Scheduled`，需要动态管理、怕重启丢任务、有多台服务器集群的场景，必须用 Quartz（或 XXL-Job 等）。**
 
-### 3、Quartz三个核心概念
+### Quartz三个核心概念
 
 | 概念 | 说明 | 类比 |
 | --- | --- | --- |
@@ -48,7 +48,7 @@ Plaintext
 Job（做什么） + Trigger（什么时候做） = Scheduler（安排执行）
 ```
 
-## 二、快速入门（最简内存版 Demo）
+## 快速入门（最简内存版 Demo）
 
 *这部分用于快速理解 Quartz 的骨架，任务信息保存在内存中，重启后重置。*
 
@@ -130,9 +130,9 @@ public class QuartzConfig {
 
 * * *
 
-## 三、两种核心 Trigger（触发器）
+## 两种核心 Trigger（触发器）
 
-### 1、SimpleTrigger（简单触发器）
+### SimpleTrigger（简单触发器）
 
 **适用场景：** 简单的重复执行，比如“每隔 X 分钟执行一次”、“延迟 X 秒后执行 10 次”。
 
@@ -148,7 +148,7 @@ Trigger trigger = TriggerBuilder.newTrigger()
         .build();
 ```
 
-### 2、CronTrigger（Cron触发器）
+### CronTrigger（Cron触发器）
 
 **适用场景：** 复杂的时间表达式，比如“每天凌晨2点”、“每周五下午4点”。
 
@@ -169,7 +169,7 @@ Trigger trigger = TriggerBuilder.newTrigger()
 
 * * *
 
-## 四、高阶必杀技：并发控制（极度重要）
+## 高阶必杀技：并发控制（极度重要）
 
 **痛点：** 假设你的任务是每 5 分钟同步一次大量数据。如果某次同步数据量极大，跑了 8 分钟才跑完，但第 5 分钟的时候，Quartz 又会启动一个新线程去跑同步，**导致两个线程同时操作同一批数据，引发严重的死锁或脏数据！**
 
@@ -192,7 +192,7 @@ public class SafeDataSyncJob extends QuartzJobBean {
 
 * * *
 
-## 五、动态管理任务（企业级真实场景）
+## 动态管理任务（企业级真实场景）
 
 > **在真实的开发中，以下这些代码通常会被写在 Service 层，然后暴露成 Controller 接口。前端会画一个漂亮的后台管理页面，运营人员在页面上点击“新增”、“启动”、“暂停”按钮，本质上就是调用了这里的代码，从而实现不重启服务器就能掌控定时任务。**
 
@@ -234,17 +234,17 @@ public class QuartzManageService {
 
 * * *
 
-## 六、企业级生产实战（持久化配置）
+## 企业级生产实战（持久化配置）
 
 > **内存模式的致命弱点：** 一旦服务器重启，所有动态添加的任务、修改的时间全部丢失！
 > 
 > **企业级做法：** 开启 JDBC 持久化，让 Quartz 把任务数据、执行状态全部存到 MySQL 里。
 
-### 1、准备数据库表
+### 准备数据库表
 
 前往 Quartz 官网下载自带的 SQL 脚本（包含了 `QRTZ_JOB_DETAILS`、`QRTZ_TRIGGERS` 等十来张表），在你的 MySQL 数据库中执行建表。
 
-### 2、修改 application.yml
+### 修改 application.yml
 
 只要加这几行配置，Spring Boot 会自动接管一切，从内存模式切换为数据库模式：
 
@@ -270,7 +270,7 @@ spring:
 
 * * *
 
-## 七、新人避坑指南
+## 新人避坑指南
 
 | 坑点 | 正确做法（避坑） |
 | --- | --- |
@@ -282,7 +282,7 @@ spring:
 
 * * *
 
-## 八、技术选型对比（我该用哪个？）
+## 技术选型对比（我该用哪个？）
 
 | 维度 | @Scheduled | Quartz | XXL-Job / Elastic-Job |
 | --- | --- | --- | --- |

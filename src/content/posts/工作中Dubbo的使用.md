@@ -6,13 +6,13 @@ category: "技术篇"
 draft: false
 ---
 
-## 一、什么是Dubbo？
+## 什么是Dubbo？
 
 Dubbo是阿里巴巴开源的Java RPC框架，用于实现服务的远程调用和治理。在微服务架构中，不同的服务部署在不同的机器上，服务之间需要相互调用，Dubbo就是帮你完成这件事的。
 
 > **简单说：Dubbo就是让一个服务能调用另一个服务的方法，就像调用本地方法一样简单。**
 
-### 1、为什么需要Dubbo？
+### 为什么需要Dubbo？
 
 | 场景 | 不用Dubbo | 用Dubbo |
 | --- | --- | --- |
@@ -21,7 +21,7 @@ Dubbo是阿里巴巴开源的Java RPC框架，用于实现服务的远程调用�
 | 负载均衡 | 自己实现 | 内置多种负载均衡策略 |
 | 服务监控 | 手动统计 | 自带监控中心 |
 
-### 2、Dubbo的核心角色
+### Dubbo的核心角色
 
 | 角色 | 说明 | 类比 |
 | --- | --- | --- |
@@ -30,7 +30,7 @@ Dubbo是阿里巴巴开源的Java RPC框架，用于实现服务的远程调用�
 | Registry（注册中心） | 服务注册与发现的地方 | 餐厅的菜单，告诉你有哪些菜 |
 | Monitor（监控中心） | 统计服务的调用次数和耗时 | 餐厅的账本，记录每道菜被点了多少次 |
 
-### 3、Dubbo的调用流程
+### Dubbo的调用流程
 
 ```
 1. Provider启动 → 向Registry注册自己的服务地址
@@ -42,7 +42,7 @@ Dubbo是阿里巴巴开源的Java RPC框架，用于实现服务的远程调用�
 
 ![dubbo调用关系](/uploads/images/2026-05-16/fc256743-745a-40ec-879d-783c223a2771.png)
 
-## 二、注册中心的选择
+## 注册中心的选择
 
 Dubbo支持多种注册中心，**不仅限于Zookeeper**，你可以根据项目实际情况选择合适的注册中心：
 
@@ -54,9 +54,9 @@ Dubbo支持多种注册中心，**不仅限于Zookeeper**，你可以根据项�
 
 > **工作中最常用的是Zookeeper和Nacos两种**，下面以这两种为例进行整合演示。具体用哪个取决于你们公司的技术栈，入职后问一下同事即可。
 
-## 三、SpringBoot整合Dubbo
+## SpringBoot整合Dubbo
 
-### 1、引入依赖
+### 引入依赖
 
 **父工程引入依赖：**
 
@@ -118,7 +118,7 @@ Dubbo支持多种注册中心，**不仅限于Zookeeper**，你可以根据项�
 </dependency>
 ```
 
-### 2、定义公共接口
+### 定义公共接口
 
 Provider和Consumer之间需要一个公共的接口模块，双方都依赖这个模块。
 
@@ -129,9 +129,9 @@ public interface TestDubboService {
 }
 ```
 
-### 3、服务提供者（Provider）
+### 服务提供者（Provider）
 
-#### 3.1 配置文件
+#### 配置文件
 
 **使用Zookeeper作为注册中心：**
 
@@ -166,7 +166,7 @@ dubbo:
 
 > **区别就只是 `registry.address` 的协议头不同**：Zookeeper是 `zookeeper://`，Nacos是 `nacos://`，其他配置完全一样。
 
-#### 3.2 启动类添加注解
+#### 启动类添加注解
 
 ```java
 @SpringBootApplication
@@ -178,7 +178,7 @@ public class ProviderApp {
 }
 ```
 
-#### 3.3 实现服务接口
+#### 实现服务接口
 
 ```java
 @DubboService  // 标记为Dubbo服务，会自动注册到注册中心
@@ -199,9 +199,9 @@ public class TestDubboServiceImpl implements TestDubboService {
 }
 ```
 
-### 4、服务消费者（Consumer）
+### 服务消费者（Consumer）
 
-#### 4.1 配置文件
+#### 配置文件
 
 **使用Zookeeper作为注册中心：**
 
@@ -231,7 +231,7 @@ dubbo:
     timeout: 60000
 ```
 
-#### 4.2 启动类添加注解
+#### 启动类添加注解
 
 ```java
 @SpringBootApplication
@@ -243,7 +243,7 @@ public class ConsumerApp {
 }
 ```
 
-#### 4.3 调用远程服务
+#### 调用远程服务
 
 ```java
 @RestController
@@ -265,7 +265,7 @@ public class TestDubboController {
 }
 ```
 
-## 四、核心注解说明
+## 核心注解说明
 
 | 注解 | 用在谁身上 | 说明 |
 | --- | --- | --- |
@@ -275,9 +275,9 @@ public class TestDubboController {
 
 > **版本说明：** 在 Dubbo 2.7.x 及更早版本中，使用的是 `@Service` 和 `@Reference` 注解（来自 `org.apache.dubbo.config.annotation.Service` 或 `com.alibaba.dubbo.config.annotation.Service`）。从 Dubbo 2.7.7 开始，官方推荐使用 `@DubboService` 和 `@DubboReference` 替代，目的是避免与 Spring 的 `@Service` 注解产生冲突和混淆。如果你在公司的老项目中看到 `@Service` 注解标注的服务类，那就是早期版本的写法，功能上和 `@DubboService` 是一样的。
 
-## 五、常用配置说明
+## 常用配置说明
 
-### 1、超时设置
+### 超时设置
 
 ```java
 // 方式一：在注解上设置（推荐，精确控制）
@@ -289,7 +289,7 @@ public class UserServiceImpl implements UserService { ... }
 private UserService userService;
 ```
 
-### 2、重试设置
+### 重试设置
 
 ```java
 @DubboReference(retries = 2)  // 重试2次，总共执行3次
@@ -298,7 +298,7 @@ private UserService userService;
 
 > **注意：** 涉及写操作（新增、修改、删除）的方法不要设置重试，避免重复执行。
 
-### 3、负载均衡策略
+### 负载均衡策略
 
 | 策略 | 说明 |
 | --- | --- |
@@ -312,7 +312,7 @@ private UserService userService;
 private UserService userService;
 ```
 
-### 4、版本控制
+### 版本控制
 
 当服务接口有不兼容升级时，可以通过版本来区分：
 
@@ -329,34 +329,34 @@ public class UserServiceImplV2 implements UserService { ... }
 private UserService userService;
 ```
 
-## 六、项目中如何使用Dubbo
+## 项目中如何使用Dubbo
 
-### 1、项目中首次使用Dubbo
+### 项目中首次使用Dubbo
 
 按照上面"三、SpringBoot整合Dubbo"的步骤操作即可。
 
-### 2、项目中非首次使用Dubbo
+### 项目中非首次使用Dubbo
 
 直接使用 `Ctrl + Shift + R` 全局搜索 `@DubboService`、`@DubboReference`、`@Service`、`@Reference`（后两个是早期版本的注解，老项目中会用到），参考同事的代码，照葫芦画瓢即可。
 
-## 七、常见使用场景
+## 常见使用场景
 
-### 1、跨服务调用
+### 跨服务调用
 
 ```
 用户服务 → 调用订单服务获取用户订单
 订单服务 → 调用商品服务获取商品信息
 ```
 
-### 2、公共服务抽取
+### 公共服务抽取
 
 ```
 短信服务、邮件服务、文件上传服务 → 独立部署，其他服务通过Dubbo调用
 ```
 
-## 八、常见问题排查
+## 常见问题排查
 
-### 1、服务调用失败：No provider available
+### 服务调用失败：No provider available
 
 **可能原因：**
 
@@ -372,7 +372,7 @@ private UserService userService;
 # 3. 检查Consumer和Provider的接口包名是否一致
 ```
 
-### 2、服务调用超时
+### 服务调用超时
 
 **可能原因：**
 
@@ -388,7 +388,7 @@ private UserService userService;
 private UserService userService;
 ```
 
-### 3、注册中心连不上
+### 注册中心连不上
 
 **可能原因：**
 
@@ -406,7 +406,7 @@ telnet 192.168.190.129 2181
 curl http://127.0.0.1:8848/nacos/
 ```
 
-### 4、本地改了代码但没有生效（新人高频问题）
+### 本地改了代码但没有生效（新人高频问题）
 
 **现象：** 本地修改了Provider的代码并重启，但调用接口后发现行为没有变化，打的断点也不进。
 
@@ -453,7 +453,7 @@ private UserService userService;
 
 > **注意：** 直连方式会绕过注册中心，仅用于本地调试，上线前必须去掉。版本区分方式的好处是：你本地注册的服务和线上的服务通过版本号隔离开，Consumer明确指定调用 `local-dev` 版本，不会误打到线上实例。排查问题的思路就是：**先确认你的请求到底打到了哪个实例上**。确认方式可以在后端对应调用Provider的服务上打个断点，走到断点就说明请求走的是本地，也可以通过这种方式来验证走本地服务的时候，逻辑是否正确的。
 
-## 九、注意事项
+## 注意事项
 
 1.  **接口包名必须一致**：Provider和Consumer引用的接口类，包路径必须完全一致，否则找不到服务
 2.  **实体类必须实现Serializable**：Dubbo传输的对象必须实现序列化接口

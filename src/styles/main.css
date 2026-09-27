@@ -518,6 +518,39 @@ img {
     margin-top: 0.75rem;  /* 12px，原 24px */
 }
 
+/* —— 标题自动编号（CSS counter） ——
+   原先标题序号是手写在标题文字里（如 `## 一、xxx`、`### 1、yyy`、`#### 1.1 zzz`），
+   删除标题后需要手动改后面所有序号，容易漏。现改为 CSS 自动编号：
+     h2 -> 一、二、三、（cjk-ideographic）
+     h3 -> 1、2、3、（decimal）
+     h4 -> 1.1 / 1.2（父 h3 序号 . 自身序号）
+   已用脚本把所有文章标题里手写的序号前缀去掉（723 处），所以这里只负责"生成"，
+   不会重复。删除/新增标题后编号自动重排，无需手改。
+   同时作用于阅读页与编辑器（.tiptap-host 也带 custom-md）。 */
+.custom-md {
+    counter-reset: h2num;
+}
+.custom-md h2 {
+    counter-increment: h2num;
+    counter-reset: h3num;
+}
+.custom-md h2::before {
+    content: counter(h2num, cjk-ideographic) "、";
+}
+.custom-md h3 {
+    counter-increment: h3num;
+    counter-reset: h4num;
+}
+.custom-md h3::before {
+    content: counter(h3num, decimal) "、";
+}
+.custom-md h4 {
+    counter-increment: h4num;
+}
+.custom-md h4::before {
+    content: counter(h3num) "." counter(h4num) " ";
+}
+
 ::selection {
     background-color: var(--selection-bg)
 }

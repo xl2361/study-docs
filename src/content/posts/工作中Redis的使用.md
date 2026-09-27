@@ -6,11 +6,11 @@ category: "技术篇"
 draft: false
 ---
 
-## 一、什么是Redis？
+## 什么是Redis？
 
 Redis是一个开源的内存数据结构存储系统，可以用作数据库、缓存和消息中间件。它支持多种类型的数据结构，如字符串、哈希、列表、集合、有序集合等。
 
-### 1、Redis的特点
+### Redis的特点
 
 | 特点 | 说明 |
 | --- | --- |
@@ -20,7 +20,7 @@ Redis是一个开源的内存数据结构存储系统，可以用作数据库、
 | 支持集群 | 支持主从复制和集群模式，实现高可用 |
 | 原子性 | 所有操作都是原子性的，支持事务 |
 
-### 2、Redis的五种基本数据类型
+### Redis的五种基本数据类型
 
 | 数据类型 | 说明 | 适用场景 |
 | --- | --- | --- |
@@ -30,11 +30,11 @@ Redis是一个开源的内存数据结构存储系统，可以用作数据库、
 | Set | 无序集合，元素唯一 | 标签、共同关注 |
 | ZSet | 有序集合，每个元素关联一个分数 | 排行榜、延时队列 |
 
-## 二、项目中如何使用Redis
+## 项目中如何使用Redis
 
-### 1、项目中首次使用Redis
+### 项目中首次使用Redis
 
-#### 1.1 引入依赖
+#### 引入依赖
 
 ```xml
 <dependency>
@@ -43,7 +43,7 @@ Redis是一个开源的内存数据结构存储系统，可以用作数据库、
 </dependency>
 ```
 
-#### 1.2 配置Redis信息
+#### 配置Redis信息
 
 **基础配置：**
 
@@ -74,7 +74,7 @@ spring:
         min-idle: 0          # 连接池最小空闲连接
 ```
 
-#### 1.3 配置RedisTemplate
+#### 配置RedisTemplate
 
 ```java
 @Configuration
@@ -110,7 +110,7 @@ public class RedisConfig {
 }
 ```
 
-#### 1.4 写Redis工具类
+#### 写Redis工具类
 
 ```java
 @Component
@@ -274,7 +274,7 @@ public class RedisUtils {
 }
 ```
 
-#### 1.5 使用Redis工具类
+#### 使用Redis工具类
 
 ```java
 @Service
@@ -311,13 +311,13 @@ public class UserService {
 }
 ```
 
-### 2、项目中非首次使用Redis
+### 项目中非首次使用Redis
 
 直接可以使用 `Ctrl + Shift + R` 全局搜索redis，参考别人的代码是如何使用的，照葫芦画瓢（这个技能很重要）。
 
-## 三、项目中使用Redis的常见场景
+## 项目中使用Redis的常见场景
 
-### 1、缓存热点数据
+### 缓存热点数据
 
 有些图表数据来源的表数据较多，处理过程复杂，导致接口响应慢，可以使用Redis缓存。
 
@@ -341,7 +341,7 @@ public List<DataVO> getChartData(String type) {
 }
 ```
 
-### 2、存储验证码/Token
+### 存储验证码/Token
 
 ```java
 // 存储验证码，5分钟过期
@@ -356,7 +356,7 @@ public boolean verifyCode(String phone, String code) {
 }
 ```
 
-### 3、分布式锁
+### 分布式锁
 
 使用Redis实现分布式锁，防止重复操作：
 
@@ -403,7 +403,7 @@ public void doSomething() {
 }
 ```
 
-### 4、计数器
+### 计数器
 
 ```java
 // 点赞数增加
@@ -418,7 +418,7 @@ public Long getLikeCount(String articleId) {
 }
 ```
 
-### 5、限流
+### 限流
 
 使用Redis实现简单的限流：
 
@@ -435,9 +435,9 @@ public boolean allowRequest(String userId, int maxCount, int seconds) {
 }
 ```
 
-## 四、缓存三大问题
+## 缓存三大问题
 
-### 1、缓存穿透
+### 缓存穿透
 
 **问题**：查询一个不存在的数据，缓存中没有，数据库中也没有。导致每次请求都穿透缓存直接查询数据库。
 
@@ -469,7 +469,7 @@ public User getUserById(String userId) {
 }
 ```
 
-### 2、缓存击穿
+### 缓存击穿
 
 **问题**：某个热点key过期，此时大量请求同时查询这个key，全部穿透到数据库。
 
@@ -514,7 +514,7 @@ public User getUserWithLock(String userId) {
 }
 ```
 
-### 3、缓存雪崩
+### 缓存雪崩
 
 **问题**：大量缓存key在同一时间集中过期，导致所有请求都落到数据库上。
 
@@ -534,7 +534,7 @@ public void setWithRandomExpire(String key, Object value, long baseTime) {
 }
 ```
 
-## 五、缓存一致性策略
+## 缓存一致性策略
 
 对于缓存一致性问题，直接先更新数据库，再删除缓存就能满足大部分的场景。
 
@@ -555,9 +555,9 @@ public void setWithRandomExpire(String key, Object value, long baseTime) {
 删除缓存 -> 更新数据库 -> 延时几百毫秒 -> 再次删除缓存
 ```
 
-## 六、Redis常用命令
+## Redis常用命令
 
-### 1、String类型
+### String类型
 
 | 命令 | 说明 |
 | --- | --- |
@@ -569,7 +569,7 @@ public void setWithRandomExpire(String key, Object value, long baseTime) {
 | INCR key | 自增1 |
 | DECR key | 自减1 |
 
-### 2、Hash类型
+### Hash类型
 
 | 命令 | 说明 |
 | --- | --- |
@@ -579,7 +579,7 @@ public void setWithRandomExpire(String key, Object value, long baseTime) {
 | HDEL key field | 删除Hash字段 |
 | HEXISTS key field | 判断字段是否存在 |
 
-### 3、List类型
+### List类型
 
 | 命令 | 说明 |
 | --- | --- |
@@ -589,7 +589,7 @@ public void setWithRandomExpire(String key, Object value, long baseTime) {
 | RPOP key | 从右边弹出 |
 | LRANGE key start stop | 获取指定范围元素 |
 
-### 4、通用命令
+### 通用命令
 
 | 命令 | 说明 |
 | --- | --- |
@@ -599,9 +599,9 @@ public void setWithRandomExpire(String key, Object value, long baseTime) {
 | EXISTS key | 判断键是否存在 |
 | FLUSHDB | 清空当前数据库 |
 
-## 七、常见问题排查
+## 常见问题排查
 
-### 1、连接超时
+### 连接超时
 
 **可能原因：**
 
@@ -620,7 +620,7 @@ telnet 127.0.0.1 6379
 redis-cli -h 127.0.0.1 -p 6379 -a password
 ```
 
-### 2、内存占用过高
+### 内存占用过高
 
 **排查方法：**
 
@@ -632,7 +632,7 @@ redis-cli info memory
 redis-cli --bigkeys
 ```
 
-### 3、响应慢
+### 响应慢
 
 **可能原因：**
 

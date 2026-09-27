@@ -588,15 +588,24 @@ async function createEditor(operation: number) {
 					.configure({
 						resize: {
 							enabled: true,
+							// 四角 + 四边共 8 个手柄：
+							// - 四角：拖拽缩放（按住 Shift 可临时锁定比例）
+							// - 四边中点：单独拉长/拉高，改变长宽比
 							directions: [
 								"top-left",
 								"top-right",
 								"bottom-right",
 								"bottom-left",
+								"top",
+								"right",
+								"bottom",
+								"left",
 							],
 							minWidth: 80,
 							minHeight: 60,
-							alwaysPreserveAspectRatio: true,
+							// false = 默认自由改变长宽比（按住 Shift 才等比）。
+							// 之前为 true 会强制等比，无法单独拉长/拉高。
+							alwaysPreserveAspectRatio: false,
 						},
 					})
 					.extend({
@@ -3346,6 +3355,25 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   .tiptap-host :global([data-resize-handle="top-right"]) { transform: translate(50%, -50%) !important; }
   .tiptap-host :global([data-resize-handle="bottom-right"]) { transform: translate(50%, 50%) !important; }
   .tiptap-host :global([data-resize-handle="bottom-left"]) { transform: translate(-50%, 50%) !important; }
+
+  /* 四边中点手柄：TipTap 默认让边手柄横跨整条边（left:0;right:0 或 top:0;bottom:0），
+     这里改回小圆点并居中到该边中点 */
+  .tiptap-host :global([data-resize-handle="top"]),
+  .tiptap-host :global([data-resize-handle="bottom"]) {
+    left: 50% !important;
+    right: auto !important;
+    width: 10px !important;
+  }
+  .tiptap-host :global([data-resize-handle="left"]),
+  .tiptap-host :global([data-resize-handle="right"]) {
+    top: 50% !important;
+    bottom: auto !important;
+    height: 10px !important;
+  }
+  .tiptap-host :global([data-resize-handle="top"]) { transform: translate(-50%, -50%) !important; }
+  .tiptap-host :global([data-resize-handle="bottom"]) { transform: translate(-50%, 50%) !important; }
+  .tiptap-host :global([data-resize-handle="left"]) { transform: translate(-50%, -50%) !important; }
+  .tiptap-host :global([data-resize-handle="right"]) { transform: translate(50%, -50%) !important; }
 
   @media (max-width: 760px) { .toolbar { top: 3.6rem; } }
 </style>

@@ -3309,39 +3309,40 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   .tiptap-host :global(.ec-line-gutter) { width: 1.55rem; padding-left: .4rem; }
   .tiptap-host :global(.ec-line-gutter) { border-right: 1px solid color-mix(in srgb, currentColor 22%, transparent); }
 
-  /* —— 图片缩放 UI：点击图片 → 蓝色边框 + 四角蓝色圆点，拖拽改尺寸 —— */
-  /* 容器：display:flex（TipTap 默认），宽度取节点 width 属性、由拖拽更新。
-     图片受 max-width:100% 与自身比例约束，可能填不满容器（实测
-     container 879 vs img 851，右侧空 28px），蓝框就会比图片宽。
-     修法（不能给 img 加 width:100%!important，那会覆盖拖拽写入的内联
-     style.width）：用 max-width:none 让图片不再被父宽度二次限制，
-     尺寸完全跟容器走，两者严格相等。 */
+  /* —— 图片缩放 UI：点击图片 → 蓝色边框 + 四角蓝色圆点，拖拽改尺寸 ——
+     尺寸机制（读 TipTap 源码确认）：
+       - this.element 就是 img，初始尺寸与拖拽都写 img.style.width/height
+       - container/wrapper 只是包裹层，默认 display:flex 且宽度取节点 width
+     因此 container 可能比 img 宽（img 受 max-width 约束时），
+     导致蓝框与手柄都以 container 为基准而偏移。
+     解法：让 container/wrapper 收缩到 img 的尺寸（inline-block + 自适应宽），
+     并去掉 img 的百分比 max-width（避免"img 相对 container、container 又
+     跟随 img"的循环依赖），改用 wrapper 的 max-width 限制不超正文栏。 */
   .tiptap-host :global([data-resize-container]) {
     position: relative;
-    max-width: 100%;
+    display: inline-block !important;
+    max-width: 100% !important;
+  }
+  .tiptap-host :global([data-resize-wrapper]) {
+    position: relative;
+    display: inline-block !important;
+    max-width: 100% !important;
   }
   .tiptap-host :global([data-resize-container] img) {
     /* 清零站点给正文图片加的垂直外边距（prose 的 my-8），
-       否则容器比图片高 64px，蓝框上下偏大 */
+       否则容器比图片高 64px */
     margin: 0 !important;
-    /* 不再被父级 max-width 二次压缩，宽度完全由容器决定 */
-    max-width: none !important;
-    max-height: none !important;
     display: block !important;
-  }
-  .tiptap-host :global([data-resize-wrapper]) {
-    max-width: 100%;
-  }
-  .tiptap-host :global([data-resize-wrapper] img) {
-    max-width: none !important;
-    max-height: none !important;
+    /* 不设百分比 max-width，避免与容器形成循环依赖；
+       超出正文栏由 wrapper 的 max-width 兜底 */
   }
   /* 编辑器内的图片不显示放大镜光标（zoom-in 是给阅读页灯箱用的，
      编辑态点击是选中图片，放大镜会误导用户）。 */
   .tiptap-host :global(.ProseMirror img) {
     cursor: default !important;
   }
-  /* 选中图片：用自定义类 .img-resize-active（由 nodeView 在点击时添加） */
+  /* 选中图片：蓝框画在 container 上（container 已收缩到与 img 等宽，
+     见上方尺寸机制说明），由 nodeView 在点击时加 .img-resize-active */
   .tiptap-host :global([data-resize-container].img-resize-active) {
     outline: 1px solid #3b82f6 !important;
     outline-offset: 0;

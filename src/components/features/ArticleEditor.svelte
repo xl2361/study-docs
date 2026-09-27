@@ -804,6 +804,38 @@ async function createEditor(operation: number) {
 									dom.style.pointerEvents = "";
 								};
 
+								// 自主控制「选中态」——不依赖 ProseMirror 给 nodeView
+								// 自动加 ProseMirror-selectednode（实测 leaf/atom 节点的
+								// 自定义 nodeView 点击时不会自动进入 NodeSelection）。
+								// 点击图片：本地加类显示手柄 + 通知编辑器选中该节点；
+								// 点击文档其它位置：移除类隐藏手柄。
+								const setActive = (on: boolean) => {
+									dom.classList.toggle("img-resize-active", on);
+								};
+								dom.addEventListener("mousedown", () => {
+									const pos = getPos();
+									if (pos !== undefined) {
+										editor.chain().setNodeSelection(pos).run();
+									}
+									setActive(true);
+								});
+								// 点击编辑器其它位置时收起（拖拽手柄时不收起）
+								const onDocMouseDown = (event: MouseEvent) => {
+									if (dom.contains(event.target as Node)) return;
+									if (
+										(event.target as Element)?.closest?.("[data-resize-handle]")
+									)
+										return;
+									setActive(false);
+								};
+								document.addEventListener("mousedown", onDocMouseDown);
+								// 节点被销毁时清理全局监听
+								const originalDestroy = nodeView.destroy?.bind(nodeView);
+								nodeView.destroy = () => {
+									document.removeEventListener("mousedown", onDocMouseDown);
+									originalDestroy?.();
+								};
+
 								return nodeView;
 							};
 						},
@@ -3271,14 +3303,14 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   /* —— 图片缩放 UI：点击图片 → 蓝色边框 + 四角蓝色圆点，拖拽改尺寸 —— */
   /* 容器 */
   .tiptap-host :global([data-resize-container]) { display: inline-block; position: relative; max-width: 100%; }
-  /* 选中图片：ProseMirror 把 ProseMirror-selectednode 加在 nodeView 的根元素
-     （ResizableNodeView 的 get dom() 返回 container），不是内层 <img>。
-     因此选中态判断要落在 [data-resize-container] 上。 */
-  .tiptap-host :global([data-resize-container].ProseMirror-selectednode) {
+  /* 选中图片：用自定义类 .img-resize-active（由 nodeView 在点击时添加），
+     不依赖 ProseMirror 的 ProseMirror-selectednode —— 实测 leaf/atom 节点的
+     自定义 nodeView 点击时不会自动获得该类的可靠行为。 */
+  .tiptap-host :global([data-resize-container].img-resize-active) {
     outline: 1px solid #3b82f6 !important;
     outline-offset: 0;
   }
-  /* 四角圆点：默认隐藏；仅当图片被点击选中或正在拖拽时显示 */
+  /* 四角圆点：默认隐藏；仅当图片被点击选中（.img-resize-active）或拖拽中显示 */
   .tiptap-host :global([data-resize-handle]) {
     width: 10px !important;
     height: 10px !important;
@@ -3292,7 +3324,7 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
     transition: opacity .1s ease !important;
     z-index: 5 !important;
   }
-  .tiptap-host :global([data-resize-container].ProseMirror-selectednode [data-resize-handle]),
+  .tiptap-host :global([data-resize-container].img-resize-active [data-resize-handle]),
   .tiptap-host :global([data-resize-container][data-resize-state="true"] [data-resize-handle]) {
     opacity: 1 !important;
     pointer-events: auto !important;

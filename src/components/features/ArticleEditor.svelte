@@ -3123,15 +3123,14 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   .tiptap-host :global(.ec-line-gutter) { border-right: 1px solid color-mix(in srgb, currentColor 22%, transparent); }
 
   /* —— 图片缩放 UI：点击图片 → 蓝色边框 + 四角蓝色圆点，拖拽改尺寸 —— */
-  /* 容器：未选中时无边框 */
+  /* 容器 */
   .tiptap-host :global([data-resize-container]) { display: inline-block; position: relative; max-width: 100%; }
-  /* 选中态（ProseMirror 给选中的图片节点加 selectednode 类）：蓝色实线边框 */
-  .tiptap-host :global(.ProseMirror img.ProseMirror-selectednode),
-  .tiptap-host :global(.ProseMirror img[data-resize-selected]) {
+  /* 选中图片节点时：蓝色实线边框（仅点击选中才显示，非悬停） */
+  .tiptap-host :global(.ProseMirror img.ProseMirror-selectednode) {
     outline: 1px solid #3b82f6 !important;
     outline-offset: 0;
   }
-  /* 四角圆点：默认隐藏，选中/悬停时显示 */
+  /* 四角圆点：默认隐藏；仅当图片被「点击选中」或正在拖拽时显示 */
   .tiptap-host :global([data-resize-handle]) {
     width: 10px !important;
     height: 10px !important;
@@ -3141,15 +3140,19 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
     box-shadow: 0 0 0 1px rgba(59, 130, 246, .5) !important;
     box-sizing: border-box !important;
     opacity: 0 !important;
-    transition: opacity .12s ease !important;
+    pointer-events: none !important;
+    transition: opacity .1s ease !important;
     z-index: 5 !important;
   }
-  /* 悬停图片容器 或 正在拖拽(data-resize-state) 时显示手柄 */
-  .tiptap-host :global([data-resize-container]:hover [data-resize-handle]),
+  /* 选中（selectednode 的容器同级判断不可行，改用 :has）：选中或拖拽时显示并可交互 */
+  .tiptap-host :global([data-resize-container]:has(img.ProseMirror-selectednode) [data-resize-handle]),
   .tiptap-host :global([data-resize-container][data-resize-state="true"] [data-resize-handle]) {
     opacity: 1 !important;
+    pointer-events: auto !important;
   }
-  /* 四个角的位置微调：让圆点压在边框交点上（TipTap 已按方向定位，这里只做居中偏移） */
+  /* 四角圆点中心精确对准图片角点：
+     TipTap 把圆点的 top/left(或 right/bottom) 置 0（圆点边缘贴角），
+     用 translate 半径回拉，让圆心落在角点上 */
   .tiptap-host :global([data-resize-handle="top-left"]) { transform: translate(-50%, -50%) !important; }
   .tiptap-host :global([data-resize-handle="top-right"]) { transform: translate(50%, -50%) !important; }
   .tiptap-host :global([data-resize-handle="bottom-right"]) { transform: translate(50%, 50%) !important; }

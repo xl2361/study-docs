@@ -151,6 +151,31 @@ export default function rehypeImageDimensions() {
 					: [];
 			if (classNames.includes("plantuml-image")) return;
 
+			// 编辑器缩放约定：title 尾部的 "WxH"（由 ArticleEditor 的
+			// renderMarkdown 写入）。用户显式设置的尺寸优先级最高，
+			// 必须先于「读取图片物理尺寸」处理，否则缩放会被原始尺寸覆盖
+			// （表现为：编辑器里改了大小，保存后阅读页仍是原始大小）。
+			const title = node.properties?.title;
+			if (typeof title === "string") {
+				const m = title.match(/(?:^|\s)(\d{2,5})x(\d{2,5})(?:\s|$)/);
+				if (m) {
+					const w = Number(m[1]);
+					const h = Number(m[2]);
+					if (w > 0 && h > 0) {
+						node.properties.width = w;
+						node.properties.height = h;
+						// 从 title 中剥离尺寸标记，避免它作为悬浮提示显示给读者
+						const cleaned = title.replace(/\s*\d{2,5}x\d{2,5}\s*/, "").trim();
+						if (cleaned) {
+							node.properties.title = cleaned;
+						} else {
+							delete node.properties.title;
+						}
+						return;
+					}
+				}
+			}
+
 			const dim = readImageDimensions(src);
 			if (dim) {
 				node.properties.width = dim.width;

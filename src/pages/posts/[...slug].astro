@@ -557,8 +557,20 @@ const editorArticlePath =
           body: payload,
         });
       }
-    } catch {
-      /* 忽略上报异常 */
-    }
-  })();
+      } catch {
+        /* 忽略上报异常 */
+      }
+
+      // 记录最近浏览（供主页把浏览过的文章置顶）。仅存本机 localStorage（每人各自的浏览记录）。
+      try {
+        const mruKey = "study-mru-v1";
+        const prev = JSON.parse(localStorage.getItem(mruKey) || "[]");
+        const list = Array.isArray(prev) ? prev : [];
+        const next = [selfSlug].concat(list.filter(function (s) { return s !== selfSlug; })).slice(0, 50);
+        localStorage.setItem(mruKey, JSON.stringify(next));
+      } catch {
+        /* 忽略（无痕模式等） */
+      }
+    })();
+
 </script>

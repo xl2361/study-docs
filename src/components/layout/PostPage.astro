@@ -277,10 +277,8 @@ const initialLayoutClass =
     });
   });
 
-  // 说明：首页文章顺序完全由构建期决定（置顶 → 发布日期），
-  // 客户端不再对列表做任何重排。热度只用于侧边栏独立的「热门文章」组件，
-  // 不参与分页，从根本上避免"同一篇文章同时出现在两页"这类跨页不一致问题。
-  // 历史教训见 AAAA/文档/稳定版归档.md v1.0.6 / v1.0.7。
+  // 说明：文章列表的顺序由构建期决定（热度 → 发布日期）。客户端只做「最近浏览置顶」（本页内重排，见下方 applyMruOrder）。
+  // 热度排序与最近浏览都不跨页搬运，从根本上避免"同一篇文章同时出现在两页"这类跨页不一致问题。历史教训见 AAAA/文档/稳定版归档.md v1.0.6 / v1.0.7。
 
   // 页面显示时也初始化布局（处理页面切换）
   document.addEventListener("visibilitychange", function () {
@@ -344,6 +342,66 @@ const initialLayoutClass =
 
   // 立即执行一次（处理页面刷新）
   setTimeout(initLayout, 0);
+
+  // —— 最近浏览置顶 ——
+  // 主页文章列表是构建期静态分页的（每页固定文章）。这里在**当前页内**把最近浏览过的文章排到最前（按最近浏览时间倒序），其余保持原顺序。
+  // 只在本页内重排，绝不跨页搬运 —— 跨页搬运会让同一篇文章同时出现在两页（v1.0.6 的 bug）。历史教训见 AAAA/文档/稳定版归档.md。
+  // 数据为每人的 localStorage（各自浏览记录，互不干扰）。
+  function readMru(): any[] {
+    try {
+      const raw = localStorage.getItem("study-mru-v1");
+      const list = JSON.parse(raw || "[]");
+      return Array.isArray(list) ? list : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function applyMruOrder() {
+    const container = document.getElementById("post-list-container");
+    if (!container) return;
+    const cards = Array.from(container.querySelectorAll(".post-card-item"));
+    if (cards.length < 2) return;
+
+    const mru = readMru();
+    if (!mru.length) return;
+
+    // 只对本页存在的卡片排序：浏览过的（按 MRU 顺序）在前，其余保持原相对顺序
+    const rank = (card: Element) => {
+      const slug = card.getAttribute("data-post-slug") || "";
+      const i = mru.indexOf(slug);
+      return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+    };
+
+    const sorted = cards.slice().sort((a, b) => rank(a) - rank(b));
+    // 顺序没变就不动 DOM（避免无谓重排导致闪烁）
+    let changed = false;
+    for (let i = 0; i < sorted.length; i++) {
+      if (sorted[i] !== cards[i]) {
+        changed = true;
+        break;
+      }
+    }
+    if (!changed) return;
+
+    for (const card of sorted) container.appendChild(card);
+    window.dispatchEvent(new CustomEvent("post-heat-sorted"));
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    setTimeout(applyMruOrder, 60);
+  });
+  document.addEventListener("astro:page-load", function () {
+    setTimeout(applyMruOrder, 60);
+  });
+  document.addEventListener("swup:contentReplaced", function () {
+    setTimeout(applyMruOrder, 60);
+  });
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) {
+      setTimeout(applyMruOrder, 60);
+    }
+  });
 </script>
 
 <style is:global>

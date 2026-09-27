@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
 import { NodeSelection, TextSelection } from "prosemirror-state";
 import { CellSelection } from "prosemirror-tables";
 import { onMount, tick } from "svelte";
@@ -3322,11 +3322,16 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
     position: relative;
     display: inline-block !important;
     max-width: 100% !important;
+    /* 同 wrapper：消除行框 descender 空隙，保证高度严格等于图片 */
+    line-height: 0 !important;
   }
   .tiptap-host :global([data-resize-wrapper]) {
     position: relative;
     display: inline-block !important;
     max-width: 100% !important;
+    /* 消除 inline-block 行框的 descender 空隙：否则 wrapper 比图片高
+       约 8px（line-height 28px 造成的基线空间），蓝框上下各多 4px */
+    line-height: 0 !important;
   }
   .tiptap-host :global([data-resize-container] img) {
     /* 清零站点给正文图片加的垂直外边距（prose 的 my-8），

@@ -4,6 +4,8 @@ published: 2026-08-01
 description: "Navicat的使用"
 category: "开发工具"
 draft: false
+updated: 2026-09-27
+tags: []
 ---
 
 ## Navicat是什么？
@@ -390,7 +392,7 @@ DELETE FROM t_user WHERE create_time < '2024-01-01';
 2.  根据你的需求选择 **Insert语句** 或者 **Update语句**
     
 
-![将表里面部分记录复制成sql语句](/uploads/images/2026-03-26/eca2da6e-9cf6-4675-a6bf-dab87993d99c.png)
+![](/uploads/images/2026-09-26/5461b7d2-b5e4-4cdc-8f53-5b3f6a27dc5e.png)
 
 **推荐命名规范**
 

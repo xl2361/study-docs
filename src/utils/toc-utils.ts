@@ -352,16 +352,24 @@ export class TOCManager {
 		for (const h of headings) {
 			if (h.id === id) return h;
 		}
-		const tocText = (
-			tocAnchor.getAttribute("aria-label") ||
-			tocAnchor.textContent ||
-			""
-		)
-			.replace(/#+\s*$/, "")
-			.trim();
+		// TOC 文本现在带编号前缀（如「一、」「1、」），编辑器标题不带，
+		// 比对时剥掉前缀，避免匹配失败后 index 回退错位。
+		const stripTocPrefix = (value: string) =>
+			value.replace(/^(?:[一二三四五六七八九十百]+|\d+(?:\.\d+)?)[、.\s]+/, "").trim();
+		const tocText = stripTocPrefix(
+			(
+				tocAnchor.getAttribute("aria-label") ||
+				tocAnchor.textContent ||
+				""
+			)
+				.replace(/#+\s*$/, "")
+				.trim(),
+		);
 		if (tocText) {
 			for (const h of headings) {
-				const hText = (h.textContent || "").replace(/#+\s*$/, "").trim();
+				const hText = stripTocPrefix(
+					(h.textContent || "").replace(/#+\s*$/, "").trim(),
+				);
 				if (hText === tocText) return h;
 			}
 		}

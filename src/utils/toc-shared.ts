@@ -29,8 +29,38 @@ export interface TocItem {
 }
 
 /**
+ * 阿拉伯数字转中文数字（用于 h2 级目录编号，与正文 cjk-ideographic 对齐）。
+ * 例：1→一 10→十 11→十一 20→二十 21→二十一 100→一百
+ */
+export function toChineseNumber(n: number): string {
+	if (!Number.isFinite(n) || n <= 0) return String(n);
+	const digits = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
+	if (n < 10) return digits[n];
+	if (n < 20) return n === 10 ? "十" : `十${digits[n % 10]}`;
+	if (n < 100) {
+		const tens = Math.floor(n / 10);
+		const ones = n % 10;
+		return `${digits[tens]}十${ones ? digits[ones] : ""}`;
+	}
+	if (n < 1000) {
+		const hundreds = Math.floor(n / 100);
+		const rest = n % 100;
+		if (rest === 0) return `${digits[hundreds]}百`;
+		if (rest < 10) return `${digits[hundreds]}百零${digits[rest]}`;
+		return `${digits[hundreds]}百${toChineseNumber(rest)}`;
+	}
+	return String(n);
+}
+
+/**
  * 根据标题列表计算目录项。
  * 复刻 TOCManager 里的 calculateMinDepth + filterHeadings + 深度/徽章逻辑。
+ *
+ * 编号：正文标题的手写序号已剥离，改由 CSS counter 生成；TOC 是纯文本渲染，
+ * 拿不到伪元素，故在此按层级顺序补出编号前缀，与正文保持完全一致：
+ *   minDepth    → 「一、」
+ *   minDepth+1  → 「1、」（每个上层重置）
+ *   minDepth+2+ → 「{上层}.{本层} 」（对齐正文 h4）
  */
 export function computeTocItems(
 	headings: TocInput[],
@@ -49,6 +79,9 @@ export function computeTocItems(
 
 	const items: TocItem[] = [];
 	let indexCount = 1;
+	// 各层级计数器：topLevelCount 用于中文序号，subCount 用于次级重置
+	let subCount = 0;
+	let deepCount = 0;
 
 	for (const h of filtered) {
 		// 跳过没有锚点的标题
@@ -60,18 +93,28 @@ export function computeTocItems(
 
 		let badgeKind: "index" | "dot" | "dot-sm";
 		let badgeIndex: number | undefined;
+		let prefix: string;
 		if (depth === minDepth) {
 			badgeKind = "index";
 			badgeIndex = indexCount;
+			prefix = `${toChineseNumber(indexCount)}、`;
 			indexCount++;
+			subCount = 0;
+			deepCount = 0;
 		} else if (depth === minDepth + 1) {
 			badgeKind = "dot";
+			subCount++;
+			deepCount = 0;
+			prefix = `${subCount}、`;
 		} else {
 			badgeKind = "dot-sm";
+			deepCount++;
+			prefix = `${subCount}.${deepCount} `;
 		}
 
 		// 空文本回退成 slug；去掉 rehypeAutolinkHeadings 追加的尾部 "#"
-		const text = (h.text || "").replace(/#+\s*$/, "").trim() || h.slug;
+		const raw = (h.text || "").replace(/#+\s*$/, "").trim() || h.slug;
+		const text = `${prefix}${raw}`;
 
 		items.push({
 			headingId: h.slug,

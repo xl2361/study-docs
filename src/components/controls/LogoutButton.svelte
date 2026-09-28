@@ -30,7 +30,7 @@ onMount(() => {
 {#if authenticated}
 	<button
 		type="button"
-		class="btn-plain scale-animation rounded-lg h-9 w-9 md:h-11 md:w-11 active:scale-90"
+		class="btn-plain scale-animation rounded-lg h-9 w-9 active:scale-90"
 		onclick={logout}
 		aria-label="退出登录"
 		title="退出登录"

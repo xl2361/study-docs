@@ -149,7 +149,7 @@ const logoVariants = await Promise.all(
         "overflow-visible! h-14 px-4"
     ]}>
         <div class="mx-auto h-full w-full max-w-(--page-width) grid grid-cols-[auto_minmax(0,1fr)_auto] items-center">
-            <a href={url('/')} class="btn-plain scale-animation rounded-lg h-10 px-3 md:px-5 font-bold active:scale-95 min-w-0 max-w-[58vw] md:max-w-none">
+            <a href={url('/')} class="btn-plain scale-animation rounded-lg h-9 px-3 md:px-5 font-bold active:scale-95 min-w-0 max-w-[58vw] md:max-w-none">
                 <div class:list={[
                     "flex flex-row items-center text-md min-w-0",
                     siteConfig.navbar.followTheme ? "text-(--primary)" : "dark:text-white text-black"
@@ -189,7 +189,7 @@ const logoVariants = await Promise.all(
                     return <DropdownMenu link={l} />;
                 })}
             </div>
-            <div class="flex col-start-3 justify-self-end">
+            <div class="flex items-center col-start-3 justify-self-end">
                 <GlobalEditController client:idle />
                 <!--<SearchPanel client:load>-->
                 <Search

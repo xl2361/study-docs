@@ -26,17 +26,14 @@
   h4,
   h5,
   h6 {
+    /* 标题锚点：保留 <a class="anchor"> 供 TOC 定位与「复制小节链接」使用，
+       但彻底隐藏「#」符号——不可见、不占视觉空间，悬停也不显示。
+       不用 pointer-events:none、不用 display:none，保留可点击跳转能力。 */
     .anchor {
-      @apply transition! -m-0.5! ml-[0.2ch]! p-0.5! select-none! opacity-0! no-underline!;
+      @apply transition-none! opacity-0! no-underline! select-none!;
 
       .anchor-icon {
-        @apply mx-[0.45ch]!;
-      }
-    }
-
-    &:hover {
-      .anchor {
-        @apply opacity-100!;
+        @apply hidden!;
       }
     }
   }

@@ -91,6 +91,8 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 			searchInput.className = "ec-code-lang-search";
 			searchInput.placeholder = "搜索…";
 			searchInput.autocomplete = "off";
+			/* size=1：避免 input 默认宽度参与面板 max-content 计算把面板撑宽 */
+			searchInput.size = 1;
 
 			listEl = document.createElement("div");
 			listEl.className = "ec-code-lang-list";

@@ -3267,7 +3267,7 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   /* 下拉面板（挂在 chrome 内部，position: absolute，随代码块滚动）
      注意：chrome 是 pointer-events:none，面板必须显式恢复 auto，
      否则点击搜索框/列表项会穿透到下层，表现为"点搜索时列表消失"。 */
-  :global(.ec-code-lang-panel) { position: absolute; pointer-events: auto; width: max-content; max-width: 160px; border: 1px solid var(--line-divider); border-radius: 6px; background: var(--card-bg); box-shadow: 0 8px 24px rgb(0 0 0 / 18%); z-index: 10002; display: flex; flex-direction: column; overflow: hidden; }
+  :global(.ec-code-lang-panel) { position: absolute; pointer-events: auto; width: max-content; max-width: 130px; border: 1px solid var(--line-divider); border-radius: 6px; background: var(--card-bg); box-shadow: 0 8px 24px rgb(0 0 0 / 18%); z-index: 10002; display: flex; flex-direction: column; overflow: hidden; }
   /* 搜索框在面板底部（紧贴语言按钮），分割线改到上边 */
   :global(.ec-code-lang-search) { width: 100%; min-width: 0; padding: .35rem .45rem; border: none; border-top: 1px solid var(--line-divider); background: transparent; color: var(--btn-content); font-size: .72rem; outline: none; }
   :global(.ec-code-lang-list) { overflow-y: auto; max-height: 220px; padding: .2rem 0; }

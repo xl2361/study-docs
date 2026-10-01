@@ -89,13 +89,14 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 			searchInput = document.createElement("input");
 			searchInput.type = "text";
 			searchInput.className = "ec-code-lang-search";
-			searchInput.placeholder = "搜索语言…";
+			searchInput.placeholder = "搜索…";
 			searchInput.autocomplete = "off";
 
 			listEl = document.createElement("div");
 			listEl.className = "ec-code-lang-list";
 
-			panel.append(searchInput, listEl);
+			/* 顺序：语言列表在上，搜索框在下（搜索框紧贴语言按钮） */
+			panel.append(listEl, searchInput);
 			/* 挂到 chrome 内部（代码块容器），随代码块一起滚动 */
 			chrome.appendChild(panel);
 			renderList("");
@@ -219,20 +220,20 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 		function positionPanel() {
 			if (!panel) return;
 			/* 面板挂在 chrome 内部，position: absolute 相对于 pre。
-			   位置：紧贴语言按钮正上方，左边与按钮对齐，宽度与按钮一致（min 120px）。 */
+			   位置：紧贴语言按钮正上方，左边与按钮对齐。
+			   宽度由内容决定（CSS width:max-content），只保证不窄于按钮。 */
 			const btnRect = langButton.getBoundingClientRect();
 			const preRect = pre.getBoundingClientRect();
 			/* 按钮相对于 pre 的偏移 */
 			const relLeft = btnRect.left - preRect.left;
 			const relBottom = btnRect.bottom - preRect.top;
-			const panelW = Math.max(120, btnRect.width);
 			const maxH = Math.min(260, window.innerHeight * 0.5);
 
 			panel.style.position = "absolute";
 			panel.style.left = `${relLeft}px`;
 			/* 面板底边紧贴按钮顶部 */
 			panel.style.bottom = `${preRect.height - relBottom + btnRect.height + 4}px`;
-			panel.style.width = `${panelW}px`;
+			panel.style.minWidth = `${Math.round(btnRect.width)}px`;
 			panel.style.maxHeight = `${maxH}px`;
 		}
 

@@ -3264,11 +3264,14 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   .tiptap-host :global(.ec-code-lang-btn:focus) { border-color: var(--primary); }
   .tiptap-host :global(.ec-code-lang-chevron) { display: inline-flex; align-items: center; opacity: .55; }
   .tiptap-host :global(.ec-code-lang-chevron svg) { width: .6rem; height: .6rem; }
-  /* 下拉面板（挂在 chrome 内部，position: absolute，随代码块滚动） */
-  :global(.ec-code-lang-panel) { position: absolute; border: 1px solid var(--line-divider); border-radius: 6px; background: var(--card-bg); box-shadow: 0 8px 24px rgb(0 0 0 / 18%); z-index: 10002; display: flex; flex-direction: column; overflow: hidden; }
-  :global(.ec-code-lang-search) { padding: .4rem .55rem; border: none; border-bottom: 1px solid var(--line-divider); background: transparent; color: var(--btn-content); font-size: .78rem; outline: none; }
+  /* 下拉面板（挂在 chrome 内部，position: absolute，随代码块滚动）
+     注意：chrome 是 pointer-events:none，面板必须显式恢复 auto，
+     否则点击搜索框/列表项会穿透到下层，表现为"点搜索时列表消失"。 */
+  :global(.ec-code-lang-panel) { position: absolute; pointer-events: auto; width: max-content; max-width: 160px; border: 1px solid var(--line-divider); border-radius: 6px; background: var(--card-bg); box-shadow: 0 8px 24px rgb(0 0 0 / 18%); z-index: 10002; display: flex; flex-direction: column; overflow: hidden; }
+  /* 搜索框在面板底部（紧贴语言按钮），分割线改到上边 */
+  :global(.ec-code-lang-search) { width: 100%; min-width: 0; padding: .35rem .45rem; border: none; border-top: 1px solid var(--line-divider); background: transparent; color: var(--btn-content); font-size: .72rem; outline: none; }
   :global(.ec-code-lang-list) { overflow-y: auto; max-height: 220px; padding: .2rem 0; }
-  :global(.ec-code-lang-item) { padding: .28rem .6rem; font-size: .75rem; font-family: var(--font-jetbrains-mono), monospace; color: var(--btn-content); cursor: pointer; }
+  :global(.ec-code-lang-item) { padding: .25rem .5rem; font-size: .72rem; white-space: nowrap; font-family: var(--font-jetbrains-mono), monospace; color: var(--btn-content); cursor: pointer; }
   :global(.ec-code-lang-item:hover) { background: var(--btn-regular-bg-hover); }
   :global(.ec-code-lang-item:focus) { background: var(--btn-regular-bg-hover); outline: none; }
   :global(.ec-code-lang-item.active) { color: var(--primary); font-weight: 600; }

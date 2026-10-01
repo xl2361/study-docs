@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
 import { NodeSelection, TextSelection } from "prosemirror-state";
 import { CellSelection } from "prosemirror-tables";
 import { onMount, tick } from "svelte";
@@ -3258,10 +3258,21 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   .tiptap-host :global(ol[data-list-style="hierarchical"] li::before) { content: counters(ordered-item, ".") ". "; font-variant-numeric: tabular-nums; }
   .tiptap-host :global(.ProseMirror pre) { position: relative; }
   .tiptap-host :global(.ProseMirror pre code) { display: block; overflow-x: auto !important; font-family: inherit !important; font-size: inherit !important; line-height: inherit !important; color: inherit !important; background: none !important; padding: 0 !important; padding-left: 1.35rem !important; }
-  .tiptap-host :global(.ec-code-lang-bar) { display: flex; align-items: center; justify-content: flex-end; gap: .35rem; min-height: 1.35rem; margin: .35rem 0 .1rem; padding: 0 0 .15rem; }
-  .tiptap-host :global(.ec-code-lang-select) { font-size: .7rem; padding: .05rem .5rem; width: auto; min-width: 0; border: 1px solid var(--line-divider); border-radius: 4px; background: var(--btn-regular-bg); color: var(--btn-content); font-family: var(--font-jetbrains-mono), monospace; cursor: pointer; outline: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23888'%3E%3Cpath d='M4.5 6.5 8 10l3.5-3.5z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right .3rem center; background-size: .7rem; padding-right: 1.1rem; }
-  .tiptap-host :global(.ec-code-lang-select:hover) { background-color: var(--btn-regular-bg-hover); }
-  .tiptap-host :global(.ec-code-lang-select:focus) { border-color: var(--primary); }
+  .tiptap-host :global(.ec-code-lang-bar) { display: flex; align-items: center; gap: .2rem; }
+  .tiptap-host :global(.ec-code-lang-btn) { display: inline-flex; align-items: center; gap: .2rem; font-size: .7rem; padding: .05rem .4rem; border: 1px solid var(--line-divider); border-radius: 4px; background: var(--btn-regular-bg); color: var(--btn-content); font-family: var(--font-jetbrains-mono), monospace; cursor: pointer; outline: none; }
+  .tiptap-host :global(.ec-code-lang-btn:hover) { background-color: var(--btn-regular-bg-hover); border-color: color-mix(in srgb, var(--primary) 45%, transparent); }
+  .tiptap-host :global(.ec-code-lang-btn:focus) { border-color: var(--primary); }
+  .tiptap-host :global(.ec-code-lang-chevron) { display: inline-flex; align-items: center; opacity: .55; }
+  .tiptap-host :global(.ec-code-lang-chevron svg) { width: .6rem; height: .6rem; }
+  /* 下拉面板（挂在 body 上，position: fixed） */
+  :global(.ec-code-lang-panel) { border: 1px solid var(--line-divider); border-radius: 6px; background: var(--card-bg); box-shadow: 0 8px 24px rgb(0 0 0 / 18%); z-index: 10002; display: flex; flex-direction: column; overflow: hidden; }
+  :global(.ec-code-lang-search) { padding: .4rem .55rem; border: none; border-bottom: 1px solid var(--line-divider); background: transparent; color: var(--btn-content); font-size: .78rem; outline: none; }
+  :global(.ec-code-lang-list) { overflow-y: auto; max-height: 260px; padding: .2rem 0; }
+  :global(.ec-code-lang-item) { padding: .28rem .6rem; font-size: .75rem; font-family: var(--font-jetbrains-mono), monospace; color: var(--btn-content); cursor: pointer; }
+  :global(.ec-code-lang-item:hover) { background: var(--btn-regular-bg-hover); }
+  :global(.ec-code-lang-item.active) { color: var(--primary); font-weight: 600; }
+  :global(.ec-code-lang-empty) { padding: .4rem .6rem; font-size: .72rem; color: var(--content-meta); text-align: center; }
+  :global(html.dark .ec-code-lang-panel) { box-shadow: 0 8px 24px rgb(0 0 0 / 45%); }
   .tiptap-host :global(.ec-code-copy-btn) { position: absolute; top: .5rem; right: .6rem; z-index: 1; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line-divider); border-radius: 4px; padding: .1rem .3rem; background: var(--btn-regular-bg); color: var(--btn-content); font-size: .7rem; cursor: pointer; }
   .tiptap-host :global(.ec-code-copy-btn:hover) { background-color: var(--btn-regular-bg-hover); border-color: color-mix(in srgb, var(--primary) 45%, transparent); }
   .tiptap-host :global(.ec-code-copy-btn.copied) { color: var(--primary); border-color: var(--primary); }
@@ -3303,7 +3314,7 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   .tiptap-host :global(.ec-line-gutter) { position: absolute; left: 0; top: 0; width: 2.2rem; padding-top: 1rem; padding-left: .5rem; text-align: left; box-sizing: border-box; color: #8a8a8c; line-height: 1.5rem; user-select: none; pointer-events: none; }
   .tiptap-host :global(.ec-line-gutter span) { display: block; height: 1.5rem; line-height: 1.5rem; }
   :global(:root.dark) .tiptap-host :global(.ec-line-gutter) { color: #767c89; }
-  .tiptap-host :global(.ec-code-lang-bar) { position: absolute; top: 0; right: .5rem; display: flex; align-items: center; gap: .35rem; transform: translateY(-100%); pointer-events: auto; }
+  .tiptap-host :global(.ec-code-lang-bar) { position: absolute; bottom: .5rem; right: .5rem; z-index: 3; pointer-events: auto; }
   .tiptap-host :global(.ec-code-copy-btn) { top: .5rem; right: .6rem; z-index: 3; pointer-events: auto; }
   .tiptap-host :global(.ProseMirror pre code) { padding-left: .7rem !important; }
   .tiptap-host :global(.ec-line-gutter) { width: 1.55rem; padding-left: .4rem; }

@@ -11,7 +11,7 @@
 
   /* Language Badge 样式适配主题色和亮暗色 */
   /* 覆盖 expressive-code-language-badge 插件的默认样式 */
-  /* 位于代码块外部右上角，紧贴边框外沿（Typora 风格），不与复制按钮重叠 */
+  /* 位于代码块内部右下角，不与右上角的复制按钮重叠 */
   [data-language]::before {
     color: var(--btn-content) !important;
     background: var(--btn-regular-bg) !important;
@@ -22,17 +22,18 @@
     font-weight: 500 !important;
     font-size: 0.7rem !important;
     line-height: 1.2 !important;
-    top: 0 !important;
+    top: auto !important;
     right: 0.5rem !important;
-    bottom: auto !important;
+    bottom: 0.5rem !important;
     left: auto !important;
     z-index: 3 !important;
     opacity: 1 !important;
     transition: opacity 0.3s !important;
-    transform: translateY(-100%) !important;
+    transform: none !important;
   }
-  /* 确保 pre 是定位上下文 */
-  .expressive-code pre[data-language] {
+  /* 确保 pre 是定位上下文（修复：原选择器 .expressive-code pre 产生双重后代，
+     实际匹配 .expressive-code .expressive-code pre，永远命中不了） */
+  & pre[data-language] {
     position: relative;
   }
 
@@ -299,20 +300,12 @@ body.wallpaper-transparent .expressive-code .ec-collapse__gradient {
   }
 
   /*
-   * 语言徽章与复制按钮同处右上角，行为对齐桌面端：徽章不为按钮预留位置，
-   * 按钮显形时徽章淡出。
+   * 语言徽章位于代码块右下角，与右上角复制按钮分离。
    *
-   * expressive-code-language-badge 在触屏下给徽章加了 margin-right: 3rem
-   * 来给常驻的复制按钮让位，按钮改成点击显形后这段留白就没有意义了。
-   * 这里用 `figure.frame` 多带一个元素选择器压过插件的 `.frame`，
-   * 不必堆 !important。
+   * 清掉插件为右上角复制按钮预留的右侧空白。
    */
   .expressive-code figure.frame [data-language]::before {
     margin-right: 0;
-  }
-
-  .expressive-code figure.frame.ff-copy-revealed [data-language]::before {
-    opacity: var(--opacity-0);
   }
 }
 

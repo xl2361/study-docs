@@ -3271,10 +3271,10 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   /* 搜索框在面板底部（紧贴语言按钮），分割线改到上边 */
   :global(.ec-code-lang-search) { width: 100%; min-width: 0; padding: .35rem .45rem; border: none; border-top: 1px solid var(--line-divider); background: transparent; color: var(--btn-content); font-size: .72rem; outline: none; }
   :global(.ec-code-lang-list) { overflow-y: auto; max-height: 220px; padding: .2rem 0; scrollbar-width: thin; scrollbar-color: rgba(0, 0, 0, .25) transparent; }
-  /* 列表滚动条收窄到约 4px（浏览器默认约 15px 的 1/4），避免挤占面板宽度 */
-  :global(.ec-code-lang-list::-webkit-scrollbar) { width: 4px; }
+  /* 列表滚动条：在浏览器默认宽度（约 15px）基础上减掉 1/4 → 约 11px */
+  :global(.ec-code-lang-list::-webkit-scrollbar) { width: 11px; }
   :global(.ec-code-lang-list::-webkit-scrollbar-track) { background: transparent; }
-  :global(.ec-code-lang-list::-webkit-scrollbar-thumb) { background: rgba(0, 0, 0, .25); border-radius: 2px; }
+  :global(.ec-code-lang-list::-webkit-scrollbar-thumb) { background: rgba(0, 0, 0, .25); border-radius: 5px; }
   :global(html.dark .ec-code-lang-list) { scrollbar-color: rgba(255, 255, 255, .25) transparent; }
   :global(html.dark .ec-code-lang-list::-webkit-scrollbar-thumb) { background: rgba(255, 255, 255, .25); }
   :global(.ec-code-lang-item) { padding: .25rem .5rem; font-size: .72rem; white-space: nowrap; font-family: var(--font-jetbrains-mono), monospace; color: var(--btn-content); cursor: pointer; }

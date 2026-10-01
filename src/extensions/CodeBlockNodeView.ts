@@ -49,7 +49,7 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 		let panel: HTMLElement | null = null;
 		let searchInput: HTMLInputElement | null = null;
 		let listEl: HTMLElement | null = null;
-		let outsideClickHandler: ((e: MouseEvent) => void) | null = null;
+		let outsideClickHandler: ((e: PointerEvent) => void) | null = null;
 		let escapeKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 
 		function updateLangButton() {
@@ -96,7 +96,8 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 			listEl.className = "ec-code-lang-list";
 
 			panel.append(searchInput, listEl);
-			document.body.appendChild(panel);
+			/* 挂到 chrome 内部（代码块容器），随代码块一起滚动 */
+			chrome.appendChild(panel);
 			renderList("");
 			positionPanel();
 			requestAnimationFrame(() => searchInput?.focus());
@@ -106,7 +107,30 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 				if (input) renderList(input.value.toLowerCase().trim());
 			});
 
-			const clickHandler = (e: MouseEvent) => {
+			/* 拦截搜索框内的键盘事件，防止 ProseMirror 拦截 Enter（导致跳到页末） */
+			searchInput.addEventListener("keydown", (e) => {
+				e.stopPropagation();
+				if (e.key === "Enter") {
+					e.preventDefault();
+					/* 选中第一个匹配项 */
+					const first = listEl?.querySelector(
+						".ec-code-lang-item",
+					) as HTMLElement | null;
+					if (first) {
+						const lang = first.dataset.lang || "";
+						selectLanguage(lang);
+					}
+					closePanel();
+				} else if (e.key === "ArrowDown") {
+					e.preventDefault();
+					const items = listEl?.querySelectorAll(".ec-code-lang-item");
+					if (items && items.length > 0) {
+						(items[0] as HTMLElement).focus();
+					}
+				}
+			});
+
+			const clickHandler = (e: PointerEvent) => {
 				if (
 					panel &&
 					!panel.contains(e.target as Node) &&
@@ -163,11 +187,30 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 				item.className = "ec-code-lang-item";
 				if (lang === currentLang) item.classList.add("active");
 				item.setAttribute("role", "option");
+				item.tabIndex = -1;
+				item.dataset.lang = lang;
 				item.textContent = lang || "auto";
 				item.addEventListener("pointerdown", (e) => {
 					e.preventDefault();
+					e.stopPropagation();
 					selectLanguage(lang);
 					closePanel();
+				});
+				item.addEventListener("keydown", (e) => {
+					e.stopPropagation();
+					if (e.key === "Enter") {
+						e.preventDefault();
+						selectLanguage(lang);
+						closePanel();
+					} else if (e.key === "ArrowDown") {
+						e.preventDefault();
+						(item.nextElementSibling as HTMLElement)?.focus();
+					} else if (e.key === "ArrowUp") {
+						e.preventDefault();
+						const prev = item.previousElementSibling as HTMLElement;
+						if (prev) prev.focus();
+						else searchInput?.focus();
+					}
 				});
 				listEl.appendChild(item);
 			}
@@ -175,48 +218,22 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 
 		function positionPanel() {
 			if (!panel) return;
+			/* 面板挂在 chrome 内部，position: absolute 相对于 pre。
+			   位置：紧贴语言按钮正上方，左边与按钮对齐，宽度与按钮一致（min 120px）。 */
 			const btnRect = langButton.getBoundingClientRect();
-			const panelW = 200;
-			const panelH = Math.min(320, window.innerHeight * 0.6);
-			const gap = 6;
-			const vw = window.innerWidth;
-			const vh = window.innerHeight;
+			const preRect = pre.getBoundingClientRect();
+			/* 按钮相对于 pre 的偏移 */
+			const relLeft = btnRect.left - preRect.left;
+			const relBottom = btnRect.bottom - preRect.top;
+			const panelW = Math.max(120, btnRect.width);
+			const maxH = Math.min(260, window.innerHeight * 0.5);
 
-			/* 定位优先级（适应页面，不截断）：
-			   1. 右侧（按钮右边缘 + gap）—— 水平空间够时首选
-			   2. 正上方（按钮上方 - gap - panelH）—— 右侧不够、上方够时
-			   3. 下方（按钮下方 + gap）—— 右侧和上方都不够时
-			   水平方向统一 clamp 到 [8, vw - panelW - 8]；垂直同理 clamp 到 [8, vh - panelH - 8] */
-			const spaceRight = vw - btnRect.right - gap;
-			const spaceAbove = btnRect.top - gap;
-			const spaceBelow = vh - btnRect.bottom - gap;
-
-			let left: number;
-			let top: number;
-
-			if (spaceRight >= panelW) {
-				/* 右侧：垂直居中对齐按钮 */
-				left = btnRect.right + gap;
-				top = btnRect.top + btnRect.height / 2 - panelH / 2;
-			} else if (spaceAbove >= panelH || spaceAbove >= spaceBelow) {
-				/* 正上方：水平与按钮对齐 */
-				top = btnRect.top - gap - panelH;
-				left = btnRect.left;
-			} else {
-				/* 下方：水平与按钮对齐 */
-				top = btnRect.bottom + gap;
-				left = btnRect.left;
-			}
-
-			/* clamp 到视口内 */
-			left = Math.max(8, Math.min(left, vw - panelW - 8));
-			top = Math.max(8, Math.min(top, vh - panelH - 8));
-
-			panel.style.position = "fixed";
-			panel.style.left = `${left}px`;
-			panel.style.top = `${top}px`;
+			panel.style.position = "absolute";
+			panel.style.left = `${relLeft}px`;
+			/* 面板底边紧贴按钮顶部 */
+			panel.style.bottom = `${preRect.height - relBottom + btnRect.height + 4}px`;
 			panel.style.width = `${panelW}px`;
-			panel.style.maxHeight = `${panelH}px`;
+			panel.style.maxHeight = `${maxH}px`;
 		}
 
 		function selectLanguage(lang: string) {

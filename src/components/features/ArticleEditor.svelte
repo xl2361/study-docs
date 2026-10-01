@@ -3264,15 +3264,19 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   .tiptap-host :global(.ec-code-lang-btn:focus) { border-color: var(--primary); }
   .tiptap-host :global(.ec-code-lang-chevron) { display: inline-flex; align-items: center; opacity: .55; }
   .tiptap-host :global(.ec-code-lang-chevron svg) { width: .6rem; height: .6rem; }
-  /* 下拉面板（挂在 body 上，position: fixed） */
-  :global(.ec-code-lang-panel) { border: 1px solid var(--line-divider); border-radius: 6px; background: var(--card-bg); box-shadow: 0 8px 24px rgb(0 0 0 / 18%); z-index: 10002; display: flex; flex-direction: column; overflow: hidden; }
+  /* 下拉面板（挂在 chrome 内部，position: absolute，随代码块滚动） */
+  :global(.ec-code-lang-panel) { position: absolute; border: 1px solid var(--line-divider); border-radius: 6px; background: var(--card-bg); box-shadow: 0 8px 24px rgb(0 0 0 / 18%); z-index: 10002; display: flex; flex-direction: column; overflow: hidden; }
   :global(.ec-code-lang-search) { padding: .4rem .55rem; border: none; border-bottom: 1px solid var(--line-divider); background: transparent; color: var(--btn-content); font-size: .78rem; outline: none; }
-  :global(.ec-code-lang-list) { overflow-y: auto; max-height: 260px; padding: .2rem 0; }
+  :global(.ec-code-lang-list) { overflow-y: auto; max-height: 220px; padding: .2rem 0; }
   :global(.ec-code-lang-item) { padding: .28rem .6rem; font-size: .75rem; font-family: var(--font-jetbrains-mono), monospace; color: var(--btn-content); cursor: pointer; }
   :global(.ec-code-lang-item:hover) { background: var(--btn-regular-bg-hover); }
+  :global(.ec-code-lang-item:focus) { background: var(--btn-regular-bg-hover); outline: none; }
   :global(.ec-code-lang-item.active) { color: var(--primary); font-weight: 600; }
   :global(.ec-code-lang-empty) { padding: .4rem .6rem; font-size: .72rem; color: var(--content-meta); text-align: center; }
   :global(html.dark .ec-code-lang-panel) { box-shadow: 0 8px 24px rgb(0 0 0 / 45%); }
+  /* chrome 默认 overflow:hidden 不可见 —— 但面板超出 chrome 时需要可见。
+     让 chrome 允许溢出（chrome 本身是 inset:0 的全透明层，溢出不影响布局） */
+  .tiptap-host :global(.ec-code-block-chrome) { overflow: visible; }
   .tiptap-host :global(.ec-code-copy-btn) { position: absolute; top: .5rem; right: .6rem; z-index: 1; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line-divider); border-radius: 4px; padding: .1rem .3rem; background: var(--btn-regular-bg); color: var(--btn-content); font-size: .7rem; cursor: pointer; }
   .tiptap-host :global(.ec-code-copy-btn:hover) { background-color: var(--btn-regular-bg-hover); border-color: color-mix(in srgb, var(--primary) 45%, transparent); }
   .tiptap-host :global(.ec-code-copy-btn.copied) { color: var(--primary); border-color: var(--primary); }

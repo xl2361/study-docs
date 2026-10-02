@@ -258,6 +258,33 @@ async function updateArticles(
 		`/repos/${repoPath(env)}/git/commits/${headSha}`,
 	);
 	if (!parent.tree?.sha) throw new HttpError(502, "GitHub 提交缺少 Tree 信息");
+
+	// 图片必须先经 Blobs API 按 base64 上传，拿到 blob SHA 后在 Tree 中引用。
+	// Create Tree 的条目没有 encoding 字段（那是 Blobs API 的参数）：
+	// 直接把 base64 文本塞进 tree.content 会把 base64 字符串本身写进仓库，
+	// 文件虽是 .png 扩展名但内容是文本，浏览器解不出 → 图片损坏。
+	const imageTreeItems = [] as { path: string; mode: string; type: string; sha: string }[];
+	for (const { image } of staged) {
+		const blob = await githubRequest<{ sha?: string }>(
+			env,
+			`/repos/${repoPath(env)}/git/blobs`,
+			{
+				method: "POST",
+				body: JSON.stringify({
+					content: image.base64,
+					encoding: "base64",
+				}),
+			},
+		);
+		if (!blob.sha) throw new HttpError(502, "GitHub 创建图片 Blob 失败");
+		imageTreeItems.push({
+			path: image.path,
+			mode: "100644",
+			type: "blob",
+			sha: blob.sha,
+		});
+	}
+
 	const tree = await githubRequest<{ sha?: string }>(
 		env,
 		`/repos/${repoPath(env)}/git/trees`,
@@ -276,17 +303,7 @@ async function updateArticles(
 									content: article.content,
 								},
 					),
-					...staged.map(({ image }) => ({
-						path: image.path,
-						mode: "100644",
-						type: "blob",
-						content: image.base64,
-						// 必须显式声明 base64：Git API 默认把 content 当原始文本，
-						// 漏掉 encoding 会把 base64 字符串本身当成文件内容写进仓库
-						// （文件仍是 .png 扩展名、CDN 按扩展名返回 image/png，
-						//  但内容是 base64 文本，浏览器解不出 → 图片"丢失"）。
-						encoding: "base64",
-					})),
+					...imageTreeItems,
 				],
 			}),
 		},

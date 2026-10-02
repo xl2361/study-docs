@@ -8,8 +8,35 @@ const copyIcon =
 const chevronIcon =
 	'<svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>';
 
+/* 语言搜索别名：按语言名列出可被搜到的额外关键词 */
+const LANG_SEARCH_TERMS: Record<string, string[]> = {
+	javascript: ["js", "ecmascript"],
+	typescript: ["ts"],
+	python: ["py"],
+	ruby: ["rb"],
+	bash: ["sh", "shell", "zsh"],
+	shell: ["sh", "bash"],
+	yaml: ["yml"],
+	markdown: ["md"],
+	go: ["golang"],
+	kotlin: ["kt"],
+	cpp: ["c++", "cxx"],
+	css: ["style"],
+	html: ["htm"],
+	sql: ["mysql"],
+	protobuf: ["proto"],
+};
+
+function langMatches(lang: string, filter: string): boolean {
+	if (!filter) return true;
+	const label = (lang || "auto").toLowerCase();
+	if (label.includes(filter)) return true;
+	const terms = LANG_SEARCH_TERMS[lang] || [];
+	return terms.some((t) => t.includes(filter) || filter.includes(t));
+}
+
 export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
-	return ({ editor, node, getPos, view }: NodeViewRendererProps) => {
+	return ({ node, getPos, view }: NodeViewRendererProps) => {
 		const pre = document.createElement("pre");
 		const chrome = document.createElement("div");
 		chrome.className = "ec-code-block-chrome";
@@ -51,6 +78,12 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 		let listEl: HTMLElement | null = null;
 		let outsideClickHandler: ((e: PointerEvent) => void) | null = null;
 		let escapeKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+		let listenerTimer: ReturnType<typeof setTimeout> | null = null;
+
+		/* 聚焦编辑器但不把旧选区滚进视口（避免选语言/Escape 后页面跳动） */
+		function focusEditorQuietly() {
+			(view.dom as HTMLElement).focus({ preventScroll: true });
+		}
 
 		function updateLangButton() {
 			const label = currentLang || "auto";
@@ -103,17 +136,19 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 			chrome.appendChild(panel);
 			renderList("");
 			positionPanel();
-			requestAnimationFrame(() => searchInput?.focus());
+			requestAnimationFrame(() => searchInput?.focus({ preventScroll: true }));
 
 			searchInput.addEventListener("input", () => {
 				const input = searchInput;
 				if (input) renderList(input.value.toLowerCase().trim());
 			});
 
-			/* 拦截搜索框内的键盘事件，防止 ProseMirror 拦截 Enter（导致跳到页末） */
+			/* 拦截搜索框内的键盘事件，防止 ProseMirror 拦截 Enter（导致跳到页末）。
+			   isComposing：输入法组词中的 Enter 是"确认候选"，不应提交选择。 */
 			searchInput.addEventListener("keydown", (e) => {
 				e.stopPropagation();
 				if (e.key === "Enter") {
+					if (e.isComposing || e.keyCode === 229) return;
 					e.preventDefault();
 					/* 选中第一个匹配项 */
 					const first = listEl?.querySelector(
@@ -128,7 +163,7 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 					e.preventDefault();
 					const items = listEl?.querySelectorAll(".ec-code-lang-item");
 					if (items && items.length > 0) {
-						(items[0] as HTMLElement).focus();
+						(items[0] as HTMLElement).focus({ preventScroll: true });
 					}
 				}
 			});
@@ -145,24 +180,27 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 			const keyHandler = (e: KeyboardEvent) => {
 				if (e.key === "Escape") {
 					closePanel();
-					editor.commands.focus();
+					focusEditorQuietly();
 				}
 			};
 			outsideClickHandler = clickHandler;
 			escapeKeyHandler = keyHandler;
-			setTimeout(() => {
+			/* 同步安装（打开面板的 pointerdown 已过 document 捕获阶段，
+			   不会误关自己），并保存 timer 便于 close/destroy 时取消，
+			   避免"先关再 destroy"后定时器仍把监听装回去的泄漏。 */
+			listenerTimer = setTimeout(() => {
+				listenerTimer = null;
 				document.addEventListener("pointerdown", clickHandler, true);
 				document.addEventListener("keydown", keyHandler, true);
 			}, 0);
 		}
 
 		function closePanel() {
-			if (!panel) return;
-			panel.remove();
-			panel = null;
-			searchInput = null;
-			listEl = null;
-			langButton.setAttribute("aria-expanded", "false");
+			/* 无论面板是否打开，都要清掉未触发的定时器与已装的全局监听 */
+			if (listenerTimer !== null) {
+				clearTimeout(listenerTimer);
+				listenerTimer = null;
+			}
 			if (outsideClickHandler) {
 				document.removeEventListener("pointerdown", outsideClickHandler, true);
 				outsideClickHandler = null;
@@ -171,13 +209,19 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 				document.removeEventListener("keydown", escapeKeyHandler, true);
 				escapeKeyHandler = null;
 			}
+			if (!panel) return;
+			panel.remove();
+			panel = null;
+			searchInput = null;
+			listEl = null;
+			langButton.setAttribute("aria-expanded", "false");
 		}
 
 		function renderList(filter: string) {
 			if (!listEl) return;
 			listEl.replaceChildren();
 			const all = ["", ...languages];
-			const filtered = all.filter((l) => l.includes(filter));
+			const filtered = all.filter((l) => langMatches(l, filter));
 			if (filtered.length === 0) {
 				const empty = document.createElement("div");
 				empty.className = "ec-code-lang-empty";
@@ -202,17 +246,20 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 				item.addEventListener("keydown", (e) => {
 					e.stopPropagation();
 					if (e.key === "Enter") {
+						if (e.isComposing || e.keyCode === 229) return;
 						e.preventDefault();
 						selectLanguage(lang);
 						closePanel();
 					} else if (e.key === "ArrowDown") {
 						e.preventDefault();
-						(item.nextElementSibling as HTMLElement)?.focus();
+						(item.nextElementSibling as HTMLElement)?.focus({
+							preventScroll: true,
+						});
 					} else if (e.key === "ArrowUp") {
 						e.preventDefault();
 						const prev = item.previousElementSibling as HTMLElement;
-						if (prev) prev.focus();
-						else searchInput?.focus();
+						if (prev) prev.focus({ preventScroll: true });
+						else searchInput?.focus({ preventScroll: true });
 					}
 				});
 				listEl.appendChild(item);
@@ -222,19 +269,43 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 		function positionPanel() {
 			if (!panel) return;
 			/* 面板挂在 chrome 内部，position: absolute 相对于 pre。
-			   位置：紧贴语言按钮正上方，左边与按钮对齐。
-			   宽度由内容决定（CSS width:max-content），只保证不窄于按钮。 */
+			   默认：紧贴语言按钮正上方、左边与按钮对齐；
+			   上方空间不足时翻到按钮下方；水平溢出视口时按右缘对齐。 */
 			const btnRect = langButton.getBoundingClientRect();
 			const preRect = pre.getBoundingClientRect();
-			/* 按钮相对于 pre 的偏移 */
-			const relLeft = btnRect.left - preRect.left;
-			const relBottom = btnRect.bottom - preRect.top;
-			const maxH = Math.min(260, window.innerHeight * 0.5);
+			const vw = window.innerWidth;
+			const vh = window.innerHeight;
+			const panelW = panel.offsetWidth;
+			const gap = 4;
+
+			/* 垂直：优先向上展开；按钮在视口内上方的空间不够时改向下 */
+			const spaceAbove = btnRect.top;
+			const openBelow = spaceAbove < 260 && spaceAbove < vh - btnRect.bottom;
+			const maxH = Math.min(
+				260,
+				Math.max(120, openBelow ? vh - btnRect.bottom - gap : spaceAbove - gap),
+			);
+
+			/* 水平：默认左对齐按钮；面板会超出视口右缘时改为右缘对齐按钮 */
+			let viewLeft = btnRect.left;
+			if (viewLeft + panelW > vw - 8) {
+				viewLeft = Math.max(8, btnRect.right - panelW);
+			}
+
+			const relLeft = viewLeft - preRect.left;
+			const relBtnBottom = btnRect.bottom - preRect.top;
 
 			panel.style.position = "absolute";
 			panel.style.left = `${relLeft}px`;
-			/* 面板底边紧贴按钮顶部 */
-			panel.style.bottom = `${preRect.height - relBottom + btnRect.height + 4}px`;
+			if (openBelow) {
+				/* 面板顶边贴按钮底边 */
+				panel.style.top = `${relBtnBottom + gap}px`;
+				panel.style.bottom = "";
+			} else {
+				/* 面板底边贴按钮顶边（bottom 相对 pre 高度） */
+				panel.style.bottom = `${preRect.height - relBtnBottom + btnRect.height + gap}px`;
+				panel.style.top = "";
+			}
 			panel.style.minWidth = `${Math.round(btnRect.width)}px`;
 			panel.style.maxHeight = `${maxH}px`;
 		}
@@ -250,12 +321,11 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 				}),
 			);
 			updateLangButton();
-			editor.commands.focus();
+			/* 只恢复编辑焦点，不把旧选区滚动进视口 */
+			focusEditorQuietly();
 		}
 
-		langButton.addEventListener("pointerdown", (e) => {
-			e.preventDefault();
-			e.stopPropagation();
+		function togglePanel() {
 			if (panel) {
 				closePanel();
 			} else {
@@ -266,6 +336,20 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 					console.error("[CodeBlockNodeView] openPanel failed:", err);
 				}
 			}
+		}
+
+		/* 鼠标：pointerdown 抢先处理并阻止 PM 抢焦点 */
+		langButton.addEventListener("pointerdown", (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+			togglePanel();
+		});
+		/* 键盘：原生按钮 Enter/Space 产生 click（detail=0），鼠标点击走上面的
+		   pointerdown，detail>=1，不会双触发 */
+		langButton.addEventListener("click", (e) => {
+			if (e.detail !== 0) return;
+			e.preventDefault();
+			togglePanel();
 		});
 
 		copyButton.addEventListener("click", async () => {

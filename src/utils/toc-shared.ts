@@ -47,6 +47,9 @@ export function toChineseNumber(n: number): string {
 		const rest = n % 100;
 		if (rest === 0) return `${digits[hundreds]}百`;
 		if (rest < 10) return `${digits[hundreds]}百零${digits[rest]}`;
+		/* 110 → 一百一十（不是"一百十"），与中文习惯一致 */
+		if (rest < 20)
+			return `${digits[hundreds]}百一十${rest % 10 ? digits[rest % 10] : ""}`;
 		return `${digits[hundreds]}百${toChineseNumber(rest)}`;
 	}
 	return String(n);
@@ -56,11 +59,12 @@ export function toChineseNumber(n: number): string {
  * 根据标题列表计算目录项。
  * 复刻 TOCManager 里的 calculateMinDepth + filterHeadings + 深度/徽章逻辑。
  *
- * 编号：正文标题的手写序号已剥离，改由 CSS counter 生成；TOC 是纯文本渲染，
- * 拿不到伪元素，故在此按层级顺序补出编号前缀，与正文保持完全一致：
- *   minDepth    → 「一、」
- *   minDepth+1  → 「1、」（每个上层重置）
- *   minDepth+2+ → 「{上层}.{本层} 」（对齐正文 h4）
+ * 编号：正文标题的手写序号已剥离，改由 CSS counter 生成（main.css）：
+ *   h2 → 一、二、（cjk-ideographic）
+ *   h3 → 1、2、（每个 h2 重置）
+ *   h4 → {h3序号}.{h4序号} （每个 h3 重置）
+ * TOC 是纯文本渲染拿不到伪元素，故在此按【绝对层级】复刻同一套计数规则，
+ * 保证与正文编号完全一致（文章从 h3 起步时也不偏移）。
  */
 export function computeTocItems(
 	headings: TocInput[],
@@ -78,38 +82,51 @@ export function computeTocItems(
 	const filtered = headings.filter((h) => h.depth < minDepth + opts.maxLevel);
 
 	const items: TocItem[] = [];
+	// 徽章序号（视觉层用，保留旧语义）
 	let indexCount = 1;
-	// 各层级计数器：topLevelCount 用于中文序号，subCount 用于次级重置
-	let subCount = 0;
-	let deepCount = 0;
+	// 与正文 CSS counter 完全同构的绝对层级计数器
+	let h2Count = 0;
+	let h3Count = 0;
+	let h4Count = 0;
 
 	for (const h of filtered) {
-		// 跳过没有锚点的标题
+		const depth = h.depth;
+		// 先按文档顺序推进 CSS 同构计数器——无锚点的标题在正文里同样计数，
+		// 跳过它会让后续编号整体偏移
+		let prefix: string;
+		if (depth <= 2) {
+			h2Count++;
+			h3Count = 0;
+			h4Count = 0;
+			prefix = depth === 2 ? `${toChineseNumber(h2Count)}、` : "";
+		} else if (depth === 3) {
+			h3Count++;
+			h4Count = 0;
+			prefix = `${h3Count}、`;
+		} else if (depth === 4) {
+			h4Count++;
+			prefix = `${h3Count}.${h4Count} `;
+		} else {
+			// h5/h6：正文 CSS 不编号，目录同样不加前缀
+			prefix = "";
+		}
+
+		// 跳过没有锚点的标题（计数已在上面完成，不参与列表项）
 		if (!h.slug) continue;
 
-		const depth = h.depth;
 		const depthLevel: 0 | 1 | 2 =
 			depth === minDepth ? 0 : depth === minDepth + 1 ? 1 : 2;
 
 		let badgeKind: "index" | "dot" | "dot-sm";
 		let badgeIndex: number | undefined;
-		let prefix: string;
 		if (depth === minDepth) {
 			badgeKind = "index";
 			badgeIndex = indexCount;
-			prefix = `${toChineseNumber(indexCount)}、`;
 			indexCount++;
-			subCount = 0;
-			deepCount = 0;
 		} else if (depth === minDepth + 1) {
 			badgeKind = "dot";
-			subCount++;
-			deepCount = 0;
-			prefix = `${subCount}、`;
 		} else {
 			badgeKind = "dot-sm";
-			deepCount++;
-			prefix = `${subCount}.${deepCount} `;
 		}
 
 		// 空文本回退成 slug；去掉 rehypeAutolinkHeadings 追加的尾部 "#"

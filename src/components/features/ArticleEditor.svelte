@@ -2730,6 +2730,9 @@ async function openEditor() {
 	if (opening) return;
 	const operation = ++openOperation;
 	opening = true;
+	// 新一轮编辑不再是"退出放弃"流程：reverting 必须复位，
+	// 否则上次退出后 beforeunload/导航自动保存会被永久跳过
+	reverting = false;
 	try {
 		if (!loaded) await loadArticle(operation);
 		if (!mounted || operation !== openOperation || !loaded) return;
@@ -2885,13 +2888,21 @@ function saveDraft(): boolean {
 function restoreEmergencyDraft() {
 	const backup = loadEmergency();
 	if (!backup) return;
-	parseArticle(backup.body);
+	// 注意：backup.body 是纯正文（无 frontmatter），不能用 parseArticle 解析，
+	// 否则会把 frontmatterSource 清空，保存时丢失全部元数据。
+	// 这里直接恢复正文与各元字段；frontmatterSource 保持当前已加载的版本。
 	articleTitle = backup.title || title;
 	published = backup.published;
 	category = backup.category;
+	if (typeof backup.tags === "string") tags = backup.tags;
+	// 恢复备份时的 SHA 基线：若远端已被他人推进，提交时 SHA 校验会得到
+	// 明确的 409 冲突，而不是把旧正文静默绑到新 SHA 上覆盖他人修改
+	if (backup.sha) sha = backup.sha;
+	if (backup.path) path = backup.path;
 	bodyDirty = true;
 	dirty = true;
-	sessionStorage.removeItem(`${emergencyKey}:${slug}`);
+	// 不在此处删除备份：用户恢复后若直接关闭页面而未保存，
+	// 仍可再次恢复。备份在 saveDraft 成功后由 saveDraft 清理。
 	error = "";
 	savedMessage = "已恢复上次未提交的编辑内容，请核对后保存";
 	emergency = null;
@@ -3184,8 +3195,11 @@ onMount(() => {
 		);
 	const onOpen = () => void openEditor();
 	const onRevert = () => {
-		// 顶栏“退出”触发：丢弃本轮修改后页面将重载，标记本次不落盘
+		// 顶栏“退出”触发：丢弃本轮修改后页面将重载，标记本次不落盘。
+		// 同时让内存内容失效：若不重载（如后续改为原地退出），
+		// 下次进入编辑必须重新从服务端拉取，避免把已丢弃的旧正文再写回去
 		reverting = true;
+		loaded = false;
 	};
 	const onKeydown = (event: KeyboardEvent) => {
 		if (!event.ctrlKey && !event.metaKey) return;

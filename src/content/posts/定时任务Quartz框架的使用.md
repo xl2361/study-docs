@@ -42,8 +42,6 @@ draft: false
 | Trigger（触发器） | 定义什么时候执行 | 工作时间表 |
 | Scheduler（调度器） | 把Job和Trigger组合起来 | 老板，统筹安排工作 |
 
-Plaintext
-
 ```text
 Job（做什么） + Trigger（什么时候做） = Scheduler（安排执行）
 ```
@@ -56,8 +54,6 @@ Job（做什么） + Trigger（什么时候做） = Scheduler（安排执行）
 
 只要引入 Spring Boot 的官方 Starter，底层依赖全部帮你搞定。
 
-XML
-
 ```xml
 <dependency>
     <groupId>org.springframework.boot</groupId>
@@ -68,8 +64,6 @@ XML
 ### 第二步：创建任务类（🔥 优雅写法）
 
 > **避坑：** 很多老教程教你实现 `Job` 接口，然后告诉你无法使用 `@Autowired`。在 Spring Boot 中，**强烈建议继承 `QuartzJobBean`**，这样就可以直接快乐地注入任何 Service 了！
-
-Java
 
 ```java
 import org.quartz.JobExecutionContext;
@@ -96,8 +90,6 @@ public class MyJob extends QuartzJobBean {
 ```
 
 ### 第三步：创建配置类（老板分配工作）
-
-Java
 
 ```java
 @Configuration
@@ -136,8 +128,6 @@ public class QuartzConfig {
 
 **适用场景：** 简单的重复执行，比如“每隔 X 分钟执行一次”、“延迟 X 秒后执行 10 次”。
 
-Java
-
 ```java
 // 延迟立即开始，每5秒执行一次，共执行10次
 Trigger trigger = TriggerBuilder.newTrigger()
@@ -151,8 +141,6 @@ Trigger trigger = TriggerBuilder.newTrigger()
 ### CronTrigger（Cron触发器）
 
 **适用场景：** 复杂的时间表达式，比如“每天凌晨2点”、“每周五下午4点”。
-
-Java
 
 ```java
 // 每天凌晨2点执行
@@ -175,8 +163,6 @@ Trigger trigger = TriggerBuilder.newTrigger()
 
 **解决方案：加一个 `@DisallowConcurrentExecution` 注解。**
 
-Java
-
 ```java
 import org.quartz.DisallowConcurrentExecution;
 
@@ -197,8 +183,6 @@ public class SafeDataSyncJob extends QuartzJobBean {
 > **在真实的开发中，以下这些代码通常会被写在 Service 层，然后暴露成 Controller 接口。前端会画一个漂亮的后台管理页面，运营人员在页面上点击“新增”、“启动”、“暂停”按钮，本质上就是调用了这里的代码，从而实现不重启服务器就能掌控定时任务。**
 
 通过 SpringBoot 自动注入的 `Scheduler` 对象，我们可以为所欲为：
-
-Java
 
 ```java
 @Service
@@ -247,8 +231,6 @@ public class QuartzManageService {
 ### 修改 application.yml
 
 只要加这几行配置，Spring Boot 会自动接管一切，从内存模式切换为数据库模式：
-
-YAML
 
 ```yml
 spring:

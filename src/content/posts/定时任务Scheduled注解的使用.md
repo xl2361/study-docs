@@ -248,8 +248,6 @@ public class FileCleanTask {
 
 **application.yml 配置：**
 
-YAML
-
 ```yml
 # 定时任务开关配置
 task:
@@ -258,8 +256,6 @@ task:
 ```
 
 **Java 代码实现：**
-
-Java
 
 ```java
 @Component

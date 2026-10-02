@@ -71,7 +71,7 @@ XML
 
 Java
 
-```Java
+```java
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -99,7 +99,7 @@ public class MyJob extends QuartzJobBean {
 
 Java
 
-```Java
+```java
 @Configuration
 public class QuartzConfig {
 
@@ -138,7 +138,7 @@ public class QuartzConfig {
 
 Java
 
-```Java
+```java
 // 延迟立即开始，每5秒执行一次，共执行10次
 Trigger trigger = TriggerBuilder.newTrigger()
         .startNow() 
@@ -177,7 +177,7 @@ Trigger trigger = TriggerBuilder.newTrigger()
 
 Java
 
-```Java
+```java
 import org.quartz.DisallowConcurrentExecution;
 
 @Component
@@ -200,7 +200,7 @@ public class SafeDataSyncJob extends QuartzJobBean {
 
 Java
 
-```Java
+```java
 @Service
 public class QuartzManageService {
 

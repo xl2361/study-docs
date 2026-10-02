@@ -44,7 +44,7 @@ draft: false
 
 Plaintext
 
-```
+```text
 Job（做什么） + Trigger（什么时候做） = Scheduler（安排执行）
 ```
 

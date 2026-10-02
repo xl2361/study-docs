@@ -526,7 +526,7 @@ mybatis-plus:
     
 2.  调用接口后，控制台会打印类似这样的日志：
     
-    ```
+```text
     ==> Preparing: SELECT * FROM t_user WHERE user_name = ? AND status = ?
     ==> Parameters: 张三(String), 1(Integer)
     ```

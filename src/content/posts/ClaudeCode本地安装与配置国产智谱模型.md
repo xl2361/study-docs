@@ -22,7 +22,7 @@ draft: false
 
 打开你的终端（Terminal）或命令行工具，输入以下命令。我们使用 npm 进行全局安装，这样你就可以在任何目录下呼出 Claude 了。
 
-```
+```bash
 # 全局安装 Claude Code 核心组件
 npm install -g @anthropic-ai/claude-code
 ```

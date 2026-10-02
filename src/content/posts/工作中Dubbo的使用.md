@@ -32,7 +32,7 @@ Dubbo是阿里巴巴开源的Java RPC框架，用于实现服务的远程调用�
 
 ### Dubbo的调用流程
 
-```
+```text
 1. Provider启动 → 向Registry注册自己的服务地址
 2. Consumer启动 → 向Registry订阅需要的服务
 3. Registry → 把Provider的地址列表推送给Consumer
@@ -343,14 +343,14 @@ private UserService userService;
 
 ### 跨服务调用
 
-```
+```text
 用户服务 → 调用订单服务获取用户订单
 订单服务 → 调用商品服务获取商品信息
 ```
 
 ### 公共服务抽取
 
-```
+```text
 短信服务、邮件服务、文件上传服务 → 独立部署，其他服务通过Dubbo调用
 ```
 

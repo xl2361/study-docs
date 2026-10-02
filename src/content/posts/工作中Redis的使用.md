@@ -538,7 +538,7 @@ public void setWithRandomExpire(String key, Object value, long baseTime) {
 
 对于缓存一致性问题，直接先更新数据库，再删除缓存就能满足大部分的场景。
 
-```
+```text
 更新数据库 -> 删除缓存 -> 下次查询时重新写入缓存
 ```
 
@@ -551,7 +551,7 @@ public void setWithRandomExpire(String key, Object value, long baseTime) {
 
 **延时双删策略**（更高一致性要求）：
 
-```
+```text
 删除缓存 -> 更新数据库 -> 延时几百毫秒 -> 再次删除缓存
 ```
 

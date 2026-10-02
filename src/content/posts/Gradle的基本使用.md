@@ -52,7 +52,7 @@ implementation group: 'commons-beanutils', name: 'commons-beanutils', version: "
 
 这里面的版本是配置在gradle.properties文件里面的，这个文件定义的属性就是全局的！
 
-```
+```text
 commonsbeanutilsVersion         =1.9.4
 ```
 

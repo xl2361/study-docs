@@ -202,7 +202,7 @@ maven私服对于我们来说主要就是有以下两个常见的使用
     
     不建议用，依赖多的时候，不好查找
     
-    ```
+```bash
     mvn -Dverbose dependency:tree
     ```
     

@@ -45,7 +45,7 @@ Git 的四个工作区域：
 
 ### git的安装
 
-```
+```bash
 1、安装过程基本直接下一步就可以
 2、安装完成后，打开cmd，输入如下命令，能够查看到git版本，便是安装成功
        git --version
@@ -77,13 +77,13 @@ Git 的四个工作区域：
 
 1.  克隆远程仓库代码到本地
 
-```
+```bash
 git clone  [远程仓库地址]
 ```
 
 2.  克隆远程仓库指定分支代码到本地
 
-```
+```bash
 git clone -b  [分支名]   [远程仓库地址] 
 ```
 
@@ -91,13 +91,13 @@ git clone -b  [分支名]   [远程仓库地址]
 
 指定账户密码只能是http/https地址
 
-```
+```bash
 git clone http://<用户名>:<密码>@<远程仓库地址>   
 ```
 
 指定用户名密码的时候，是因为本地有缓存其他git的凭据信息，所以，需要指定此次克隆地址的用户名和密码。或者使用下面命令清除本地缓存的git凭据信息
 
-```
+```bash
 git config --global --unset credential.helper
 ```
 
@@ -117,7 +117,7 @@ git config --global --unset credential.helper
 
 拿到token,使用token克隆即可：
 
-```
+```bash
 git clone http://<用户名>:<token>@<远程仓库地址> 
 使用示例：
 git clone http://zhuoye:glpat-HaQ_A4ejLRP1Jx-12yXz@192.168.3.3:9000/zCloud/study-platform/zy-cloud.git
@@ -131,7 +131,7 @@ ssh密钥配置流程：
 
 -   生成本地密钥
 
-```
+```bash
   ssh-keygen -t ed25519 -C "736170173@qq.com"
 ```
 
@@ -150,7 +150,7 @@ ssh密钥配置流程：
 
 #### 将代码从工作区添加到暂存区
 
-```
+```bash
 #添加单个文件
 git add  filename.txt
 
@@ -167,7 +167,7 @@ git add src/*.ts  # 添加src目录下所有ts文件
 
 #### 提交代码到本地仓库
 
-```
+```bash
 #提交暂存区里面的代码到本地仓库
 git commit -m "提交说明"
 
@@ -177,7 +177,7 @@ git commit -am "提交说明"
 
 #### 更新远程仓库代码到本地
 
-```
+```bash
 #拉取当前分支对应的远程分支代码并自动合并
 git pull
 
@@ -187,7 +187,7 @@ git pull origin 分支名
 
 #### 推送代码到远程仓库
 
-```
+```bash
 #推送当前分支到与之关联的远程分支
 git push
 
@@ -203,7 +203,7 @@ git push --force
 
 #### 其它命令
 
-```
+```bash
 #新建分支
 git branch  分支名
 

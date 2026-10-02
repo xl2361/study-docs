@@ -74,7 +74,7 @@ GET请求用于从服务器获取数据，参数通常通过URL传递。
 
 方式一：直接在URL中拼接参数
 
-```
+```text
 http://localhost:81/dev-api/system/user/list?pageNum=1&pageSize=10
 ```
 
@@ -143,7 +143,7 @@ DELETE请求用于删除资源，通常参数通过URL传递。
 
 在URL、Params、Headers中使用 `{{变量名}}` 格式：
 
-```
+```text
 {{baseUrl}}/api/user/list
 ```
 

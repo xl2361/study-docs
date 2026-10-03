@@ -679,6 +679,15 @@ if (!buildCommit) {
           }
         } catch (e) {}
 
+        // Swup 站内导航（点击链接/分页）时不做"恢复上次滚动位置"：
+        // 否则会把该页旧的滚动位置恢复回来，覆盖切页回顶（表现为"停在页面底部"）。
+        // 该标志由 swup 的 visit:start 设置，仅普通链接导航会命中；
+        // 整页刷新 / 浏览器前进后退不会走这里，保持原有的滚动恢复行为。
+        if (window.__ffSwupNavigating) {
+          window.__ffSwupNavigating = false;
+          return;
+        }
+
         // ---- 保存：无条件注册（关键修复：此前注册在 savedY 判空 return 之后，
         // 首次访问永远存不上位置，形成"没存过→不注册→存不上"死锁）----
         // 但只允许绑定一次：swup 换页会重跑本 script（reloadScripts），无守卫时
@@ -1488,9 +1497,6 @@ function disableAnimation() {
     });
   }
 
-  // 是否跳过下一次切页后的"回顶"（浏览器前进后退 / 锚点跳转时跳过）
-  let skipNextScrollTop = false;
-
   const setup = () => {
     // 全屏壁纸模式：替换 swup 默认的回顶行为
     // 首页回顶部，其他页滚动到 #main-grid（与 ScrollDownIndicator 行为一致）
@@ -1510,19 +1516,33 @@ function disableAnimation() {
     // 本项目未启用 @swup/scroll-plugin（@swup/astro 未装载它），
     // 因此上面 replace 的 scroll:top hook 实际不会被调用 → 切页后浏览器保留
     // 上一页的滚动位置（在页面下方点分页，跳转后仍停在下方，看起来"少了几条文章"）。
-    // 这里用内容替换后的时机手动回顶：仅普通链接导航生效，
-    // 浏览器前进/后退与锚点跳转不强制回顶。
+    //
+    // 这里统一处理切页滚动：
+    //   - 普通链接导航（含分页）：回顶，并让 head 里的滚动恢复脚本跳过"恢复旧位置"
+    //   - 浏览器前进/后退、锚点跳转：保留原有的滚动恢复行为，不强制回顶
+    let pendingHistoryNav = false;
+    let currentVisitIsLink = false;
     window.swup.hooks.on("history:popstate", () => {
-      skipNextScrollTop = true;
+      pendingHistoryNav = true;
     });
     window.swup.hooks.on("link:anchor", () => {
-      skipNextScrollTop = true;
+      pendingHistoryNav = true;
+    });
+    window.swup.hooks.on("visit:start", () => {
+      currentVisitIsLink = !pendingHistoryNav;
+      pendingHistoryNav = false;
+      // 通知 head 里的滚动恢复脚本：链接导航时不要恢复旧滚动位置
+      window.__ffSwupNavigating = currentVisitIsLink;
     });
     window.swup.hooks.on("content:replace", () => {
-      const skip = skipNextScrollTop;
-      skipNextScrollTop = false;
-      if (skip) return;
-      window.scrollTo({ top: 0, left: 0 });
+      if (currentVisitIsLink) window.scrollTo({ top: 0, left: 0 });
+    });
+    // 导航收尾后清除标志（延迟一点，确保新页脚本已执行完），
+    // 避免标志泄漏到下一次整页刷新而误跳过滚动恢复
+    window.swup.hooks.on("visit:end", () => {
+      setTimeout(() => {
+        window.__ffSwupNavigating = false;
+      }, 300);
     });
 
     // TODO: temp solution to change the height of the banner

@@ -90,6 +90,9 @@ const initialLayoutClass =
 </script>
 
 <script>
+  // 布局切换动画定时器（跨 updatePostListLayout 调用共享，用于取消竞态）
+  let layoutSwitchTimer: ReturnType<typeof setTimeout> | null = null;
+
   // 动态布局切换脚本
   function initLayout() {
     const postListContainer = document.getElementById("post-list-container");
@@ -167,13 +170,21 @@ const initialLayoutClass =
     postListContainer.classList.add("layout-switching");
 
     // 2. Change Layout after fade out (200ms match CSS)
-    setTimeout(() => {
-        applyClasses();
+    // 取消上一次未完成的切换定时器：快速连续切页/Swup 换页时，
+    // 旧定时器会用过期的 layout 参数覆盖新容器的布局类（竞态），
+    // 导致卡片布局错乱、部分卡片不可见。
+    if (layoutSwitchTimer !== null) {
+      clearTimeout(layoutSwitchTimer);
+      layoutSwitchTimer = null;
+    }
+    layoutSwitchTimer = setTimeout(() => {
+      layoutSwitchTimer = null;
+      applyClasses();
 
-        // 3. Fade IN (Short delay to ensure DOM update)
-        requestAnimationFrame(() => {
-            postListContainer.classList.remove("layout-switching");
-        });
+      // 3. Fade IN (Short delay to ensure DOM update)
+      requestAnimationFrame(() => {
+        postListContainer.classList.remove("layout-switching");
+      });
     }, 200);
   }
 
@@ -287,14 +298,6 @@ const initialLayoutClass =
     }
   });
 
-
-  // 页面显示时也初始化布局（处理页面切换）
-  document.addEventListener("visibilitychange", function () {
-    if (!document.hidden) {
-      setTimeout(initLayout, 100);
-    }
-  });
-
   // 监听布局变化事件
   window.addEventListener("layoutChange", function (event) {
     // @ts-ignore
@@ -392,6 +395,10 @@ const initialLayoutClass =
     setTimeout(applyMruOrder, 60);
   });
   document.addEventListener("astro:page-load", function () {
+    setTimeout(applyMruOrder, 60);
+  });
+  // Swup 4 派发 swup:content:replace（旧名 swup:contentReplaced 已不再触发）
+  document.addEventListener("swup:content:replace", function () {
     setTimeout(applyMruOrder, 60);
   });
   document.addEventListener("swup:contentReplaced", function () {

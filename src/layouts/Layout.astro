@@ -1488,6 +1488,9 @@ function disableAnimation() {
     });
   }
 
+  // 是否跳过下一次切页后的"回顶"（浏览器前进后退 / 锚点跳转时跳过）
+  let skipNextScrollTop = false;
+
   const setup = () => {
     // 全屏壁纸模式：替换 swup 默认的回顶行为
     // 首页回顶部，其他页滚动到 #main-grid（与 ScrollDownIndicator 行为一致）
@@ -1502,6 +1505,24 @@ function disableAnimation() {
       }
       window.scrollTo({ top: 0, left: 0, ...args.options });
       return true;
+    });
+
+    // 本项目未启用 @swup/scroll-plugin（@swup/astro 未装载它），
+    // 因此上面 replace 的 scroll:top hook 实际不会被调用 → 切页后浏览器保留
+    // 上一页的滚动位置（在页面下方点分页，跳转后仍停在下方，看起来"少了几条文章"）。
+    // 这里用内容替换后的时机手动回顶：仅普通链接导航生效，
+    // 浏览器前进/后退与锚点跳转不强制回顶。
+    window.swup.hooks.on("history:popstate", () => {
+      skipNextScrollTop = true;
+    });
+    window.swup.hooks.on("link:anchor", () => {
+      skipNextScrollTop = true;
+    });
+    window.swup.hooks.on("content:replace", () => {
+      const skip = skipNextScrollTop;
+      skipNextScrollTop = false;
+      if (skip) return;
+      window.scrollTo({ top: 0, left: 0 });
     });
 
     // TODO: temp solution to change the height of the banner

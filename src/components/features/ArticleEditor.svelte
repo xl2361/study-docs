@@ -7,6 +7,11 @@ import { createCodeBlockNodeView } from "@/extensions/CodeBlockNodeView";
 import { FontSize } from "@/extensions/FontSize";
 import { Indent } from "@/extensions/Indent";
 import { LineHeight } from "@/extensions/LineHeight";
+import {
+	StyledOrderedList,
+	StyledParagraph,
+	StyledTextStyle,
+} from "@/extensions/MarkdownPersistence";
 import { OrderedListStyle } from "@/extensions/OrderedListStyle";
 import EditorToolbar from "./EditorToolbar.svelte";
 
@@ -477,7 +482,6 @@ async function createEditor(operation: number) {
 			strikeExt,
 			sub,
 			sup,
-			textStyle,
 			color,
 			highlight,
 			textAlign,
@@ -494,7 +498,6 @@ async function createEditor(operation: number) {
 			import("@tiptap/extension-strike"),
 			import("@tiptap/extension-subscript"),
 			import("@tiptap/extension-superscript"),
-			import("@tiptap/extension-text-style"),
 			import("@tiptap/extension-color"),
 			import("@tiptap/extension-highlight"),
 			import("@tiptap/extension-text-align"),
@@ -563,7 +566,12 @@ async function createEditor(operation: number) {
 					strike: false,
 					codeBlock: false,
 					code: false,
+					// 用带 markdown 持久化的版本替换默认段落 / 有序列表
+					paragraph: false,
+					orderedList: false,
 				}),
+				StyledParagraph,
+				StyledOrderedList,
 				strikeExt.default,
 				PermissiveCode,
 				markdown.Markdown,
@@ -851,7 +859,6 @@ async function createEditor(operation: number) {
 					}),
 				sub.default,
 				sup.default,
-				textStyle.TextStyle,
 				color.default,
 				highlight.default.configure({ multicolor: true }),
 				textAlign.default.configure({ types: ["heading", "paragraph"] }),
@@ -861,11 +868,32 @@ async function createEditor(operation: number) {
 				Indent,
 				LineHeight,
 				OrderedListStyle,
+				StyledTextStyle,
 				CodeBlockLang,
 				codeBlockLowlight.default
 					.extend({
 						addNodeView() {
 							return createCodeBlockNodeView(CODE_LANGUAGES);
+						},
+						// 覆盖 markdown 序列化：正文里若含连续反引号（如代码内再嵌
+						// ``` 围栏），固定三反引号会提前闭合代码块、把正文拆坏。
+						// 这里按正文最长连续反引号动态加长围栏（至少 3）。
+						renderMarkdown: (node: JsonNode, helpers: unknown) => {
+							const h = helpers as {
+								renderChildren: (content: unknown) => string;
+							};
+							const language = (node.attrs?.language as string) || "";
+							const inner = node.content ? h.renderChildren(node.content) : "";
+							let maxRun = 0;
+							const runs = inner.match(/`+/g);
+							if (runs) {
+								for (const run of runs) {
+									if (run.length > maxRun) maxRun = run.length;
+								}
+							}
+							const fence = "`".repeat(Math.max(3, maxRun + 1));
+							if (!node.content) return `${fence}${language}\n\n${fence}`;
+							return [`${fence}${language}`, inner, fence].join("\n");
 						},
 					})
 					.configure({

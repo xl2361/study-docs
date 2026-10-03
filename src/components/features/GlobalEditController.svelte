@@ -94,7 +94,7 @@ function restoreMode() {
 
 async function checkSession() {
 	try {
-		const response = await fetch("/api/auth/session");
+		const response = await fetch("/api/auth/session/");
 		authenticated = response.ok;
 		if (authenticated) restoreMode();
 	} catch {
@@ -197,13 +197,50 @@ async function toggleEditing() {
 		} catch {
 			// 无响应体时不做部署轮询。
 		}
-		sessionStorage.removeItem(draftsKey);
+		// 提交成功：只清理「与本次提交内容一致」的草稿。
+		// 提交是异步的，期间用户可能继续编辑并保存，产生更新的草稿；
+		// 若无条件 removeItem(draftsKey) 会把这些新修改一起清掉（数据丢失）。
+		const submittedBySlug = new Map(
+			articles.map((article) => {
+				const item = article as { slug?: string; content?: string };
+				return [item.slug, item.content];
+			}),
+		);
+		let leftoverDrafts = 0;
+		try {
+			const current = JSON.parse(
+				sessionStorage.getItem(draftsKey) || "{}",
+			) as Record<string, { content?: string }>;
+			const remaining: Record<string, unknown> = {};
+			for (const [slug, draft] of Object.entries(current)) {
+				if (
+					submittedBySlug.has(slug) &&
+					submittedBySlug.get(slug) === draft.content
+				) {
+					// 已随本次提交写入且此后无改动 → 安全清理
+					continue;
+				}
+				// 提交期间新产生或又改动过的草稿 → 保留
+				remaining[slug] = draft;
+			}
+			leftoverDrafts = Object.keys(remaining).length;
+			if (leftoverDrafts > 0) {
+				sessionStorage.setItem(draftsKey, JSON.stringify(remaining));
+			} else {
+				sessionStorage.removeItem(draftsKey);
+			}
+		} catch {
+			// 草稿解析异常时保守清空，避免留下损坏数据
+			sessionStorage.removeItem(draftsKey);
+		}
 		sessionStorage.removeItem(categoryDraftsKey);
 		stopEditing();
 		message =
-			changed > 0
-				? `已提交 ${changed} 个文件，正在等待后台部署，完成后自动刷新`
-				: "已提交，正在等待后台部署，完成后自动刷新";
+			leftoverDrafts > 0
+				? `已提交 ${changed > 0 ? changed : ""} 个文件；提交期间的 ${leftoverDrafts} 处新修改已保留为草稿，请再次点“更新”提交`
+				: changed > 0
+					? `已提交 ${changed} 个文件，正在等待后台部署，完成后自动刷新`
+					: "已提交，正在等待后台部署，完成后自动刷新";
 		watchDeploy(commit);
 	} catch (reason) {
 		message = reason instanceof Error ? reason.message : "提交失败，请稍后重试";

@@ -312,3 +312,36 @@ body.wallpaper-transparent .custom-md {
   }
 }
 
+/* —— 有序列表样式（编辑器持久化到 markdown 的内联 HTML ol）——
+   编辑器的「有序列表样式」会序列化为
+     <ol data-list-style="cjk" style="list-style-type:cjk-ideographic">…
+   或 <ol data-list-style="hierarchical">（用 CSS 计数器实现层级编号）。
+   这里补齐阅读端的渲染，保证与编辑器所见一致。 */
+.custom-md ol[data-list-style="mixed"] {
+  list-style-type: decimal;
+}
+.custom-md ol[data-list-style="mixed"] ol {
+  list-style-type: lower-alpha;
+}
+.custom-md ol[data-list-style="mixed"] ol ol {
+  list-style-type: lower-roman;
+}
+.custom-md ol[data-list-style="cjk"] {
+  list-style-type: cjk-ideographic;
+}
+.custom-md ol[data-list-style="cjk"] ol {
+  list-style-type: decimal;
+}
+.custom-md ol[data-list-style="hierarchical"],
+.custom-md ol[data-list-style="hierarchical"] ol {
+  list-style: none;
+  counter-reset: ordered-item;
+}
+.custom-md ol[data-list-style="hierarchical"] li {
+  counter-increment: ordered-item;
+}
+.custom-md ol[data-list-style="hierarchical"] li::before {
+  content: counters(ordered-item, ".") ". ";
+  font-variant-numeric: tabular-nums;
+}
+

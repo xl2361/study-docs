@@ -15,7 +15,9 @@ export const LineHeight = Extension.create({
 
 	addOptions() {
 		return {
-			types: ["paragraph", "heading"],
+			// 仅段落：标题的 line-height 无法安全持久化到 markdown
+			// （阅读端无 rehype-raw，标题若序列化为原始 HTML 会丢失锚点 id / 目录项）
+			types: ["paragraph"],
 		};
 	},
 

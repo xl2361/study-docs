@@ -4,31 +4,31 @@ published: 2026-08-01
 description: "Swagger的使用"
 category: "开发工具"
 draft: false
+updated: 2026-10-06
+tags: []
 ---
 
 ### Swagger是什么？为什么需要Swagger？
 
 #### Swagger是什么
 
-Swagger是一款**RESTful API文档自动生成和测试工具**，在Java后端开发中主要用于自动生成API接口文档，并提供在线测试接口的功能。
-
-简单的说，Swagger就是**帮你的接口自动生成文档的工具**。以前写接口需要手动写Word文档或者Excel表格来记录接口地址、参数、返回值等，现在只需要在代码上加几个注解，Swagger就能自动生成漂亮的网页版接口文档。
+Swagger是一款**自动生成 <span style="font-size:15px">RESTful</span> API 文档和测试工具**。简单的说，Swagger就是**帮你的接口自动生成文档，和在线测试**。
 
 **官方网站**：[https://swagger.io/](https://swagger.io/)
 
-#### 为什么需要Swagger
+#### 为什么要Swagger
 
 对个人开发：
 
--   **不用手写文档**：通过注解自动生成接口文档，大大减少文档编写工作量
--   **在线测试**：直接在浏览器中测试接口，不需要打开Postman等额外工具
--   **文档与代码同步**：代码变了，文档自动更新，不会出现文档过时的问题
+- **通过注解自动生成接口文档**，**不用手写文档**
+- **直接在浏览器中在线测试**，不用Postman等额外工具
+- **文档与代码自动同步**
 
 对团队协作：
 
--   **前端同事很高兴**：前端开发人员可以直接查看接口文档，了解接口参数和返回值
--   **提高沟通效率**：不用反复问"这个接口什么参数？"、"这个接口返回什么？"
--   **便于接口交接**：新入职的同事可以通过Swagger文档快速了解项目接口
+- **前端**开发可以**直接查看接口文档**，了解接口参数和返回值
+- **效率更高**：不用反复问"这个接口什么参数？"、"这个接口返回什么？"
+- **便于接口交接**：新同事可以通过Swagger文档快速了解项目接口
 
 ### Swagger的基本使用
 
@@ -36,30 +36,32 @@ Swagger是一款**RESTful API文档自动生成和测试工具**，在Java后端
 
 工作中常见的是以下几种情况：
 
-| 版本 | Swagger路径 | 注解包 | 说明 |
-| --- | --- | --- | --- |
-| Swagger 2 | /swagger-ui.html | io.swagger.annotations | 老版本 |
-| Swagger 3 | /swagger-ui/index.html | io.swagger.v3.oas.annotations | 新版本，也叫 OpenAPI 3.0 |
-| Swagger 3（兼容模式） | /swagger-ui/index.html | io.swagger.annotations | 使用Swagger 2注解，生成Swagger 3文档 ✅ |
-| Knife4j（Swagger 2增强版） | /doc.html | io.swagger.annotations | 中文增强版，界面美观，国内常用 |
-| Knife4j（Swagger 3增强版） | /doc.html | io.swagger.v3.oas.annotations | 基于Swagger 3的增强版 |
+
+| 版本                    | Swagger路径              | 注解包                           | 说明                            |
+| --------------------- | ---------------------- | ----------------------------- | ----------------------------- |
+| Swagger 2             | /swagger-ui.html       | io.swagger.annotations        | 老版本                           |
+| Swagger 3             | /swagger-ui/index.html | io.swagger.v3.oas.annotations | 新版本，也叫 OpenAPI 3.0            |
+| Swagger 3（兼容模式）       | /swagger-ui/index.html | io.swagger.annotations        | 使用Swagger 2注解，生成Swagger 3文档 ✅ |
+| Knife4j（Swagger 2增强版） | /doc.html              | io.swagger.annotations        | 中文增强版，界面美观，国内常用               |
+| Knife4j（Swagger 3增强版） | /doc.html              | io.swagger.v3.oas.annotations | 基于Swagger 3的增强版               |
+
 
 **如何快速判断项目用的是Swagger 2还是Swagger 3？**
 
 看访问地址：
 
--   `/swagger-ui.html` → **Swagger 2**
--   `/swagger-ui/index.html` → **Swagger 3** ✅
--   `/doc.html` → **Knife4j**（增强版）
+- `/swagger-ui.html` → **Swagger 2**
+- `/swagger-ui/index.html` → **Swagger 3** ✅
+- `/doc.html` → **Knife4j**（增强版）
 
 **什么是Knife4j？**
 
 Knife4j 是 Swagger 的**中文增强版**，主要特点：
 
--   **界面更美观**：全新的UI设计，比原生Swagger更好看
--   **中文友好**：原生支持中文，无需额外配置
--   **功能增强**：增加了很多实用功能，如离线文档、接口排序等
--   **国内流行**：在国内项目中使用非常广泛
+- **界面更美观**：全新的UI设计，比原生Swagger更好看
+- **中文友好**：原生支持中文，无需额外配置
+- **功能增强**：增加了很多实用功能，如离线文档、接口排序等
+- **国内流行**：在国内项目中使用非常广泛
 
 Knife4j 本质上是 Swagger 的皮肤增强，底层还是 Swagger，只是界面更好看。
 
@@ -67,8 +69,8 @@ Knife4j 本质上是 Swagger 的皮肤增强，底层还是 Swagger，只是界�
 
 **什么是"兼容模式"？**
 
--   使用 **Swagger 2 的注解**（`@Api`, `@ApiOperation` 等）
--   生成 **Swagger 3 的文档**（OpenAPI 3.0 规范）
+- 使用 **Swagger 2 的注解**（`@Api`, `@ApiOperation` 等）
+- 生成 **Swagger 3 的文档**（OpenAPI 3.0 规范）
 
 这样写的好处：可以继续用熟悉的 Swagger 2 注解，享受 Swagger 3 的新特性。
 
@@ -244,9 +246,9 @@ public class SwaggerConfig {
 
 **配置说明：**
 
--   `DocumentationType.OAS_30`：**这是Swagger 3**（OpenAPI 3.0规范）
--   `RequestHandlerSelectors.withMethodAnnotation(ApiOperation.class)`：扫描`@ApiOperation`注解（Swagger 2注解风格）
--   `securitySchemes()`：配置Token认证
+- `DocumentationType.OAS_30`：**这是Swagger 3**（OpenAPI 3.0规范）
+- `RequestHandlerSelectors.withMethodAnnotation(ApiOperation.class)`：扫描`@ApiOperation`注解（Swagger 2注解风格）
+- `securitySchemes()`：配置Token认证
 
 **配置文件（application.yml）：**
 
@@ -267,17 +269,19 @@ swagger:
 
 **不同版本的访问地址：**
 
-| 版本 | Swagger路径 | 判断依据 | 特点 |
-| --- | --- | --- | --- |
-| Swagger 2 | /swagger-ui.html | 地址中没有 index.html | 老版本，界面较简陋 |
-| Swagger 3 | /swagger-ui/index.html | 地址中有 index.html | 新版本，功能更强 |
-| Knife4j | /doc.html | 地址是 doc.html | 增强版，界面美观，中文友好 ✅ |
+
+| 版本        | Swagger路径              | 判断依据             | 特点              |
+| --------- | ---------------------- | ---------------- | --------------- |
+| Swagger 2 | /swagger-ui.html       | 地址中没有 index.html | 老版本，界面较简陋       |
+| Swagger 3 | /swagger-ui/index.html | 地址中有 index.html  | 新版本，功能更强        |
+| Knife4j   | /doc.html              | 地址是 doc.html     | 增强版，界面美观，中文友好 ✅ |
+
 
 **如何快速记住：**
 
--   看到 `swagger-ui/index.html` → **Swagger 3**
--   看到 `swagger-ui.html` → **Swagger 2**
--   看到 `doc.html` → **Knife4j**（增强版）✅
+- 看到 `swagger-ui/index.html` → **Swagger 3**
+- 看到 `swagger-ui.html` → **Swagger 2**
+- 看到 `doc.html` → **Knife4j**（增强版）✅
 
 **访问地址的构成说明（重点）：**
 
@@ -289,9 +293,9 @@ http://[域名或IP]:[端口][项目前缀][Swagger路径]
 
 **如何找到正确的访问地址：**
 
-1.  确认项目端口：查看`application.yml`中的`server.port`
-2.  确认项目前缀：查看`application.yml`中的`server.servlet.context-path`
-3.  在地址后加上 `/swagger-ui/index.html`（Swagger 3）
+1. 确认项目端口：查看`application.yml`中的`server.port`
+2. 确认项目前缀：查看`application.yml`中的`server.servlet.context-path`
+3. 在地址后加上 `/swagger-ui/index.html`（Swagger 3）
 
 当然，有时候，Swagger路径也可以改的！正常情况，如果更改的话就是在项目配置文件里面去配置这个路径！如果默认路径都无法访问的话，就去配置文件里面去看，有没有自定义swagger路径。
 
@@ -301,12 +305,14 @@ Swagger 3（兼容模式）使用 Swagger 2 的注解风格。了解就行，不
 
 **常用注解：**
 
-| 注解 | 使用位置 | 作用 |
-| --- | --- | --- |
-| @Api | Controller类 | 标识接口分组，描述模块功能 |
-| @ApiOperation | 方法 | 描述接口的具体功能 |
-| @ApiModel | 实体类 | 描述实体类的信息 |
-| @ApiModelProperty | 字段 | 描述字段的信息 |
+
+| 注解                | 使用位置        | 作用            |
+| ----------------- | ----------- | ------------- |
+| @Api              | Controller类 | 标识接口分组，描述模块功能 |
+| @ApiOperation     | 方法          | 描述接口的具体功能     |
+| @ApiModel         | 实体类         | 描述实体类的信息      |
+| @ApiModelProperty | 字段          | 描述字段的信息       |
+
 
 ### Swagger的高级配置（了解）
 
@@ -354,10 +360,10 @@ private List<SecurityScheme> securitySchemes() {
 
 **使用方式：**
 
-1.  登录后获取token
-2.  在Swagger UI界面点击右上角的 **Authorize** 按钮
-3.  输入：`Bearer {token}` 或直接输入 `{token}`
-4.  之后所有接口请求都会自动带上这个请求头
+1. 登录后获取token
+2. 在Swagger UI界面点击右上角的 **Authorize** 按钮
+3. 输入：`Bearer {token}` 或直接输入 `{token}`
+4. 之后所有接口请求都会自动带上这个请求头
 
 ### 在Swagger中测试接口
 
@@ -365,11 +371,11 @@ private List<SecurityScheme> securitySchemes() {
 
 **步骤：**
 
-1.  点击接口名称，展开接口详情
-2.  点击 **Try it out** 按钮
-3.  填写请求参数（如果有）
-4.  点击 **Execute** 执行请求
-5.  查看响应结果
+1. 点击接口名称，展开接口详情
+2. 点击 **Try it out** 按钮
+3. 填写请求参数（如果有）
+4. 点击 **Execute** 执行请求
+5. 查看响应结果
 
 ![get请求](/uploads/images/2026-03-26/42442029-f034-449a-9001-95203e956a43.png)
 
@@ -377,11 +383,11 @@ private List<SecurityScheme> securitySchemes() {
 
 **步骤：**
 
-1.  点击接口名称，展开接口详情
-2.  点击 **Try it out** 按钮
-3.  在Request body中填写JSON格式的请求数据
-4.  点击 **Execute** 执行请求
-5.  查看响应结果
+1. 点击接口名称，展开接口详情
+2. 点击 **Try it out** 按钮
+3. 在Request body中填写JSON格式的请求数据
+4. 点击 **Execute** 执行请求
+5. 查看响应结果
 
 ![post请求](/uploads/images/2026-03-26/6c795821-4f0d-4f3e-b601-e50779333c47.png)
 
@@ -389,13 +395,10 @@ private List<SecurityScheme> securitySchemes() {
 
 **步骤：**
 
-1.  使用登录接口或者token或者登录对应前端平台F12获取别的接口传的Token
-    
-2.  点击页面右上角的 **Authorize** 按钮
-    
-    ![获取token](/uploads/images/2026-03-26/4bd8a600-ff20-4605-97cb-46681d436231.png)
-    
-3.  输入token，点击 **Authorize** 确认
-    
+1. 使用登录接口或者token或者登录对应前端平台F12获取别的接口传的Token
+2. 点击页面右上角的 **Authorize** 按钮
+  ![获取token](/uploads/images/2026-03-26/4bd8a600-ff20-4605-97cb-46681d436231.png)
+3. 输入token，点击 **Authorize** 确认
 
 ![获取token2](/uploads/images/2026-03-26/9fe3688d-83a9-49cd-ba25-96a87f2752d6.png)
+

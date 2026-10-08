@@ -346,10 +346,13 @@ const initialLayoutClass =
   // 立即执行一次（处理页面刷新）
   setTimeout(initLayout, 0);
 
-  // —— 最近浏览置顶 ——
-  // 主页文章列表是构建期静态分页的（每页固定文章）。这里在**当前页内**把最近浏览过的文章排到最前（按最近浏览时间倒序），其余保持原顺序。
-  // 只在本页内重排，绝不跨页搬运 —— 跨页搬运会让同一篇文章同时出现在两页（v1.0.6 的 bug）。历史教训见 AAAA/文档/稳定版归档.md。
-  // 数据为每人的 localStorage（各自浏览记录，互不干扰）。
+  // —— 最近浏览置顶（全局重排）——
+  // 排序规则（用户需求）：最近浏览过的文章排最前（按浏览时间倒序），
+  // 其余按构建期原始顺序依次后排。
+  //
+  // 实现：第一页嵌入了 #all-post-cards 模板（含全部文章卡片及原始排序号）。
+  // 有模板时做全局重排：MRU 优先 + 原始顺序，取前 N 张替换当前页显示。
+  // 无模板（其他分页）时退回本页内重排（只调整当前页卡片的相对顺序）。
   function readMru(): any[] {
     try {
       const raw = localStorage.getItem("study-mru-v1");
@@ -363,16 +366,70 @@ const initialLayoutClass =
   function applyMruOrder() {
     const container = document.getElementById("post-list-container");
     if (!container) return;
-    const cards = Array.from(container.querySelectorAll(".post-card-item"));
-    if (cards.length < 2) return;
 
     const mru = readMru();
     if (!mru.length) return;
 
+    const template = document.getElementById("all-post-cards") as HTMLTemplateElement | null;
+
+    if (template && template.content) {
+      // —— 全局重排（有模板时，所有分页共用）——
+      const entries = Array.from(
+        template.content.querySelectorAll(".post-card-item")
+      );
+      if (entries.length < 2) return;
+
+      const pageSize =
+        parseInt(template.getAttribute("data-page-size") || "7", 10) || 7;
+      const currentPage =
+        parseInt(template.getAttribute("data-current-page") || "1", 10) || 1;
+
+      // 排序：MRU 文章按浏览顺序（最近在前），其余按原始索引
+      // slug 大小写不敏感匹配：Astro content collection 可能把文件名转成小写，
+      // 而文章页 [..slug].astro 写入 MRU 时可能保留原始大小写
+      const mruLower = mru.map((s: string) => s.toLowerCase());
+      const mruRank = (el: Element) => {
+        const slug = (el.getAttribute("data-post-slug") || "").toLowerCase();
+        const i = mruLower.indexOf(slug);
+        return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+      };
+      const origIdx = (el: Element) =>
+        parseInt(el.getAttribute("data-original-index") || "0", 10) || 0;
+
+      const sorted = entries
+        .slice()
+        .sort((a, b) => {
+          const ra = mruRank(a);
+          const rb = mruRank(b);
+          if (ra !== rb) return ra - rb;
+          if (ra === Number.MAX_SAFE_INTEGER) return origIdx(a) - origIdx(b);
+          return 0;
+        });
+
+      // 取当前分页对应的段
+      const start = (currentPage - 1) * pageSize;
+      const visible = sorted.slice(start, start + pageSize);
+
+      // 替换容器内的卡片
+      const existing = container.querySelectorAll(".post-card-item");
+      existing.forEach((el) => el.remove());
+      for (const el of visible) {
+        const clone = el.cloneNode(true);
+        container.appendChild(clone);
+      }
+      window.dispatchEvent(new CustomEvent("post-heat-sorted"));
+      return;
+    }
+
+    // —— 本页内重排（其他分页或无模板时）——
+    const cards = Array.from(container.querySelectorAll(".post-card-item"));
+    if (cards.length < 2) return;
+
     // 只对本页存在的卡片排序：浏览过的（按 MRU 顺序）在前，其余保持原相对顺序
+    const mruLower = mru.map((s: string) => s.toLowerCase());
     const rank = (card: Element) => {
-      const slug = card.getAttribute("data-post-slug") || "";
-      const i = mru.indexOf(slug);
+      const slug = (card.getAttribute("data-post-slug") || "").toLowerCase();
+      const i = mruLower.indexOf(slug);
       return i === -1 ? Number.MAX_SAFE_INTEGER : i;
     };
 

@@ -1,21 +1,29 @@
 ---
+import { getPostUrlBySlug } from "@utils/url-utils";
 import type { GetStaticPaths } from "astro";
 import Pagination from "@/components/common/Pagination.astro";
+import PostCard from "@/components/layout/PostCard.astro";
 import PostPage from "@/components/layout/PostPage.astro";
 import { siteConfig } from "@/config";
 import MainGridLayout from "@/layouts/MainGridLayout.astro";
 import { getSortedPosts } from "@/utils/content-utils";
+
 export const getStaticPaths = (async ({ paginate }) => {
 	const allBlogPosts = await getSortedPosts();
-	// 使用配置中的文章数量
 	const pageSize = siteConfig.pagination.postsPerPage;
 	return paginate(allBlogPosts, { pageSize });
 }) satisfies GetStaticPaths;
-// https://github.com/withastro/astro/issues/6507#issuecomment-1489916992
 
 const { page } = Astro.props;
-
 const len = page.data.length;
+
+// —— 全量卡片（每一页都嵌入，供客户端按「最近浏览」全局重排）——
+// 排序规则（用户需求）：最近浏览过的文章排最前（按浏览时间倒序），
+// 其余按构建期原始顺序依次后排。客户端读取 #all-post-cards 模板，
+// 按此规则重排后，取对应分页段（第 page.currentPage 页的 slice）显示。
+// 嵌入在各分页自己的 HTML 中，不影响其他页的加载体积。
+const allSortedPosts = await getSortedPosts();
+const currentPage = page.currentPage || 1;
 ---
 
 <MainGridLayout>
@@ -29,23 +37,44 @@ const len = page.data.length;
       />
     )
   }
+
+  {allSortedPosts.length > 0 && (
+    <template id="all-post-cards" data-total={allSortedPosts.length} data-page-size={page.size} data-current-page={currentPage}>
+      {allSortedPosts.map((entry, originalIndex) => (
+        <PostCard
+          entry={entry}
+          title={entry.data.title}
+          tags={entry.data.tags}
+          category={entry.data.category}
+          published={entry.data.published}
+          updated={entry.data.updated}
+          url={getPostUrlBySlug(entry.id)}
+          image={entry.data.image}
+          description={entry.data.description}
+          draft={entry.data.draft}
+          pinned={entry.data.pinned}
+          password={!!entry.data.password}
+          class:list="post-card-item"
+          data-original-index={originalIndex}
+          style={`animation-delay: calc(var(--content-delay) + ${(originalIndex % 7) * 50}ms);`}
+        />
+      ))}
+    </template>
+  )}
 </MainGridLayout>
 
 <script>
-  // 响应式分页处理脚本
   document.addEventListener("DOMContentLoaded", function () {
-    // 如果启用了响应式分页，添加相应的CSS类
-    const responsiveEnabled = true; // ${siteConfig.pagination.responsive}
+    const responsiveEnabled = true;
     if (responsiveEnabled) {
-      const deviceType = getDeviceType();
+      const deviceType = getDevice();
       document.body.classList.add(`device-${deviceType}`);
 
-      // 监听窗口大小变化
       let resizeTimeout: any;
       window.addEventListener("resize", function () {
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(function () {
-          const newDeviceType = getDeviceType();
+          const newDeviceType = getDevice();
           const currentDeviceType = document.body.className.match(
             /device-(mobile|tablet|desktop)/
           )?.[1];
@@ -58,13 +87,4 @@ const len = page.data.length;
       });
     }
   });
-
-  function getDeviceType() {
-    if (typeof window === "undefined") return "desktop";
-
-    const width = window.innerWidth;
-    if (width < 768) return "mobile";
-    if (width < 1024) return "tablet";
-    return "desktop";
-  }
 </script>

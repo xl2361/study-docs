@@ -19,9 +19,11 @@ interface Props {
 	pinned?: boolean;
 	password?: boolean;
 	style: string;
+	"data-original-index"?: number;
 }
 const { entry, title, url, tags, pinned, password, style } = Astro.props;
 const className = Astro.props.class;
+const originalIndex = Astro.props["data-original-index"];
 // 说明：卡片不再显示发布日期与阅读时长，故不再从 remarkPluginFrontmatter 取 minutes。
 // render() 保留：它负责执行 remark 插件链（阅读时长等 frontmatter 由插件注入），
 // 移除会改变构建期行为，非本次需求所需。
@@ -36,6 +38,7 @@ await render(entry);
     className,
   ]}
   data-post-slug={entry.id.replace(/\.(md|mdx|markdown)$/i, "")}
+  data-original-index={originalIndex}
   style={style}
 >
   <div class="post-card-content px-4 md:px-6 py-2 md:py-3 relative flex flex-col h-full w-full">

@@ -568,9 +568,42 @@ const editorArticlePath =
         const list = Array.isArray(prev) ? prev : [];
         const next = [selfSlug].concat(list.filter(function (s) { return s !== selfSlug; })).slice(0, 50);
         localStorage.setItem(mruKey, JSON.stringify(next));
+        // 清除 Swup 页面缓存：主页的静态 HTML 是构建期的旧排序，
+        // 缓存不清的话切回主页时 Swup 从缓存取旧 HTML（无最新排序数据），
+        // 导致「最近浏览置顶」不生效。
+        try {
+          if (window.swup && window.swup.cache) window.swup.cache.clear();
+        } catch (e) {}
       } catch {
         /* 忽略（无痕模式等） */
       }
     })();
+  </script>
+
+  <script data-astro-rerun>
+    // —— 最近浏览 MRU 写入（非 inline，Swup 导航时由 ScriptsPlugin 重跑）——
+    // 上面的 is:inline + define:vars 脚本只在整页加载时执行；
+    // Swup 站内导航（主页→文章）到本页时它不会重跑，MRU 不更新，
+    // 导致「最近浏览置顶」失效。这里从 URL 提取 slug，与 is:inline 版逻辑一致。
+    function recordMru() {
+      try {
+        const match = location.pathname.match(/^\/posts\/(.+)\/$/);
+        if (!match || !match[1]) return;
+        const slug = decodeURIComponent(match[1]);
+        const key = "study-mru-v1";
+        const prev = JSON.parse(localStorage.getItem(key) || "[]");
+        const list = Array.isArray(prev) ? prev : [];
+        const slugLower = slug.toLowerCase();
+        const next = [slug].concat(list.filter(function(s) { return s.toLowerCase() !== slugLower; })).slice(0, 50);
+        localStorage.setItem(key, JSON.stringify(next));
+        try { if (window.swup && window.swup.cache) window.swup.cache.clear(); } catch (e) {}
+      } catch (e) {}
+    }
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", recordMru, { once: true });
+    } else {
+      recordMru();
+    }
+  </script>
 
 </script>

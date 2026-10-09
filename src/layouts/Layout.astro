@@ -2347,4 +2347,87 @@ function disableAnimation() {
   document.addEventListener('swup:contentReplaced', () => {
     requestAnimationFrame(initImageLoadFadeIn);
   });
+
+  // —— 最近浏览 MRU 写入（全局，Swup 导航后必触发）——
+  // 关键修复：之前 MRU 写入放在文章页的 is:inline 脚本里，
+  // Swup 站内导航到文章页时该脚本不重跑 → MRU 不更新 → 主页排序失效。
+  // 改为全局监听 astro:page-load（Swup 导航后必触发），从 URL 提取 slug。
+  function recordMruFromUrl() {
+    try {
+      var m = location.pathname.match(/^\/posts\/(.+?)\/?$/);
+      if (!m || !m[1]) return;
+      var slug = decodeURIComponent(m[1]);
+      if (slug === 'page' || slug.indexOf('page/') === 0) return;
+      var key = 'study-mru-v1';
+      var prev = JSON.parse(localStorage.getItem(key) || '[]');
+      var list = Array.isArray(prev) ? prev : [];
+      var slugLower = slug.toLowerCase();
+      var next = [slug].concat(list.filter(function(s) {
+        return (s || '').toLowerCase() !== slugLower;
+      })).slice(0, 50);
+      localStorage.setItem(key, JSON.stringify(next));
+      try { if (window.swup && window.swup.cache) window.swup.cache.clear(); } catch (e) {}
+    } catch (e) {}
+  }
+  document.addEventListener('astro:page-load', recordMruFromUrl);
+
+  // —— 主页「最近浏览置顶」全局重排 ——
+  // 排序规则：最近浏览过的文章排最前（按浏览时间倒序），其余按构建期原始顺序依次后排。
+  // 数据来源：#all-post-cards 模板（在 [...page].astro 中嵌入全部文章卡片及原始排序号）。
+  // 放在 Layout.astro 全局脚本里（而非 PostPage.astro），
+  // 因为 PostPage 的模块脚本里的 astro:page-load 监听器可能因模块去重而不触发。
+  function applyMruGlobal() {
+    try {
+      // 仅在主页生效
+      if (location.pathname !== '/' && location.pathname !== '') return;
+      var container = document.getElementById('post-list-container');
+      if (!container) return;
+      var tpl = document.getElementById('all-post-cards');
+      if (!tpl || !tpl.content) return;
+      var mru = JSON.parse(localStorage.getItem('study-mru-v1') || '[]');
+      if (!mru.length) return;
+
+      var entries = Array.from(tpl.content.querySelectorAll('.post-card-item'));
+      if (entries.length < 2) return;
+      var pageSize = parseInt(tpl.getAttribute('data-page-size') || '7', 10) || 7;
+      var currentPage = parseInt(tpl.getAttribute('data-current-page') || '1', 10) || 1;
+
+      // 大小写不敏感匹配
+      var mruLower = mru.map(function(s) { return (s || '').toLowerCase(); });
+      var mruRank = function(el) {
+        var slug = (el.getAttribute('data-post-slug') || '').toLowerCase();
+        var i = mruLower.indexOf(slug);
+        return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+      };
+      var origIdx = function(el) {
+        return parseInt(el.getAttribute('data-original-index') || '0', 10) || 0;
+      };
+
+      var sorted = entries.slice().sort(function(a, b) {
+        var ra = mruRank(a), rb = mruRank(b);
+        if (ra !== rb) return ra - rb;
+        if (ra === Number.MAX_SAFE_INTEGER) return origIdx(a) - origIdx(b);
+        return 0;
+      });
+
+      // 取当前分页对应的段
+      var start = (currentPage - 1) * pageSize;
+      var visible = sorted.slice(start, start + pageSize);
+
+      // 替换容器内的卡片
+      var existing = container.querySelectorAll('.post-card-item');
+      existing.forEach(function(el) { el.remove(); });
+      visible.forEach(function(el) {
+        var clone = el.cloneNode(true);
+        clone.classList.remove('onload-animation');
+        container.appendChild(clone);
+      });
+    } catch (e) {}
+  }
+  document.addEventListener('astro:page-load', function() {
+    setTimeout(applyMruGlobal, 100);
+  });
+  document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(applyMruGlobal, 100);
+  });
 </script>

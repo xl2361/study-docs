@@ -2,15 +2,14 @@
 import { NodeSelection, TextSelection } from "prosemirror-state";
 import { CellSelection } from "prosemirror-tables";
 import { onMount, tick } from "svelte";
-import { CodeBlockLang } from "@/extensions/CodeBlockLang";
-import { createCodeBlockNodeView } from "@/extensions/CodeBlockNodeView";
-import { FontSize } from "@/extensions/FontSize";
-import { Indent } from "@/extensions/Indent";
-import { SelectAllInCodeBlock } from "@/extensions/SelectAllInCodeBlock";
 import {
 	setupBlockHandle,
 	teardownBlockHandle,
 } from "@/extensions/BlockHandle";
+import { CodeBlockLang } from "@/extensions/CodeBlockLang";
+import { createCodeBlockNodeView } from "@/extensions/CodeBlockNodeView";
+import { FontSize } from "@/extensions/FontSize";
+import { Indent } from "@/extensions/Indent";
 import { LineHeight } from "@/extensions/LineHeight";
 import {
 	StyledOrderedList,
@@ -18,6 +17,7 @@ import {
 	StyledTextStyle,
 } from "@/extensions/MarkdownPersistence";
 import { OrderedListStyle } from "@/extensions/OrderedListStyle";
+import { SelectAllInCodeBlock } from "@/extensions/SelectAllInCodeBlock";
 import EditorToolbar from "./EditorToolbar.svelte";
 
 export let slug: string;
@@ -108,7 +108,9 @@ type JsonNode = {
 };
 type EditorChain = {
 	focus: () => EditorChain;
-	setTextSelection: (position: number | { from: number; to: number }) => EditorChain;
+	setTextSelection: (
+		position: number | { from: number; to: number },
+	) => EditorChain;
 	undo: () => EditorChain;
 	redo: () => EditorChain;
 	toggleBold: () => EditorChain;
@@ -1677,7 +1679,8 @@ function onCellDragUp() {
 }
 
 // 安全取坐标对应的文字位置：仅当落在文本块内才返回（表格内/块边界返回 null）
-function posAtCoordsSafe(mouse: MouseEvent): number | null {	if (!editor) return null;
+function posAtCoordsSafe(mouse: MouseEvent): number | null {
+	if (!editor) return null;
 	try {
 		const p = editor.view.posAtCoords({
 			left: mouse.clientX,
@@ -1696,7 +1699,11 @@ function posAtCoordsSafe(mouse: MouseEvent): number | null {	if (!editor) return
 // 把光标放进指定顶层块内（保证后续转化/缩进命令作用于该块）
 function focusBlock(pos: number) {
 	if (!editor) return;
-	editor.chain().focus().setTextSelection(pos + 1).run();
+	editor
+		.chain()
+		.focus()
+		.setTextSelection(pos + 1)
+		.run();
 }
 
 function runBlockAction(
@@ -2544,12 +2551,13 @@ async function loadArticle(operation: number) {
 		// 本地 dev：API route 被 prerendered（query 不可达），mock 返回
 		// 全部文章 map，这里本地挑选；生产走 Pages Function 带查询单篇拉取。
 		if (import.meta.env.DEV) {
-			const bulk = await fetch("/api/editor/article/").then((r) =>
+			const bulk = (await fetch("/api/editor/article/").then((r) =>
 				r.json(),
-			) as { posts?: Record<string, string> };
+			)) as { posts?: Record<string, string> };
 			const key = slug.toLowerCase().replace(/\.md$/, "");
 			const content = bulk.posts?.[key];
-			if (content === undefined) throw new Error("文章读取失败（本地 mock 无此文）");
+			if (content === undefined)
+				throw new Error("文章读取失败（本地 mock 无此文）");
 			parseArticle(content);
 			sha = "dev-mock";
 			path = `src/content/posts/${key}.md`;

@@ -344,7 +344,7 @@ function openMenu() {
 	if (subEl) {
 		const kindOf: Record<string, string> = {
 			paragraph: "paragraph",
-			heading: "heading?" + curType,
+			heading: `heading?${curType}`,
 			bulletList: "bulletList",
 			orderedList: "orderedList",
 			taskList: "taskList",

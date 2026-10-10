@@ -11,9 +11,10 @@ import { YUQUE_ICONS } from "./yuqueIcons";
 
 type BlockHandleEditor = {
 	view: {
-		posAtCoords: (coords: { left: number; top: number }) =>
-			| { pos: number; inside: number }
-			| null;
+		posAtCoords: (coords: {
+			left: number;
+			top: number;
+		}) => { pos: number; inside: number } | null;
 		posAtDOM: (node: Node, offset: number) => number;
 		dom: HTMLElement;
 	};
@@ -61,7 +62,6 @@ let curPos = -1;
 let curEnd = -1;
 let curType = "";
 let curText = "";
-let curIsListItem = false;
 let menuOpen = false;
 let subOpen = false;
 // 活跃实例计数（编辑器重建时 setup/teardown 可能交叉，见 teardownBlockHandle）
@@ -96,7 +96,7 @@ function resolveTopBlock(pos: number): {
 		const $ = ed.state.doc.resolve(pos);
 		if ($.depth === 0) return null;
 		// 沿深度向上找第一个非 list 的顶层块；列表场景落在 list 本身
-		let depth = 1;
+		const depth = 1;
 		let name = $.node(1).type.name;
 		let isListItem = false;
 		for (let d = 1; d <= $.depth; d++) {
@@ -260,7 +260,6 @@ function showHandle(block: NonNullable<ReturnType<typeof resolveTopBlock>>) {
 	curEnd = block.end;
 	curType = block.type;
 	curText = block.text;
-	curIsListItem = block.isListItem;
 	const h = ensureHandle();
 	const hostRect = host?.getBoundingClientRect();
 	if (!hostRect) return;
@@ -283,7 +282,9 @@ function showHandle(block: NonNullable<ReturnType<typeof resolveTopBlock>>) {
 			const child = domAt.node.parentElement.children[domAt.offset];
 			if (child) el = child;
 		}
-		const matched = el?.matches("p,h1,h2,h3,h4,h5,h6,pre,ul,ol,blockquote,table,img")
+		const matched = el?.matches(
+			"p,h1,h2,h3,h4,h5,h6,pre,ul,ol,blockquote,table,img",
+		)
 			? el
 			: el?.closest("p,h1,h2,h3,h4,h5,h6,pre,ul,ol,blockquote,table,img");
 		const r = matched?.getBoundingClientRect();
@@ -413,7 +414,10 @@ export function setupBlockHandle(options: {
 		action: MenuAction | "add",
 		block: { pos: number; end: number; text: string },
 	) => void;
-	onTransform: (kind: TransformKind, block: { pos: number; end: number }) => void;
+	onTransform: (
+		kind: TransformKind,
+		block: { pos: number; end: number },
+	) => void;
 }) {
 	host = options.host;
 	getEditor = options.getEditor;

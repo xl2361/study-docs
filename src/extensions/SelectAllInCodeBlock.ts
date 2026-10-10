@@ -22,7 +22,10 @@ export const SelectAllInCodeBlock = Extension.create({
 						// 已全选代码块 → 让默认行为接管（全选全文）
 						return false;
 					}
-					return this.editor.commands.setTextSelection({ from: start, to: end });
+					return this.editor.commands.setTextSelection({
+						from: start,
+						to: end,
+					});
 				}
 				return false;
 			},

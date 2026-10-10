@@ -6,17 +6,14 @@
 // 改用 import.meta.glob 编译期读入全部文章，按 query/任何能拿到的线索都
 // 不可行 → 直接返回全部文章 map，前端 dev 模式自行挑选。
 // 生产静态构建输出 404 占位，实际由 Pages Function 接管（带 query 正常工作）。
-import type { APIRoute } from "astro";
-import { readFile, readdir } from "node:fs/promises";
+
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import type { APIRoute } from "astro";
 
 // 本地静态构建（无 adapter）需静态化占位，否则 NoAdapterInstalled。
 // dev 与部署构建（CF_WORKERS）按需渲染。
-export const prerender = process.env.CF_WORKERS
-	? false
-	: import.meta.env.DEV
-		? false
-		: true;
+export const prerender = !(process.env.CF_WORKERS || import.meta.env.DEV);
 
 const POSTS_DIR = path.join(process.cwd(), "src/content/posts");
 

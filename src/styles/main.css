@@ -387,6 +387,43 @@ img {
         display: none;
     }
 
+    /* 全站滚动条：加深加粗便于看清（页面主滚动条 + 各面板滚动条） */
+    * {
+        scrollbar-width: auto;
+        scrollbar-color: #6b7280 transparent;
+    }
+    ::-webkit-scrollbar {
+        width: 12px;
+        height: 12px;
+    }
+    ::-webkit-scrollbar-track {
+        background: rgba(0, 0, 0, 0.05);
+    }
+    ::-webkit-scrollbar-thumb {
+        background: #6b7280;
+        border-radius: 6px;
+        border: 2.5px solid transparent;
+        background-clip: padding-box;
+    }
+    :root.dark {
+        scrollbar-color: #9ca3af transparent;
+    }
+    :root.dark::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.06);
+    }
+    :root.dark::-webkit-scrollbar-thumb {
+        background: #9ca3af;
+        background-clip: padding-box;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: #374151;
+        background-clip: padding-box;
+    }
+    :root.dark::-webkit-scrollbar-thumb:hover {
+        background: #d1d5db;
+        background-clip: padding-box;
+    }
+
 
     .text-90 {
         @apply text-black/90 dark:text-white/90
@@ -702,9 +739,11 @@ html.study-editor-active #editor-topbar {
 #editor-topbar[hidden] { display: none !important; }
 #editor-topbar:not([hidden]) {
   position: sticky;
-  top: 4.5rem;
+  top: 3.5rem;
   z-index: 30;
   margin-bottom: .75rem;
+  margin-top: -.5rem; /* 抵消 card-base p-2 的上内边距，让工具栏视觉上贴住顶栏 */
+  padding-top: .5rem;
   color: var(--btn-content);
   background: var(--card-bg);
 }

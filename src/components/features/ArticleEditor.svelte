@@ -6,6 +6,11 @@ import { CodeBlockLang } from "@/extensions/CodeBlockLang";
 import { createCodeBlockNodeView } from "@/extensions/CodeBlockNodeView";
 import { FontSize } from "@/extensions/FontSize";
 import { Indent } from "@/extensions/Indent";
+import { SelectAllInCodeBlock } from "@/extensions/SelectAllInCodeBlock";
+import {
+	setupBlockHandle,
+	teardownBlockHandle,
+} from "@/extensions/BlockHandle";
 import { LineHeight } from "@/extensions/LineHeight";
 import {
 	StyledOrderedList,
@@ -103,7 +108,7 @@ type JsonNode = {
 };
 type EditorChain = {
 	focus: () => EditorChain;
-	setTextSelection: (position: number) => EditorChain;
+	setTextSelection: (position: number | { from: number; to: number }) => EditorChain;
 	undo: () => EditorChain;
 	redo: () => EditorChain;
 	toggleBold: () => EditorChain;
@@ -138,6 +143,7 @@ type EditorChain = {
 	unsetAllMarks: () => EditorChain;
 	clearNodes: () => EditorChain;
 	deleteSelection: () => EditorChain;
+	insertContent: (content: unknown) => EditorChain;
 	setMark: (name: string, attributes: Record<string, unknown>) => EditorChain;
 	unsetMark: (name: string) => EditorChain;
 	addRowBefore: () => EditorChain;
@@ -254,6 +260,8 @@ let outsideDragFrom: number | null = null;
 let rangeDragActive = false;
 let tableToolbarEl: HTMLElement | null = null;
 let dragHandleEl: HTMLDivElement | null = null;
+// 块手柄清理函数（Notion 式行操作）
+let blockHandleCleanup: (() => void) | null = null;
 let rowHandleEl: HTMLDivElement | null = null;
 let colHandleEl: HTMLDivElement | null = null;
 let lastMouseX = 0;
@@ -866,6 +874,7 @@ async function createEditor(operation: number) {
 				taskItem.default,
 				FontSize,
 				Indent,
+				SelectAllInCodeBlock,
 				LineHeight,
 				OrderedListStyle,
 				StyledTextStyle,
@@ -1002,6 +1011,13 @@ async function createEditor(operation: number) {
 		syncHistoryState();
 		editor.on("selectionUpdate", onTableSelectionChange);
 		editor.on("transaction", onTableSelectionChange);
+		// Notion 式块手柄：hover 顶层块显示 6 点手柄，点击弹菜单
+		blockHandleCleanup = setupBlockHandle({
+			host: editorMount,
+			getEditor: () => editor,
+			onAction: runBlockAction,
+			onTransform: runBlockTransform,
+		});
 		document.addEventListener("mousemove", onTableMouseMove);
 		document.addEventListener("mousedown", onTableDocMouseDown);
 		document.addEventListener("mouseup", onTableDocMouseUp, true);
@@ -1661,8 +1677,7 @@ function onCellDragUp() {
 }
 
 // 安全取坐标对应的文字位置：仅当落在文本块内才返回（表格内/块边界返回 null）
-function posAtCoordsSafe(mouse: MouseEvent): number | null {
-	if (!editor) return null;
+function posAtCoordsSafe(mouse: MouseEvent): number | null {	if (!editor) return null;
 	try {
 		const p = editor.view.posAtCoords({
 			left: mouse.clientX,
@@ -1673,6 +1688,117 @@ function posAtCoordsSafe(mouse: MouseEvent): number | null {
 		return $p.parent.inlineContent ? p.pos : null;
 	} catch {
 		return null;
+	}
+}
+
+// —— Notion 式块手柄的动作实现（菜单回调，见 BlockHandle.ts） ——
+
+// 把光标放进指定顶层块内（保证后续转化/缩进命令作用于该块）
+function focusBlock(pos: number) {
+	if (!editor) return;
+	editor.chain().focus().setTextSelection(pos + 1).run();
+}
+
+function runBlockAction(
+	action: "delete" | "copy" | "cut" | "indent" | "add",
+	block: { pos: number; end: number; text: string },
+) {
+	if (!editor) return;
+	if (action === "copy" || action === "cut") {
+		const text = block.text;
+		void navigator.clipboard?.writeText(text).catch(() => {});
+		if (action === "copy") return;
+	}
+	focusBlock(block.pos);
+	if (action === "delete" || action === "cut") {
+		// 选中整个顶层块再删除（用 BlockHandle 传回的 end，避免边界 resolve 抛错）
+		try {
+			editor
+				.chain()
+				.focus()
+				.setTextSelection({ from: block.pos, to: block.end })
+				.run();
+			editor.chain().focus().deleteSelection().run();
+		} catch {
+			/* 块已不存在，忽略 */
+		}
+		return;
+	}
+	if (action === "indent") {
+		editor.chain().focus().indent().run();
+		return;
+	}
+	if (action === "add") {
+		// 在块末尾后插入空段落并聚焦
+		try {
+			editor
+				.chain()
+				.focus()
+				.setTextSelection(block.end)
+				.insertContent({ type: "paragraph" })
+				.run();
+		} catch {
+			/* 忽略 */
+		}
+	}
+}
+
+function runBlockTransform(
+	kind:
+		| "heading1"
+		| "heading2"
+		| "heading3"
+		| "heading4"
+		| "heading5"
+		| "heading6"
+		| "paragraph"
+		| "orderedList"
+		| "bulletList"
+		| "taskList"
+		| "blockquote"
+		| "codeBlock",
+	block: { pos: number; end: number },
+) {
+	if (!editor) return;
+	focusBlock(block.pos);
+	const c = editor.chain().focus();
+	switch (kind) {
+		case "heading1":
+			c.toggleHeading({ level: 1 }).run();
+			break;
+		case "heading2":
+			c.toggleHeading({ level: 2 }).run();
+			break;
+		case "heading3":
+			c.toggleHeading({ level: 3 }).run();
+			break;
+		case "heading4":
+			c.toggleHeading({ level: 4 }).run();
+			break;
+		case "heading5":
+			c.toggleHeading({ level: 5 }).run();
+			break;
+		case "heading6":
+			c.toggleHeading({ level: 6 }).run();
+			break;
+		case "paragraph":
+			c.setParagraph().run();
+			break;
+		case "orderedList":
+			c.toggleOrderedList().run();
+			break;
+		case "bulletList":
+			c.toggleBulletList().run();
+			break;
+		case "taskList":
+			c.toggleTaskList().run();
+			break;
+		case "blockquote":
+			c.toggleBlockquote().run();
+			break;
+		case "codeBlock":
+			c.toggleCodeBlock().run();
+			break;
 	}
 }
 
@@ -2346,6 +2472,11 @@ function runTableCommand(name: string) {
 }
 
 function destroyEditor() {
+	if (blockHandleCleanup) {
+		blockHandleCleanup();
+		blockHandleCleanup = null;
+	}
+	teardownBlockHandle();
 	if (editor) {
 		editor.off("selectionUpdate", onTableSelectionChange);
 		editor.off("transaction", onTableSelectionChange);
@@ -2410,6 +2541,30 @@ async function loadArticle(operation: number) {
 	loaded = false;
 	error = "";
 	try {
+		// 本地 dev：API route 被 prerendered（query 不可达），mock 返回
+		// 全部文章 map，这里本地挑选；生产走 Pages Function 带查询单篇拉取。
+		if (import.meta.env.DEV) {
+			const bulk = await fetch("/api/editor/article/").then((r) =>
+				r.json(),
+			) as { posts?: Record<string, string> };
+			const key = slug.toLowerCase().replace(/\.md$/, "");
+			const content = bulk.posts?.[key];
+			if (content === undefined) throw new Error("文章读取失败（本地 mock 无此文）");
+			parseArticle(content);
+			sha = "dev-mock";
+			path = `src/content/posts/${key}.md`;
+			const draft = readDrafts()[slug];
+			if (draft) {
+				sha = draft.sha || sha;
+				path = draft.path || path;
+				if (draft.content) parseArticle(draft.content);
+			}
+			loaded = true;
+			dirty = false;
+			bodyDirty = false;
+			loading = false;
+			return;
+		}
 		const response = await fetch(
 			`/api/editor/article?slug=${encodeURIComponent(slug)}`,
 		);
@@ -3282,7 +3437,7 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
 {/if}
 
 <style>
- .ha-editor { color: var(--btn-content); } .statusline { display: flex; align-items: center; gap: .55rem; margin: .15rem 0 .25rem; } .edit-badge { flex: none; border: 1px solid var(--primary); border-radius: .4rem; padding: .12rem .5rem; color: var(--primary); font-size: .75rem; font-weight: 750; } .status { font-size: .75rem; opacity: .75; } .recover { border-color: color-mix(in srgb, #e0a23c 45%, transparent); color: #b7791f; } button { border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .35rem .6rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } button:disabled { cursor: not-allowed; opacity: .5; } .primary { border-color: var(--primary); color: white; background: var(--primary); } .danger { color: #c74747; } .error { color: #c74747; font-size: .8rem; } .success { color: #27845f; font-size: .8rem; } .toolbar { position: sticky; top: 4.3rem; z-index: 20; margin: .35rem 0 .9rem; border-radius: .6rem; box-shadow: 0 1px 8px color-mix(in srgb, var(--btn-content) 10%, transparent); } .tiptap-host :global(.ProseMirror) { min-height: 26rem; outline: none; line-height: 1.75; } .tiptap-host :global(.ProseMirror pre) { margin: 0 !important; overflow: visible !important; border-radius: 0.75rem !important; border: 1.5px solid #d4d4d4 !important; padding: 1rem 1.35rem !important; background: #fafafa !important; font-family: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important; font-size: 0.875rem !important; line-height: 1.5rem !important; color: #383a42 !important; }
+ .ha-editor { color: var(--btn-content); } .statusline { display: flex; align-items: center; gap: .55rem; margin: .15rem 0 .25rem; } .edit-badge { flex: none; border: 1px solid var(--primary); border-radius: .4rem; padding: .12rem .5rem; color: var(--primary); font-size: .75rem; font-weight: 750; } .status { font-size: .75rem; opacity: .75; } .recover { border-color: color-mix(in srgb, #e0a23c 45%, transparent); color: #b7791f; } button { border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .35rem .6rem; color: inherit; background: var(--btn-regular-bg); font: inherit; font-size: .78rem; cursor: pointer; } button:disabled { cursor: not-allowed; opacity: .5; } .primary { border-color: var(--primary); color: white; background: var(--primary); } .danger { color: #c74747; } .error { color: #c74747; font-size: .8rem; } .success { color: #27845f; font-size: .8rem; } .toolbar { position: sticky; top: 3.5rem; z-index: 20; margin: .15rem 0 .9rem; border-radius: .6rem; box-shadow: 0 1px 8px color-mix(in srgb, var(--btn-content) 10%, transparent); } .tiptap-host :global(.ProseMirror) { min-height: 26rem; outline: none; line-height: 1.75; } .tiptap-host :global(.ProseMirror pre) { margin: 0 !important; overflow: visible !important; border-radius: 0.75rem !important; border: 1.5px solid #d4d4d4 !important; padding: 1rem 1.35rem !important; background: #fafafa !important; font-family: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important; font-size: 0.875rem !important; line-height: 1.5rem !important; color: #383a42 !important; }
   :global(:root.dark) .tiptap-host :global(.ProseMirror pre) { border-color: #3c424e !important; background: #282c34 !important; color: #abb2bf !important; } .tiptap-host :global(.ProseMirror table) { display: table; width: max-content; max-width: 100%; min-width: 100%; border-collapse: separate; border-spacing: 0; } .tiptap-host :global(.ProseMirror td), .tiptap-host :global(.ProseMirror th) { min-width: 120px; padding: 8px 12px; word-break: break-word; text-align: left; } .tiptap-host :global(.ProseMirror table p) { margin: 0; padding: 0; } .tiptap-host :global(.ProseMirror li p), .tiptap-host :global(.ProseMirror blockquote p) { margin: 0; padding: 0; } .tiptap-host :global(.ProseMirror table colgroup) { display: table-column-group; } .tiptap-host :global(.ProseMirror img) { max-width: 100%; height: auto; } .tiptap-host :global(.ProseMirror code) { font-size: .85rem !important; } .source-note { margin-top: .5rem; color: color-mix(in srgb, var(--btn-content) 65%, transparent); font-size: .8rem; } .source-editor { display: block; width: 100%; min-height: 26rem; resize: vertical; font-family: var(--font-jetbrains-mono), monospace; font-size: .86rem; line-height: 1.65; border: 1px solid color-mix(in srgb, var(--btn-content) 15%, transparent); border-radius: .45rem; padding: .6rem; color: inherit; background: var(--card-bg); }
  :global([data-article-title].article-title-editing) { outline: 2px dashed color-mix(in srgb, var(--primary) 45%, transparent); outline-offset: 2px; border-radius: .25rem; }
  :global(.article-category-select), :global(.article-tags-input) { display: inline-block; max-width: 14rem; border: 1px dashed color-mix(in srgb, var(--primary) 45%, transparent); border-radius: .3rem; padding: .08rem .3rem; color: inherit; background: var(--card-bg); font: inherit; font-size: .78rem; }
@@ -3372,7 +3527,9 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   .tiptap-host :global(.ec-code-lang-bar) { position: absolute; bottom: .5rem; right: .5rem; z-index: 3; pointer-events: auto; }
   .tiptap-host :global(.ec-code-copy-btn) { top: .5rem; right: .6rem; z-index: 3; pointer-events: auto; }
   .tiptap-host :global(.ProseMirror pre code) { padding-left: .7rem !important; }
-  .tiptap-host :global(.ec-line-gutter) { width: 1.55rem; padding-left: .4rem; }
+  /* 行号列宽由 CodeBlockNodeView 按最大行号位数内联设置（width: calc 基准 1.55rem + 每位 0.62rem），
+     这里仅保底；内联样式优先级更高 */
+  .tiptap-host :global(.ec-line-gutter) { min-width: 1.55rem; padding-left: .4rem; }
   .tiptap-host :global(.ec-line-gutter) { border-right: 1px solid color-mix(in srgb, currentColor 22%, transparent); }
 
   /* —— 图片缩放 UI：点击图片 → 蓝色边框 + 四角蓝色圆点，拖拽改尺寸 ——
@@ -3464,5 +3621,23 @@ $: if (editing && (sourceMode || editorMount || sourceEditEl))
   .tiptap-host :global([data-resize-handle="left"]) { transform: translate(-50%, -50%) !important; }
   .tiptap-host :global([data-resize-handle="right"]) { transform: translate(50%, -50%) !important; }
 
-  @media (max-width: 760px) { .toolbar { top: 3.6rem; } }
+  /* —— Notion 式块手柄 + 行操作菜单（DOM 挂 body，样式须 :global） —— */
+  :global(.block-handle) { display: none; position: fixed; z-index: 43; width: 22px; height: 22px; align-items: center; justify-content: center; border: none; border-radius: 6px; background: transparent; color: #b3b3b1; cursor: grab; -webkit-user-select: none; user-select: none; transition: background .12s ease, color .12s ease; }
+  :global(.block-handle svg) { display: block; fill: currentColor; }
+  :global(.block-handle:hover) { background: rgba(0, 0, 0, .06); color: #6b6b69; }
+  :global(html.dark .block-handle) { color: #55575c; }
+  :global(html.dark .block-handle:hover) { background: rgba(255, 255, 255, .09); color: #b8babf; }
+  :global(.block-menu) { display: none; position: fixed; z-index: 44; flex-direction: column; min-width: 132px; padding: .25rem; border: 1px solid color-mix(in srgb, var(--btn-content) 12%, transparent); border-radius: .6rem; background: var(--card-bg); box-shadow: 0 10px 28px rgb(0 0 0 / 18%); }
+  :global(html.dark .block-menu) { box-shadow: 0 10px 28px rgb(0 0 0 / 45%); }
+  :global(.block-menu-item) { display: flex; align-items: center; justify-content: space-between; gap: .6rem; border-radius: .4rem; padding: .32rem .55rem; color: var(--btn-content); font-size: .78rem; cursor: pointer; white-space: nowrap; }
+  :global(.block-menu-item:hover) { background: var(--btn-regular-bg-hover); }
+  :global(.block-menu-sub) { display: none; flex-direction: row !important; flex-wrap: wrap; gap: 2px; width: max-content; max-width: 192px; padding: .25rem; }
+  :global(.block-menu-sub.open) { display: flex !important; }
+  :global(.block-menu-icon) { display: flex; align-items: center; justify-content: center; width: 28px; height: 26px; border-radius: 4px; color: var(--btn-content); cursor: pointer; }
+  :global(.block-menu-icon svg) { width: 15px; height: 15px; fill: currentColor; }
+  :global(.block-menu-icon:hover) { background: var(--btn-regular-bg-hover); color: var(--primary); }
+  :global(.block-menu-icon.active) { background: var(--primary); color: #fff; }
+  :global(.block-menu-icon.active:hover) { color: #fff; opacity: .85; }
+
+  @media (max-width: 760px) { .toolbar { top: 3.4rem; } }
 </style>

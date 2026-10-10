@@ -1,5 +1,6 @@
 <script lang="ts">
 import { createEventDispatcher, onMount } from "svelte";
+import { YUQUE_ICONS } from "@/extensions/yuqueIcons";
 
 export let canUndo = false;
 export let canRedo = false;
@@ -83,8 +84,44 @@ const ICONS: Record<string, string> = {
 	chevronDown: `<path d="m6 9 6 6 6-6"/>`,
 };
 
-const SVG = (name: string, size = 15) =>
-	`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICONS[name]}</svg>`;
+// 语雀图标名映射（工具栏动作名 → YUQUE_ICONS 键）
+const YQ_MAP: Record<string, string> = {
+	undo: "undo",
+	redo: "redo",
+	cut: "cut",
+	eraser: "clearFormat",
+	painter: "formatPainter",
+	superscript: "superscript",
+	subscript: "subscript",
+	strikethrough: "strikethrough",
+	colorText: "colorText",
+	highlighter: "highlighter",
+	alignLeft: "alignLeft",
+	alignCenter: "alignCenter",
+	alignRight: "alignRight",
+	alignJustify: "alignJustify",
+	listBulleted: "listBulleted",
+	listNumbered: "listNumbered",
+	checklist: "checklist",
+	lineHeight: "lineHeight",
+	indentIncrease: "indentIncrease",
+	indentDecrease: "indentDecrease",
+	table: "table",
+	link: "link",
+	image: "image",
+	quote: "quoteIcon",
+	hr: "hr",
+	code: "inlineCode",
+};
+
+const SVG = (name: string, size = 15) => {
+	// 语雀官方图标（fill 风格）；未映射的（chevronDown/check/more）走内置 stroke 图标
+	const yq = YQ_MAP[name] ? YUQUE_ICONS[YQ_MAP[name]] : null;
+	if (yq) {
+		return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="${yq.viewBox}" fill="currentColor" aria-hidden="true" focusable="false">${yq.body}</svg>`;
+	}
+	return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICONS[name]}</svg>`;
+};
 
 let openMenu: string | null = null;
 
@@ -658,7 +695,7 @@ const currentAlign = () =>
 		width: 64px;
 	}
 	.tb-select-size {
-		width: 56px;
+		width: 66px;
 	}
 	.tb-select-label {
 		overflow: hidden;
@@ -951,7 +988,7 @@ const currentAlign = () =>
 			width: 58px;
 		}
 		.tb-select-size {
-			width: 52px;
+			width: 62px;
 		}
 		.tb-char {
 			font-size: 12px;

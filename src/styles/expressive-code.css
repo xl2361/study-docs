@@ -77,9 +77,12 @@
   }
 }
 
-/* 行号块：缩小宽度、缩小与代码的间隙 */
+/* 行号块：缩小与代码的间隙。
+   注意不能把 min-width 设为 0：EC 按最大行号位数预留列宽（如 100+ 行需要 3ch），
+   归零会让 3 位数行号被压缩截断/换行错乱。这里保留 2ch 保底，3 位数行号
+   由 EC 内联宽度自然撑开。 */
 .expressive-code .gutter .ln {
-  min-width: 0;
+  min-width: 2ch;
   padding-inline: 1px 3px;
 }
 

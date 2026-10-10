@@ -105,7 +105,12 @@ export function createCodeBlockNodeView(languages: string[]): NodeViewRenderer {
 			langButton.setAttribute("data-lang", currentLang);
 			updateLangButton();
 			gutter.replaceChildren();
-			for (const [index] of currentNode.textContent.split("\n").entries()) {
+			const lines = currentNode.textContent.split("\n");
+			// 行号列宽自适应：按最大行号位数扩展（1位=1.55rem 基准，每多1位加0.62rem），
+			// 避免超过 100 行时行号被截断错乱
+			const digits = String(lines.length).length;
+			gutter.style.width = `${(1.55 + (digits - 2) * 0.62).toFixed(2)}rem`;
+			for (const [index] of lines.entries()) {
 				const line = document.createElement("span");
 				line.textContent = String(index + 1);
 				gutter.appendChild(line);
